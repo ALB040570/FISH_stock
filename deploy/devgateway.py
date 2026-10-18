@@ -17,7 +17,8 @@ sys.path.insert(0, str(REPO / "libs" / "fishcommon"))
 from fishcommon.settings import SERVICE_PORTS  # noqa: E402
 
 DIST = Path(os.environ.get("FISH_FRONTEND_DIST", REPO / "frontend" / "dist"))
-ROUTES = {name.replace("_", "-"): f"http://127.0.0.1:{port}" for name, port in SERVICE_PORTS.items()}
+ROUTES = {name.replace("_", "-"): os.environ.get(f"FISH_URL_{name.upper()}", f"http://127.0.0.1:{port}")
+          for name, port in SERVICE_PORTS.items()}
 HOP = {"connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade", "content-encoding", "content-length"}
 
 app = FastAPI(title="FishStocke gateway", docs_url=None, redoc_url=None)

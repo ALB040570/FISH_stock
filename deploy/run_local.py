@@ -28,6 +28,7 @@ def main():
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--workers", type=int, default=int(os.environ.get("FISH_WORKERS", 2)))
     ap.add_argument("--reload", action="store_true")
+    ap.add_argument("--port-base", type=int, default=None, help="порты сервисов base+1..base+6 (по умолчанию 8001..8006)")
     args = ap.parse_args()
 
     env = dict(os.environ)
@@ -45,6 +46,11 @@ def main():
             saved.setdefault(k, secrets.token_urlsafe(48))
             env[k] = saved[k]
     sec_path.write_text(json.dumps(saved))
+    ports = dict(SERVICE_PORTS)
+    if args.port_base:
+        ports = {name: args.port_base + i + 1 for i, name in enumerate(SERVICE_PORTS)}
+    for name, port in ports.items():
+        env[f"FISH_URL_{name.upper()}"] = f"http://127.0.0.1:{port}"
     procs = []
 
     def spawn(cmd, cwd):
@@ -53,7 +59,7 @@ def main():
     # users первым: другие сервисы пишут в его журнал
     order = ["users"] + [s for s in SERVICE_PORTS if s != "users"]
     for name in order:
-        cmd = [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(SERVICE_PORTS[name])]
+        cmd = [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(ports[name])]
         if args.reload:
             cmd += ["--reload"]
         spawn(cmd, REPO / "services" / name)
