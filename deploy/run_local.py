@@ -34,6 +34,17 @@ def main():
     env.setdefault("FISH_DATA_DIR", str(REPO / "data"))
     env["PYTHONPATH"] = os.pathsep.join([str(REPO / "libs" / "fishcommon"), str(REPO), env.get("PYTHONPATH", "")])
     env["FISH_WORKERS"] = str(args.workers)
+    # ключи: из окружения, иначе — случайные, сохраняются в каталоге данных (не в Git)
+    import json
+    import secrets
+    sec_path = Path(env["FISH_DATA_DIR"]) / ".secrets.json"
+    sec_path.parent.mkdir(parents=True, exist_ok=True)
+    saved = json.loads(sec_path.read_text()) if sec_path.exists() else {}
+    for k in ("FISH_JWT_SECRET", "FISH_SERVICE_TOKEN"):
+        if not env.get(k):
+            saved.setdefault(k, secrets.token_urlsafe(48))
+            env[k] = saved[k]
+    sec_path.write_text(json.dumps(saved))
     procs = []
 
     def spawn(cmd, cwd):

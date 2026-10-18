@@ -5,6 +5,8 @@ x-service: &service
   env_file: .env
   environment: &env
     FISH_DATA_DIR: /data
+    FISH_JWT_SECRET: ${FISH_JWT_SECRET:?задайте FISH_JWT_SECRET в .env}
+    FISH_SERVICE_TOKEN: ${FISH_SERVICE_TOKEN:?задайте FISH_SERVICE_TOKEN в .env}
     FISH_URL_USERS: http://users:8000
     FISH_URL_DATA_MODEL: http://data_model:8000
     FISH_URL_DATA_ADMIN: http://data_admin:8000

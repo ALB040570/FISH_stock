@@ -30,7 +30,7 @@ async def proxy(service: str, path: str, request: Request):
     if base is None or path.startswith("internal/"):
         return JSONResponse({"error": {"code": "not_found", "message": "Нет такого сервиса"}}, 404)
     url = f"{base}/{path}"
-    headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP | {"host"}}
+    headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP | {"host", "x-service-token"}}
     headers["x-forwarded-prefix"] = f"/api/{service}"
     try:
         req = client.build_request(request.method, url, params=request.query_params, headers=headers,

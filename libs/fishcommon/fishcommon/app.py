@@ -13,6 +13,9 @@ VERSION = "1.0.0"
 
 def create_app(service: str, title: str, description: str = "") -> FastAPI:
     st = settings_mod.load(service)
+    if st.jwt_secret == settings_mod.DEV_SECRET or st.service_token == "dev-service-token":
+        print(f"[{service}] ВНИМАНИЕ: используются ключи разработки — задайте FISH_JWT_SECRET и FISH_SERVICE_TOKEN",
+              flush=True)
     app = FastAPI(title=f"FishStocke — {title}", description=description, version=VERSION,
                   root_path_in_servers=False)
     app.state.settings = st
