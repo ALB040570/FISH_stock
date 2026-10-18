@@ -9,6 +9,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /srv
+# компилятор C++ нужен PyTensor (PyMC) для быстрой байесовской модели — только сервисам алгоритмов
+RUN if [ "$SERVICE" = "algo_admin" ] || [ "$SERVICE" = "algo_model" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends g++ && rm -rf /var/lib/apt/lists/*; \
+    fi
 COPY libs/fishcommon /srv/libs/fishcommon
 RUN pip install /srv/libs/fishcommon
 COPY services/${SERVICE}/requirements.txt /srv/requirements.txt

@@ -57,9 +57,15 @@ def audit(user, action, oid, details=None):
 
 def _seed():
     for t in templates.SYSTEM:
-        if not boards.exists(t["code"]):
-            boards.create({**copy.deepcopy(t), "owner": "system"}, actor="system", obj_id=t["code"])
+        rev = templates.TEMPLATE_REV
+        cur = boards.get(t["code"])
+        if cur is None:
+            boards.create({**copy.deepcopy(t), "owner": "system", "template_rev": rev}, actor="system", obj_id=t["code"])
             boards.add_version(t["code"], {"dashboard.json": dumps(t).encode()}, {"comment": "системный шаблон"}, "system")
+        elif cur.get("template_rev", 1) < rev and cur.get("updated_by") == "system":
+            boards.update(t["code"], {**copy.deepcopy(t), "template_rev": rev}, actor="system")
+            boards.add_version(t["code"], {"dashboard.json": dumps(t).encode()},
+                               {"comment": f"обновление системного шаблона (ревизия {rev})"}, "system")
 
 
 _seed()
@@ -331,7 +337,7 @@ def widget_data(body: DataIn, user: User = Depends(require("dashboard.view"))):
     wbs = flt.get("water_bodies") if src.get("multi") else None
     wbs = wbs or ([flt.get("water_body")] if flt.get("water_body") else [])
     if kind in ("dataset", "run", "payload") and not wbs:
-        return {"empty": True, "reason": "no_water_body", "message": "Выберите водоём"}
+        return {"empty": True, "reason": "no_water_body", "message": "Выберите водоём"}  # noqa
     if kind == "status":
         wb = wbs[0]
         data = SVC["data_admin"].get("/water-bodies/status") or {}

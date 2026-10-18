@@ -8,12 +8,15 @@ export function fmt(v, d = 0) {
   return Number(v).toLocaleString('ru-RU', { maximumFractionDigits: d, minimumFractionDigits: 0 })
 }
 
+const UNITS = { ru: [' млрд', ' млн', ' тыс'], kk: [' млрд', ' млн', ' мың'] }
+function lang() { try { return localStorage.getItem('fishstocke.lang') || 'ru' } catch (e) { return 'ru' } }
 export function compact(v) {
   if (v === null || v === undefined) return ''
   const a = Math.abs(v)
-  if (a >= 1e9) return (v / 1e9).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' млрд'
-  if (a >= 1e6) return (v / 1e6).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' млн'
-  if (a >= 1e3) return (v / 1e3).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' тыс'
+  const u = UNITS[lang()] || UNITS.ru
+  if (a >= 1e9) return (v / 1e9).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + u[0]
+  if (a >= 1e6) return (v / 1e6).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + u[1]
+  if (a >= 1e3) return (v / 1e3).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + u[2]
   return v.toLocaleString('ru-RU', { maximumFractionDigits: 3 })
 }
 

@@ -5,7 +5,7 @@
       <el-select v-model="year" size="small" style="width:100px"><el-option v-for="y in years" :key="y" :label="y" :value="y" /></el-select>
       <span v-if="fit" class="small muted">
         c̄ = {{ fmt(fit.c_mean, 3) }}<template v-if="fit.j50 != null"> · j50 = {{ fmt(fit.j50, 2) }} · a = {{ fmt(fit.a, 2) }}</template>
-        <template v-if="fit.peak != null"> · вершина c¹ = {{ fmt(fit.peak, 2) }}</template> · проба {{ fit.n_sample }} шт ·
+        <template v-if="fit.peak != null"> · {{ $t('w.peak') }} c¹ = {{ fmt(fit.peak, 2) }}</template> · {{ $t('w.sample') }} {{ fit.n_sample }} {{ $t('w.pcs') }} ·
         <el-tag size="small" :type="String(fit.status).includes('нарушено') ? 'warning' : 'success'">{{ fit.status }}</el-tag>
       </span>
     </div>
@@ -14,11 +14,13 @@
   </div>
 </template>
 <script setup>
+import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import EChart from '../components/EChart.vue'
 import { compact, fmt, PALETTE } from '../components/charts'
 import { useSpecies } from './useSpecies'
 const p = defineProps({ data: Object, filters: Object, options: Object })
+const { t } = useI18n()
 const net = computed(() => p.options?.kind === 'net_curves')
 const fits = computed(() => (net.value ? p.data?.payload?.net?.fits : p.data?.payload?.fits))
 const { list, chosen } = useSpecies(p, () => Object.keys(fits.value || {}))
@@ -37,13 +39,13 @@ const opt = computed(() => {
     grid: { left: 60, right: 52, top: 56, bottom: 34 },
     tooltip: { trigger: 'axis', valueFormatter: (v) => fmt(v, 'auto') },
     legend: { top: 0 },
-    xAxis: { type: 'category', data: ages, name: 'возраст, лет', nameLocation: 'middle', nameGap: 22 },
-    yAxis: [{ type: 'value', name: f.observed_is_catch ? 'улов, шт' : 'проба, шт', axisLabel: { formatter: compact }, splitLine: { lineStyle: { color: '#edf1f5' } } },
+    xAxis: { type: 'category', data: ages, name: t('w.age_years'), nameLocation: 'middle', nameGap: 22 },
+    yAxis: [{ type: 'value', name: f.observed_is_catch ? t('w.catch_pcs') : t('w.sample_pcs'), axisLabel: { formatter: compact }, splitLine: { lineStyle: { color: '#edf1f5' } } },
       { type: 'value', name: 'c', min: 0, max: 1, splitLine: { show: false } }],
     series: [
-      { type: 'bar', name: f.observed_is_catch ? 'улов по возрастам' : 'возрастная проба', data: f.observed, itemStyle: { color: '#a9c9da' }, barMaxWidth: 26 },
-      ...(f.fitted ? [{ type: 'line', name: 'кривая улова (подгонка)', data: f.fitted, symbol: 'none', lineStyle: { color: '#2a9d8f' } }] : []),
-      { type: 'line', name: 'уловистость c', data: f.c, yAxisIndex: 1, lineStyle: { width: 2.5, color: '#1d5c7a' }, itemStyle: { color: '#1d5c7a' },
+      { type: 'bar', name: f.observed_is_catch ? t('w.catch_by_age') : t('w.age_sample'), data: f.observed, itemStyle: { color: '#a9c9da' }, barMaxWidth: 26 },
+      ...(f.fitted ? [{ type: 'line', name: t('w.catch_curve'), data: f.fitted, symbol: 'none', lineStyle: { color: '#2a9d8f' } }] : []),
+      { type: 'line', name: t('w.catchability'), data: f.c, yAxisIndex: 1, lineStyle: { width: 2.5, color: '#1d5c7a' }, itemStyle: { color: '#1d5c7a' },
         markLine: { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: '#c44536' }, label: { formatter: '{c}' }, data: [{ yAxis: lo }, { yAxis: hi }] } },
     ],
   }

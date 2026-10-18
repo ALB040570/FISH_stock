@@ -4,7 +4,7 @@
       <div class="wt">{{ tr(widget, 'title') }}</div>
       <slot name="tools" />
     </div>
-    <StateBlock :loading="loading" :error="error" :empty="!!data?.empty" :empty-text="data?.message" :retry="load">
+    <StateBlock :loading="loading" :error="error" :empty="!!data?.empty" :empty-text="emptyText" :retry="load">
       <template v-if="data">
         <div v-if="widget.type === 'text'" class="txt">{{ widget.options?.text }}</div>
         <div v-else-if="widget.type === 'kpi'" class="kpis">
@@ -31,6 +31,7 @@
 </template>
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import { tr } from '../i18n'
 import EChart from '../components/EChart.vue'
@@ -43,6 +44,8 @@ const data = ref(null)
 const loading = ref(false)
 const error = ref(null)
 const special = computed(() => specials[p.widget.options?.kind])
+const { t, te } = useI18n()
+const emptyText = computed(() => (data.value?.reason && te('w.reason_' + data.value.reason) ? t('w.reason_' + data.value.reason) : data.value?.message))
 
 async function load() {
   if (p.widget.type === 'text') { data.value = {}; return }

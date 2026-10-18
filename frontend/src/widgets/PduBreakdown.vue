@@ -5,36 +5,38 @@
       <el-select v-model="yi" size="small" style="width:100px"><el-option v-for="(y, i) in years" :key="y" :label="y" :value="i" /></el-select>
     </div>
     <div class="flow">
-      <div class="step"><div class="n">1</div><div><div class="v">{{ fmt(stockTotal) }} шт</div><div class="l">окончательный запас (сеть + невод), возрасты {{ ageLabel(sp.m0) }} – {{ ageLabel(sp.m1) }} — половозрелые</div></div></div>
+      <div class="step"><div class="n">1</div><div><div class="v">{{ fmt(stockTotal) }} {{ $t('w.pcs') }}</div><div class="l">{{ $t('w.step1', { a: ageLabel(sp.m0), b: ageLabel(sp.m1) }) }}</div></div></div>
       <div class="arrow">→</div>
-      <div class="step"><div class="n">2</div><div><div class="v">{{ fmt(sp.biomass_t[yi], 1) }} т</div><div class="l">промысловая биомасса (запас × средний вес)</div></div></div>
+      <div class="step"><div class="n">2</div><div><div class="v">{{ fmt(sp.biomass_t[yi], 1) }} т</div><div class="l">{{ $t('w.step2') }}</div></div></div>
       <div class="arrow">→</div>
-      <div class="step"><div class="n">3</div><div><div class="v">{{ fmt(sp.pdu_t[yi], 1) }} т</div><div class="l">квота НПЦ, распределена {{ fmt(sp.distributed_t[yi], 1) }} т за {{ sp.iterations[yi] }} итер.</div></div></div>
+      <div class="step"><div class="n">3</div><div><div class="v">{{ fmt(sp.pdu_t[yi], 1) }} т</div><div class="l">{{ $t('w.step3', { t: fmt(sp.distributed_t[yi], 1), n: sp.iterations[yi] }) }}</div></div></div>
       <div class="arrow">→</div>
-      <div class="step hi"><div class="n">4</div><div><div class="v">{{ fmt(sp.pieces_total[yi]) }} шт</div><div class="l">ПДУ в штуках по возрастам · {{ sp.stop_reason[yi] }}</div></div></div>
+      <div class="step hi"><div class="n">4</div><div><div class="v">{{ fmt(sp.pieces_total[yi]) }} {{ $t('w.pcs') }}</div><div class="l">{{ $t('w.step4') }} · {{ sp.stop_reason[yi] }}</div></div></div>
     </div>
     <div class="grid12" style="margin-top:10px">
       <div style="grid-column: span 6"><EChart :option="opt" height="280px" /></div>
       <div style="grid-column: span 6">
         <el-table :data="rows" size="small" border max-height="290">
-          <el-table-column prop="age" label="Возраст" width="72" />
-          <el-table-column label="Запас, шт" align="right"><template #default="{ row }">{{ fmt(row.stock) }}</template></el-table-column>
-          <el-table-column label="Ср. вес, г" align="right"><template #default="{ row }">{{ fmt(row.weight, 1) }}<sup v-if="row.filled" title="вес взят от ближайшего младшего возраста">*</sup></template></el-table-column>
-          <el-table-column label="ПДУ, шт" align="right"><template #default="{ row }">{{ fmt(row.pieces) }}</template></el-table-column>
-          <el-table-column label="ПДУ, т" align="right"><template #default="{ row }">{{ fmt(row.tonnes, 2) }}</template></el-table-column>
-          <el-table-column label="Изъятие" align="right"><template #default="{ row }">{{ row.exploitation == null ? '—' : fmt(row.exploitation * 100, 1) + ' %' }}<el-tag v-if="row.capped" size="small" type="warning" style="margin-left:4px">75 %</el-tag></template></el-table-column>
+          <el-table-column prop="age" :label="$t('w.age')" width="72" />
+          <el-table-column :label="$t('w.stock_pcs')" align="right"><template #default="{ row }">{{ fmt(row.stock) }}</template></el-table-column>
+          <el-table-column :label="$t('w.weight_g')" align="right"><template #default="{ row }">{{ fmt(row.weight, 1) }}<sup v-if="row.filled" :title="$t('w.weight_filled')">*</sup></template></el-table-column>
+          <el-table-column :label="$t('w.pdu_pcs')" align="right"><template #default="{ row }">{{ fmt(row.pieces) }}</template></el-table-column>
+          <el-table-column :label="$t('w.pdu_t')" align="right"><template #default="{ row }">{{ fmt(row.tonnes, 2) }}</template></el-table-column>
+          <el-table-column :label="$t('w.exploitation')" align="right"><template #default="{ row }">{{ row.exploitation == null ? '—' : fmt(row.exploitation * 100, 1) + ' %' }}<el-tag v-if="row.capped" size="small" type="warning" style="margin-left:4px">75 %</el-tag></template></el-table-column>
         </el-table>
       </div>
     </div>
-    <div class="small muted" style="margin-top:6px">Квота НПЦ (т) распределяется между половозрелыми возрастами пропорционально биомассе с нагрузкой j/m1; за итерацию из возраста изымается не более {{ fmt((data.payload.cap || 0.75) * 100, 0) }} % остатка (раздел 5 статьи).</div>
+    <div class="small muted" style="margin-top:6px">{{ $t('w.pdu_hint', { cap: fmt((data.payload.cap || 0.75) * 100, 0) }) }}</div>
   </div>
 </template>
 <script setup>
+import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import EChart from '../components/EChart.vue'
 import { base, fmt } from '../components/charts'
 import { useSpecies } from './useSpecies'
 const p = defineProps({ data: Object, filters: Object })
+const { t } = useI18n()
 const all = computed(() => p.data?.payload?.species || {})
 const years = computed(() => p.data?.payload?.years || [])
 const { list, chosen } = useSpecies(p, () => Object.keys(all.value))
@@ -51,9 +53,9 @@ const stockTotal = computed(() => rows.value.filter((r) => r.mature).reduce((a, 
 const opt = computed(() => {
   const b = sp.value.by_year[yi.value]
   const bio = sp.value.ages.map((a, i) => (b.stock[i] == null || b.weight[i] == null ? null : (b.stock[i] * b.weight[i]) / 1e6))
-  return base({ x: rows.value.map((r) => r.age), type: 'bar', yName: 'т', xName: 'возраст, лет', series: [
-    { name: 'биомасса запаса', values: bio, extra: { itemStyle: { color: '#a9c9da' } } },
-    { name: 'ПДУ', values: b.tonnes, extra: { itemStyle: { color: '#1d5c7a' } } }] })
+  return base({ x: rows.value.map((r) => r.age), type: 'bar', yName: 'т', xName: t('w.age_years'), series: [
+    { name: t('w.biomass'), values: bio, extra: { itemStyle: { color: '#a9c9da' } } },
+    { name: t('w.pdu'), values: b.tonnes, extra: { itemStyle: { color: '#1d5c7a' } } }] })
 })
 </script>
 <style scoped>

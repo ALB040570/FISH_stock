@@ -1,0 +1,19 @@
+# Внешний доступ коллегам: HTTPS на доменном имени сервера.
+#   В .env задайте FISH_DOMAIN=fish.example.kz (DNS-запись A должна указывать на сервер), затем:
+#   docker compose -f docker-compose.yml -f docker-compose.public.yml up -d --build
+services:
+  web:
+    ports: !reset []
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    env_file: .env
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web]
+volumes:
+  caddy_data:
+  caddy_config:

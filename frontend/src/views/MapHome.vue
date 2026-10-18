@@ -76,6 +76,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
+import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import { tr } from '../i18n'
 import { useAuth } from '../store/auth'
@@ -85,8 +86,8 @@ import StateBlock from '../components/StateBlock.vue'
 const auth = useAuth()
 const STATES = ['no_data', 'has_data', 'has_run', 'stale']
 const COLORS = { no_data: '#9aa5b1', has_data: '#3b82c4', has_run: '#2f9e6b', stale: '#e08a1e' }
-const TYPES = { lake: 'Озеро', reservoir: 'Водохранилище', river: 'Река', sea: 'Море', other: 'Другое' }
-const typeTitle = (t) => TYPES[t] || t
+const { t } = useI18n()
+const typeTitle = (x) => t('wbtype.' + (x || 'other'))
 const mapEl = ref(null)
 const loading = ref(true)
 const error = ref(null)
@@ -161,7 +162,7 @@ function draw() {
       lay = L.circleMarker([w.point[0], w.point[1]], { radius: 7, ...style(w), fillOpacity: 0.8 })
     } else continue
     lay.bindTooltip(`<b>${tr(w, 'name')}</b><br>${w.years.length ? w.years[0] + '–' + w.years[w.years.length - 1] : ''}${
-      w.pdu?.rows?.length ? '<br>ПДУ: ' + fmt(w.pdu.rows.reduce((a, r) => a + (r.pdu_t || 0), 0), 0) + ' т' : ''}`, { sticky: true })
+      w.pdu?.rows?.length ? '<br>' + t('map.pdu') + ': ' + fmt(w.pdu.rows.reduce((a, r) => a + (r.pdu_t || 0), 0), 0) + ' т' : ''}`, { sticky: true })
     lay.on('click', () => select(w, false))
     lay.addTo(layer)
     layers[w.id] = lay
