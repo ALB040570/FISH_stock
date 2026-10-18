@@ -420,6 +420,8 @@ class DatasetTypeIn(BaseModel):
     period_field: str | None = "year"
     columns: list[dict]
     species_columns: dict = {"enabled": False}
+    key_fields: list[str] = []
+    rules: list[dict] = []
     comment: str = ""
 
 
@@ -448,6 +450,12 @@ def _check_dtype(d: dict, old: dict | None) -> None:
         errs.append("Столбцы видов: тип значения — целое или число")
     if d.get("period_field") and d["period_field"] not in codes:
         errs.append("Поле периода должно быть одним из столбцов")
+    for k in d.get("key_fields") or []:
+        if k not in codes:
+            errs.append(f"Ключевое поле «{k}» должно быть одним из столбцов")
+    for r in d.get("rules") or []:
+        if r.get("type") not in ("le", "lt") or r.get("left") not in codes or r.get("right") not in codes:
+            errs.append(f"Правило проверки {r} задано неверно")
     if old:
         new_by = {c["code"]: c for c in d["columns"]}
         for c in old["columns"]:

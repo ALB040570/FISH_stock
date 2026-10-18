@@ -79,6 +79,7 @@ SPECIES = [
     ("yorsh", "ерш", "таутан", "Gymnocephalus cernua", False),
     ("lin", "линь", "оңғақ", "Tinca tinca", False),
     ("nalim", "налим", "налим", "Lota lota", True),
+    ("tolstolobik", "толстолобик", "дөңмаңдай", "Hypophthalmichthys molitrix", False),
 ]
 
 GEARS = [
@@ -122,6 +123,7 @@ DATASET_TYPES = [
         "code": "age_samples", "title_ru": "Возрастные пробы", "title_kk": "Жас сынамалары",
         "description": "Число рыб, прошедших биологический анализ, по возрастам (на год, по всем орудиям).",
         "period_field": "year", "system": True,
+        "key_fields": ["year", "age"],
         "columns": [YEAR, AGE],
         "species_columns": species_cols("integer", "шт", "Число рыб в пробе, шт", "Сынамадағы балық саны, дана"),
     },
@@ -129,6 +131,7 @@ DATASET_TYPES = [
         "code": "mean_weights", "title_ru": "Средний вес по возрастам", "title_kk": "Жас бойынша орташа салмақ",
         "description": "Средний вес рыбы, г, по возрастам и годам.",
         "period_field": "year", "system": True,
+        "key_fields": ["year", "age"],
         "columns": [YEAR, AGE],
         "species_columns": species_cols("number", "г", "Средний вес, г", "Орташа салмақ, г"),
     },
@@ -136,6 +139,13 @@ DATASET_TYPES = [
         "code": "species_props", "title_ru": "Биологические параметры видов", "title_kk": "Түрлердің биологиялық параметрлері",
         "description": "Параметры видов для водоёма (как в zhaysan_fish_prop.py).",
         "period_field": None, "system": True,
+        "key_fields": ["species"],
+        "rules": [
+            {"type": "le", "left": "m0", "right": "m1", "message": "m0 не может быть больше m1"},
+            {"type": "le", "left": "m2", "right": "m1", "message": "m2 не может быть больше m1"},
+            {"type": "le", "left": "fecundity_min", "right": "fecundity_max",
+             "message": "Минимальная плодовитость больше максимальной"},
+        ],
         "columns": [
             F("species", "Вид", "Түрі", "ref", required=True, ref_entity="species"),
             F("m0", "Возраст половой зрелости m0", "Жыныстық жетілу жасы m0", "integer", required=True, min=1, max=40),
@@ -156,7 +166,7 @@ DATASET_TYPES = [
     {
         "code": "yearly_conditions", "title_ru": "Условия по годам", "title_kk": "Жылдар бойынша жағдайлар",
         "description": "Площадь водоёма и параметры сетей по годам.",
-        "period_field": "year", "system": True,
+        "period_field": "year", "system": True, "key_fields": ["year"],
         "columns": [
             YEAR,
             F("lake_area_km2", "Площадь водоёма, км²", "Су айдынының ауданы, км²", "number", required=True, unit="км²", min=0),
@@ -168,14 +178,14 @@ DATASET_TYPES = [
     {
         "code": "npc_stock", "title_ru": "Оценка запаса НПЦ", "title_kk": "ҒӨО қор бағасы",
         "description": "Оценка запаса НПЦ РХ, тыс. шт (в расчётах умножается на 1000).",
-        "period_field": "year", "system": True,
+        "period_field": "year", "system": True, "key_fields": ["year"],
         "columns": [YEAR],
         "species_columns": species_cols("number", "тыс. шт", "Запас, тыс. шт", "Қор, мың дана"),
     },
     {
         "code": "npc_pdu", "title_ru": "ПДУ НПЦ", "title_kk": "ҒӨО ШРА",
         "description": "Предельно допустимый улов, установленный НПЦ, т.",
-        "period_field": "year", "system": True,
+        "period_field": "year", "system": True, "key_fields": ["year"],
         "columns": [YEAR],
         "species_columns": species_cols("number", "т", "ПДУ, т", "ШРА, т"),
     },

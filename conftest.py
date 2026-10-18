@@ -41,3 +41,12 @@ def svc(tmp_path, monkeypatch):
     def make(name, **env):
         return TestClient(load_service(name, tmp_path, monkeypatch, **env).app)
     return make
+
+
+@pytest.fixture()
+def data_stack(tmp_path, monkeypatch):
+    """data-model + data-admin в одном процессе (data-admin читает справочники через TestClient)."""
+    dm = TestClient(load_service("data_model", tmp_path, monkeypatch).app)
+    da_mod = load_service("data_admin", tmp_path, monkeypatch)
+    da_mod.DICT = da_mod.DictClient(http=dm)
+    return dm, TestClient(da_mod.app), da_mod
