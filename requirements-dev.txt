@@ -1,0 +1,5 @@
+# Всё для запуска без Docker и для тестов
+-e libs/fishcommon
+-r services/algo_admin/requirements.txt
+pytest>=8
+shapely>=2.0

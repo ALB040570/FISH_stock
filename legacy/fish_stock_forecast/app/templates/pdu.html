@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% from "_macros.html" import ctx_bar, page_title %}
+{% block title %}ПДУ по возрастам{% endblock %}
+{% block ctx %}{{ ctx_bar() }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    {{ page_title("ПДУ по возрастам", step_label) }}
+    <p class="lead">Официальный ПДУ НПЦ в тоннах переводится в штуки рыб по возрастам (раздел 5 статьи).
+      Квота распределяется по половозрелым рыбам пропорционально биомассе запаса с нагрузкой, растущей с возрастом;
+      за одну итерацию из возраста изымается не больше 75 % остатка. Итерации идут, пока квота не исчерпана
+      или не закончится свободный запас.</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="/api/pdu/export.xlsx">Скачать Excel</a>
+  </div>
+</section>
+
+<section class="filters minor" aria-label="Настройки отображения">
+  <div class="field">
+    <span class="field-label">Шкала</span>
+    <div id="scale-toggle" class="segmented"></div>
+  </div>
+</section>
+
+<p id="load-state" class="muted">Загрузка и расчёт…</p>
+<div id="content" hidden>
+  <section class="tiles" id="tiles"></section>
+  <p id="status-note" class="note" hidden></p>
+
+  <section class="grid-2">
+    <figure class="card">
+      <figcaption>
+        <h2 id="ages-title">Запас и ПДУ по возрастам</h2>
+        <p class="muted" id="ages-sub"></p>
+      </figcaption>
+      <div id="chart-ages" class="chart"></div>
+    </figure>
+    <figure class="card">
+      <figcaption>
+        <h2>Доля изъятия по возрастам</h2>
+        <p class="muted">ПДУ в штуках, делённый на запас возраста. Растёт с возрастом из-за линейной нагрузки j / m1.</p>
+      </figcaption>
+      <div id="chart-expl" class="chart"></div>
+    </figure>
+  </section>
+
+  <details class="card table-card">
+    <summary>Таблица по возрастам для выбранного года</summary>
+    <div class="table-wrap"><table id="age-table" class="data"></table></div>
+  </details>
+
+  <figure class="card">
+    <figcaption>
+      <h2 id="years-title">ПДУ и промысловая биомасса по годам</h2>
+      <p class="muted">Промысловая биомасса — окончательный запас половозрелых возрастов × средний вес.</p>
+    </figcaption>
+    <div id="chart-years" class="chart"></div>
+  </figure>
+
+  <figure class="card">
+    <figcaption>
+      <h2 id="table-title">Итоги по годам</h2>
+      <p class="muted">Строка выбранного года выделена; нажмите на строку, чтобы выбрать год.</p>
+    </figcaption>
+    <div class="table-wrap"><table id="years-table" class="data"></table></div>
+  </figure>
+
+  <details class="card method">
+    <summary>Метод расчёта</summary>
+    <div class="method-body">
+      <pre>X<sub>j</sub>     — окончательный запас возраста j: средневзвешенное сети и невода по числу ловов
+w<sub>j</sub>     — средний вес, г;   M<sub>j</sub> = 1 при j ≥ m0 (ловятся только половозрелые)
+P      — ПДУ НПЦ, т × 10⁶ → г;   A<sub>j</sub> = 0
+
+итерация k:
+  X<sub>j</sub><sup>(k)</sup> = X<sub>j</sub> − A<sub>j</sub>                                       (30)
+  B<sub>j</sub> = X<sub>j</sub><sup>(k)</sup> · w<sub>j</sub> · M<sub>j</sub>;   B̃<sub>j</sub> = B<sub>j</sub> · j / m1                    (31)
+  μ<sub>j</sub> = B̃<sub>j</sub> / Σ B̃<sub>j</sub>;   ΔA<sub>j</sub> = min(P · μ<sub>j</sub> / w<sub>j</sub>,  0,75 · X<sub>j</sub><sup>(k)</sup>)
+  A<sub>j</sub> += ΔA<sub>j</sub>;   P = max(P − Σ ΔA<sub>j</sub> · w<sub>j</sub>, 0)</pre>
+      <p>В статье и старом коде — 3 итерации; здесь итерации продолжаются, пока квота не исчерпана или
+        не закончится свободный запас (остаток меньше 1 г). Средний вес для возрастов до m1, которых нет
+        в таблице весов, берётся от ближайшего младшего возраста (у язя вес возраста 12–13 = вес 11–12).</p>
+    </div>
+  </details>
+  <p class="muted small" id="footer-info"></p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', path='js/pdu.js') }}"></script>
+{% endblock %}

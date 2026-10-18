@@ -1,0 +1,50 @@
+# FishStocke v1 — запуск: cp .env.example .env (заполнить) && docker compose up -d --build
+# Все данные — в томе fishdata (/data в контейнерах): сохраняются при перезапуске и обновлении.
+x-service: &service
+  restart: unless-stopped
+  env_file: .env
+  environment: &env
+    FISH_DATA_DIR: /data
+    FISH_URL_USERS: http://users:8000
+    FISH_URL_DATA_MODEL: http://data_model:8000
+    FISH_URL_DATA_ADMIN: http://data_admin:8000
+    FISH_URL_ALGO_MODEL: http://algo_model:8000
+    FISH_URL_ALGO_ADMIN: http://algo_admin:8000
+    FISH_URL_DASHBOARDS: http://dashboards:8000
+  volumes:
+    - fishdata:/data
+
+services:
+  users:
+    <<: *service
+    build: { context: ., dockerfile: deploy/service.Dockerfile, args: { SERVICE: users } }
+  data_model:
+    <<: *service
+    build: { context: ., dockerfile: deploy/service.Dockerfile, args: { SERVICE: data_model } }
+  data_admin:
+    <<: *service
+    build: { context: ., dockerfile: deploy/service.Dockerfile, args: { SERVICE: data_admin } }
+  algo_model:
+    <<: *service
+    build: { context: ., dockerfile: deploy/service.Dockerfile, args: { SERVICE: algo_model } }
+  algo_admin:
+    <<: *service
+    build: { context: ., dockerfile: deploy/service.Dockerfile, args: { SERVICE: algo_admin } }
+  # воркеры расчётов: тот же образ, что algo_admin; число — FISH_WORKERS (процессов внутри контейнера)
+  worker:
+    <<: *service
+    build: { context: ., dockerfile: deploy/service.Dockerfile, args: { SERVICE: algo_admin } }
+    command: ["python", "-m", "app.worker"]
+    healthcheck: { disable: true }
+  dashboards:
+    <<: *service
+    build: { context: ., dockerfile: deploy/service.Dockerfile, args: { SERVICE: dashboards } }
+  web:
+    restart: unless-stopped
+    build: { context: ., dockerfile: deploy/web.Dockerfile }
+    ports:
+      - "${FISH_HTTP_PORT:-8080}:80"
+    depends_on: [users, data_model, data_admin, algo_model, algo_admin, dashboards]
+
+volumes:
+  fishdata:

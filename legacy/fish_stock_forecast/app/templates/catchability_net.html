@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "_macros.html" import ctx_bar, page_title %}
+{% block title %}Уловистость сети{% endblock %}
+{% block ctx %}{{ ctx_bar() }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    {{ page_title("Уловистость сети", step_label) }}
+    <p class="lead">Парабола по возрастам, формулы (22)–(24) статьи. Вершина — в возрасте
+      max(m0 + 1, возраст наибольшего улова); средняя уловистость по возрастам от 1–2 до m1 равна заданной.</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="/api/catchability/net/export.xlsx">Скачать Excel</a>
+  </div>
+</section>
+
+
+<p id="load-state" class="muted">Загрузка и расчёт…</p>
+<div id="content" hidden>
+  <section class="tiles" id="tiles"></section>
+  <p id="status-note" class="note" hidden></p>
+
+  <section class="grid-2">
+    <figure class="card">
+      <figcaption>
+        <h2 id="catch-title">Улов сетью по возрастам</h2>
+        <p class="muted" id="catch-sub"></p>
+      </figcaption>
+      <div id="chart-catch" class="chart"></div>
+    </figure>
+    <figure class="card">
+      <figcaption>
+        <h2>Коэффициент уловистости сети</h2>
+        <p class="muted" id="c-sub"></p>
+      </figcaption>
+      <div id="chart-c" class="chart"></div>
+    </figure>
+  </section>
+
+  <details class="card table-card">
+    <summary>Таблица по возрастам для выбранного года</summary>
+    <div class="table-wrap"><table id="age-table" class="data"></table></div>
+  </details>
+
+  <figure class="card">
+    <figcaption>
+      <h2 id="heat-title">Уловистость по годам и возрастам</h2>
+      <p class="muted">Каждая строка — парабола года. Нажмите на строку, чтобы выбрать год.</p>
+    </figcaption>
+    <div id="chart-heat" class="chart chart-heat"></div>
+  </figure>
+
+  <figure class="card">
+    <figcaption>
+      <h2 id="params-title">Параметры парабол по годам</h2>
+      <p class="muted">Строка выбранного года выделена. Нажмите на строку, чтобы выбрать год.</p>
+    </figcaption>
+    <div class="table-wrap"><table id="params-table" class="data"></table></div>
+  </figure>
+
+  <details class="card method">
+    <summary>Метод расчёта</summary>
+    <div class="method-body">
+      <pre>c¹ = max(m0 + 1, argmax Y<sub>j</sub>)                      — вершина
+c<sub>j</sub> = c⁰ − a1·(j − c¹)²,  2 ≤ j ≤ c¹                  (22)
+c<sub>j</sub> = c⁰ − a2·(j − c¹)²,  c¹ ≤ j ≤ m1
+c̄ − a1·(2 − c¹)² = 0,1   →   a1 = (c̄ − 0,1)/(2 − c¹)²
+c̄ − a2·(m1 − c¹)² = 0,2  →   a2 = (c̄ − 0,2)/(m1 − c¹)²
+(1/n)·Σ c<sub>j</sub> = c̄        →   c⁰ = c̄ + (1/n)·Σ a·(j − c¹)²    (23)
+0,1 ≤ c<sub>j</sub> ≤ 0,8                                           (24)</pre>
+      <p>j — номер возраста: возраст j означает рыб от j−1 до j лет (j = 2 — возраст 1–2 года, двухлетки).
+        c̄ — заданный средний коэффициент уловистости сети вида. В статье суммирование начинается с j = 1;
+        одногодков в уловах нет, поэтому здесь первый возраст — 1–2 года (j = 2).</p>
+      <p>σ — доля рыб первого круга (радиус равен пути рыбы за час), попавших в сеть за время
+        стоянки, по модели баланса 12 колец. Запас по улову сетью сейчас считается как в старом коде:
+        X = Y·S / (σ·(V² − r0²)), r0 — половина длины сети; формула (28) статьи X = Y·S / (π·V²·σ)
+        включается настройкой NET_STOCK_FORMULA.</p>
+    </div>
+  </details>
+  <p class="muted small" id="footer-info"></p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', path='js/catchability_net.js') }}"></script>
+{% endblock %}

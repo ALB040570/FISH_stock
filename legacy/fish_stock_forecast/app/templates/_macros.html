@@ -1,0 +1,25 @@
+{# Крупная панель выбора вида и года — закреплена вверху страницы при прокрутке #}
+{% macro ctx_bar(year=True, year_label="Год") -%}
+<div class="ctx" aria-label="Вид рыбы и год">
+  <div class="ctx-field">
+    <span class="ctx-label">Вид рыбы</span>
+    <div id="species-tabs" class="segmented fish-tabs" role="tablist"></div>
+  </div>
+  {% if year %}
+  <div class="ctx-field" id="year-field">
+    <span class="ctx-label">{{ year_label }}</span>
+    <div class="year-step">
+      <button type="button" class="ys-btn" data-step="-1" aria-label="Предыдущий год">◀</button>
+      <select id="year-select" aria-label="{{ year_label }}"></select>
+      <button type="button" class="ys-btn" data-step="1" aria-label="Следующий год">▶</button>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{%- endmacro %}
+
+{# Заголовок страницы: «Шаг N из 6», название и текущий выбор (вид, год) #}
+{% macro page_title(title, step_label=None) -%}
+{% if step_label %}<div class="step-label">{{ step_label }}</div>{% endif %}
+<h1>{{ title }}<span id="page-ctx" class="page-ctx"></span></h1>
+{%- endmacro %}

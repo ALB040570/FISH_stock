@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% from "_macros.html" import ctx_bar, page_title %}
+{% block title %}Байесовская модель{% endblock %}
+{% block ctx %}{{ ctx_bar() }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    {{ page_title("Байесовская модель", step_label) }}
+    <p class="lead">Когортная модель по уравнениям (16)–(17) статьи. Численность по годам и возрастам, естественная
+      смертность, давление хищников, β (отношение фактического вылова к ПДУ) и поправка уловистости q оцениваются
+      совместно по оценкам запаса во всех ловах сети и невода.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" id="excel-link" href="#">Скачать Excel</a>
+  </div>
+</section>
+
+<section class="filters minor" aria-label="Настройки отображения">
+  <div class="field">
+    <span class="field-label">Результат</span>
+    <div id="source-tabs" class="segmented"></div>
+  </div>
+  <div class="field">
+    <span class="field-label">Шкала численности</span>
+    <div id="scale-toggle" class="segmented"></div>
+  </div>
+</section>
+
+<p id="load-state" class="muted">Загрузка…</p>
+
+<section class="card run-card" id="run-card" hidden>
+  <div class="run-head">
+    <div class="run-status">
+      <h2 id="run-title">Расчёт</h2>
+      <p class="muted" id="run-sub"></p>
+    </div>
+    <div class="run-actions">
+      <button class="btn" id="btn-prior" title="Динамика по выборкам из априорных распределений, без PyMC">Априорная проверка</button>
+      <button class="btn btn-primary" id="btn-run"></button>
+      <button class="btn" id="btn-run-all">Рассчитать все виды</button>
+      <button class="btn" id="btn-check" title="Входные данные и настройки старого скрипта — сравнение со старым .nc">Сверка со старым скриптом</button>
+      <button class="btn btn-danger" id="btn-cancel" hidden>Остановить</button>
+    </div>
+  </div>
+  <p id="run-note" class="note" hidden></p>
+  <div id="progress" class="progress-block" hidden>
+    <div class="progress-meta" id="progress-meta"></div>
+    <div id="chain-bars" class="chain-bars"></div>
+  </div>
+  <details id="log-box" class="log-box" hidden>
+    <summary>Журнал расчёта</summary>
+    <pre id="log"></pre>
+  </details>
+</section>
+
+<details class="card settings-card" id="settings-card" hidden>
+  <summary><span id="settings-title">Настройки модели</span> <span class="muted" id="settings-sub"></span></summary>
+  <p class="muted small settings-help">Значения по умолчанию взяты из последней версии скрипта вида. Изменения
+    сохраняются в results/bayes_config.json и действуют на следующие запуски (при расчёте всех видов — на виды,
+    до которых очередь ещё не дошла). Поля, отличающиеся от скрипта, отмечены.</p>
+  <form id="settings-form" class="settings-form" autocomplete="off"></form>
+  <div class="settings-actions">
+    <button class="btn btn-primary" id="btn-save" type="button">Сохранить</button>
+    <button class="btn" id="btn-reset" type="button">Вернуть значения скрипта</button>
+    <span class="muted small" id="settings-msg" role="status"></span>
+  </div>
+</details>
+
+<div id="empty" class="card empty" hidden></div>
+
+<div id="content" hidden>
+  <section class="tiles" id="tiles"></section>
+  <p id="status-note" class="note" hidden></p>
+
+  <figure class="card">
+    <figcaption class="cap-row">
+      <div>
+        <h2 id="total-title">Численность по годам</h2>
+        <p class="muted" id="total-sub"></p>
+      </div>
+      <div class="cap-controls">
+        <div id="ages-toggle" class="segmented"></div>
+        <div id="data-toggle" class="segmented"></div>
+      </div>
+    </figcaption>
+    <div id="chart-total" class="chart chart-tall"></div>
+  </figure>
+
+  <section class="grid-2">
+    <figure class="card">
+      <figcaption>
+        <h2 id="ages-title">Возрастная структура</h2>
+        <p class="muted">Модель: медиана и 95 % интервал. Оценки по уловам — окончательный запас (сеть и невод).</p>
+      </figcaption>
+      <div id="chart-ages" class="chart"></div>
+    </figure>
+    <figure class="card">
+      <figcaption>
+        <h2>Пополнение (возраст 0–1) по годам</h2>
+        <p class="muted">Сеголетки: икра × выживаемость, ограниченная ёмкостью нерестилищ, × (1 − s)² / (1 + γ).</p>
+      </figcaption>
+      <div id="chart-recruits" class="chart"></div>
+    </figure>
+  </section>
+
+  <section class="grid-2">
+    <figure class="card">
+      <figcaption>
+        <h2 id="s-title">Естественная смертность s по возрастам</h2>
+        <p class="muted">Доля рыб возраста, погибающих за год. Медиана и 95 % интервал.</p>
+      </figcaption>
+      <div id="chart-s" class="chart"></div>
+    </figure>
+    <figure class="card">
+      <figcaption>
+        <h2 id="pred-title">Давление хищников γ по возрастам</h2>
+        <p class="muted">Убывает как 1/j до возраста m2; в уравнении (17) — знаменатель 1 + γ.</p>
+      </figcaption>
+      <div id="chart-pred" class="chart"></div>
+    </figure>
+  </section>
+
+  <section class="grid-2">
+    <figure class="card">
+      <figcaption>
+        <h2>β по годам</h2>
+        <p class="muted">Фактический вылов / ПДУ: β &gt; 1 — неучтённый вылов (браконьерство).</p>
+      </figcaption>
+      <div id="chart-beta" class="chart"></div>
+    </figure>
+    <figure class="card">
+      <figcaption>
+        <h2>Поправка уловистости q по возрастам</h2>
+        <p class="muted" id="q-sub">Оценка по лову ≈ q · численность модели. Медиана и 95 % интервал.</p>
+      </figcaption>
+      <div id="chart-q" class="chart"></div>
+    </figure>
+  </section>
+
+  <figure class="card">
+    <figcaption>
+      <h2>Баланс гибели по годам</h2>
+      <p class="muted">Медианы, штук, сумма по возрастам: естественная гибель s·X, хищники γ·X, ПДУ, браконьерство (β − 1)·ПДУ.</p>
+    </figcaption>
+    <div id="chart-deaths" class="chart"></div>
+  </figure>
+
+  <figure class="card">
+    <figcaption>
+      <h2>Параметры модели</h2>
+      <p class="muted">Апостериорные медианы и интервалы; R̂ &gt; 1,01 — цепи не сошлись.</p>
+    </figcaption>
+    <div class="table-wrap"><table id="params-table" class="data"></table></div>
+  </figure>
+
+  <details class="card table-card" id="diag-card">
+    <summary>Диагностика и сравнение со старым расчётом</summary>
+    <div class="table-wrap"><table id="diag-table" class="data"></table></div>
+    <div id="check-block" hidden>
+      <h2 class="sub-h">Сравнение со старым расчётом: численность, возрасты 1–2 и старше</h2>
+      <div class="table-wrap"><table id="check-table" class="data"></table></div>
+    </div>
+  </details>
+</div>
+
+<details class="card method">
+  <summary>Модель</summary>
+  <div class="method-body">
+    <pre>j = 1          X₁(t) = min(K(t)·α(t), Σ θ(j)·ε(j)·X_j(t−1) · e) · (1 − s₁(t))² / (1 + γ₁(t))
+j = 2          X₂(t) = (1 − s₂(t)) · X₁(t−1) / (1 + γ₂(t))
+j = 3 … m1     X_j(t) = ((1 − s_{j−1}(t)) · X_{j−1}(t−1) − β(t)·A_{j−1}(t)) / (1 + h(j)·γ_j(t))       (17)
+
+s     — естественная смертность: парабола с минимумом в m0 + 1 и годовыми колебаниями
+γ     — давление хищников ~ 1/j до возраста m2;   h(j) — граница «корм хищников»
+A     — ПДУ НПЦ в штуках по возрастам (этап 3);    β(t) — отношение фактического вылова к ПДУ
+θ, ε  — плодовитость и доля половозрелых;           e — выживаемость икры;   K·α — ёмкость нерестилищ
+наблюдения: оценка запаса в лове d ~ LogNormal(ln(q_j · X_j(t_d)), σ)</pre>
+    <p>Начальный запас первого года — окончательный годовой запас по возрастам (средневзвешенное сети и невода
+      по числу ловов) с логнормальным разбросом в пределах [0,5; x0_hi] от оценки; сеголетки первого года
+      рассчитываются от нерестового стада, как в старом коде. Вычитание вылова в (17), граница h и другие
+      варианты формул выбираются в настройках вида — по умолчанию как в скрипте вида.</p>
+    <p>Режим «Сверка со старым скриптом» берёт входные данные старого проекта (prepare_data_for_bayes из скрипта
+      вида) и его настройки выборки и сравнивает результат со старым файлом из data_stock. «Априорная проверка»
+      показывает, какую динамику допускают априорные распределения до учёта данных: полосы должны накрывать
+      оценки по уловам, иначе выборка NUTS будет долго сходиться.</p>
+  </div>
+</details>
+<p class="muted small" id="footer-info"></p>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', path='js/bayes.js') }}"></script>
+{% endblock %}

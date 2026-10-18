@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% from "_macros.html" import ctx_bar, page_title %}
+{% block title %}Уловистость невода{% endblock %}
+{% block ctx %}{{ ctx_bar() }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    {{ page_title("Уловистость невода", step_label) }}
+    <p class="lead">Сигмоида по возрасту, параметры найдены методом наименьших квадратов по годовым уловам.
+      Средняя уловистость по возрастам 2…m1 равна заданной, значения от 0,1 до 0,8 (для двухлеток — от 0,01).</p>
+  </div>
+  <div class="actions">
+    <button id="btn-recalc" class="btn">Пересчитать</button>
+    <a id="btn-excel" class="btn btn-primary" href="/api/catchability/seine/export.xlsx">Скачать Excel</a>
+  </div>
+</section>
+
+<section class="filters minor" aria-label="Настройки отображения">
+  <div class="field">
+    <span class="field-label">Шкала улова</span>
+    <div class="segmented" id="scale-toggle">
+      <button data-scale="linear" class="on">Линейная</button>
+      <button data-scale="log">Логарифм.</button>
+    </div>
+  </div>
+</section>
+
+<p id="load-state" class="muted">Загрузка и расчёт…</p>
+<div id="content" hidden>
+  <section class="tiles" id="tiles"></section>
+  <p id="status-note" class="note" hidden></p>
+
+  <section class="grid-2">
+    <figure class="card">
+      <figcaption>
+        <h2 id="catch-title">Улов неводом по возрастам</h2>
+        <p class="muted" id="catch-sub"></p>
+      </figcaption>
+      <div id="chart-catch" class="chart" aria-label="График улова по возрастам"></div>
+    </figure>
+    <figure class="card">
+      <figcaption>
+        <h2>Коэффициент уловистости</h2>
+        <p class="muted" id="c-sub"></p>
+      </figcaption>
+      <div id="chart-c" class="chart" aria-label="График коэффициента уловистости"></div>
+    </figure>
+  </section>
+
+  <details class="card table-card">
+    <summary>Таблица по возрастам для выбранного года</summary>
+    <div class="table-wrap"><table id="age-table" class="data"></table></div>
+  </details>
+
+  <figure class="card">
+    <figcaption>
+      <h2 id="heat-title">Уловистость по годам и возрастам</h2>
+      <p class="muted">Каждая строка — отдельная сигмоида года. Нажмите на строку, чтобы выбрать год.</p>
+    </figcaption>
+    <div id="chart-heat" class="chart chart-heat" aria-label="Тепловая карта уловистости"></div>
+  </figure>
+
+  <figure class="card">
+    <figcaption>
+      <h2 id="params-title">Параметры сигмоид по годам</h2>
+      <p class="muted">Строка выбранного года выделена. Нажмите на строку, чтобы выбрать год.</p>
+    </figcaption>
+    <div class="table-wrap"><table id="params-table" class="data"></table></div>
+  </figure>
+
+  <details class="card method">
+    <summary>Метод расчёта</summary>
+    <div class="method-body">
+      <p>Для каждого вида и года уловистость невода ищется в виде сигмоиды, формула (24) статьи:</p>
+      <pre>c<sub>j</sub> = b / (1 + exp(−a·(j − j50))),   j = 2 … m1</pre>
+      <p>Улов возраста j пропорционален уловистости и численности, которая убывает с возрастом:</p>
+      <pre>Y<sub>j</sub> ≈ c<sub>j</sub> · N0 · exp(−Z·j)   ⇒   ln Y<sub>j</sub> = K − Z·j + ln σ<sub>j</sub></pre>
+      <p>Параметры a, j50, Z, K находятся методом наименьших квадратов в логарифмах с весами,
+        равными числу рыб возраста j в пробе (+1). Множитель b по уловам не определяется
+        (сливается с N0), его задаёт условие (25): среднее c<sub>j</sub> по возрастам 2…m1 равно
+        заданному c̄. Ограничения (26): 0,1 ≤ c<sub>j</sub> ≤ 0,8; для двухлеток (возраст 1–2 года)
+        нижняя граница снижена до 0,01.</p>
+      <p>Годовой улов по возрастам — суммарный улов вида неводом за год, распределённый по долям
+        возрастной пробы (как в save_catch_3d.py). Если в пробе меньше 20 рыб, берётся проба вида за
+        все годы; если неводом вид не пойман, форма берётся из пробы.</p>
+      <p>j50 по правилу статьи: max(m0 + 1, возраст максимального улова) — показан для сравнения.</p>
+    </div>
+  </details>
+  <p class="muted small" id="footer-info"></p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', path='js/catchability_seine.js') }}"></script>
+{% endblock %}

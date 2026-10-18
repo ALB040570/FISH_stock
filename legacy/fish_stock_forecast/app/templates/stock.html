@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% from "_macros.html" import ctx_bar, page_title %}
+{% block title %}Запас по уловам{% endblock %}
+{% block ctx %}{{ ctx_bar() }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    {{ page_title("Запас по уловам", step_label) }}
+    <p class="lead">Оценка запаса по каждому лову: сети — балансовый метод; невод — метод площадей,
+      формула (27). Годовой запас по каждому возрасту — среднее оценок по ловам отдельно для сети и невода;
+      окончательный запас по возрасту — средневзвешенное сети и невода по числу ловов; суммарный запас —
+      сумма окончательных запасов по всем возрастам от 1–2 до m1 (без сеголеток).</p>
+  </div>
+  <div class="actions">
+    <button id="btn-recalc" class="btn">Пересчитать</button>
+    <a class="btn btn-primary" href="/api/stock/export.xlsx">Скачать Excel</a>
+  </div>
+</section>
+
+<section class="filters minor" aria-label="Настройки отображения">
+  <div class="field">
+    <span class="field-label">Уловистость</span>
+    <div id="variant-toggle" class="segmented"></div>
+  </div>
+  <div class="field">
+    <span class="field-label">Годовой запас</span>
+    <div id="method-toggle" class="segmented"></div>
+  </div>
+  <div class="field">
+    <span class="field-label">Шкала</span>
+    <div id="scale-toggle" class="segmented"></div>
+  </div>
+  <label class="field check" id="old-field" hidden>
+    <span class="field-label">Сравнение</span>
+    <span class="check-row"><input type="checkbox" id="show-old"> прежний расчёт</span>
+  </label>
+</section>
+
+<p id="load-state" class="muted">Загрузка и расчёт…</p>
+<div id="content" hidden>
+  <section class="tiles" id="tiles"></section>
+
+  <figure class="card">
+    <figcaption>
+      <h2 id="yearly-title">Годовой запас</h2>
+      <p class="muted" id="yearly-sub"></p>
+    </figcaption>
+    <div id="chart-yearly" class="chart chart-tall"></div>
+  </figure>
+
+  <section class="grid-2">
+    <figure class="card">
+      <figcaption>
+        <h2>Оценки по отдельным ловам</h2>
+        <p class="muted">Каждая точка — запас, оценённый по одному лову; линии — годовой запас по каждому орудию.</p>
+      </figcaption>
+      <div id="chart-hauls" class="chart"></div>
+    </figure>
+    <figure class="card">
+      <figcaption>
+        <h2 id="ages-title">Возрастная структура запаса</h2>
+        <p class="muted" id="ages-sub"></p>
+      </figcaption>
+      <div id="chart-ages" class="chart"></div>
+    </figure>
+  </section>
+
+  <figure class="card">
+    <figcaption>
+      <h2 id="table-title">Годовой запас, таблица</h2>
+      <p class="muted">Штук рыб. Строка выбранного года выделена; нажмите на строку, чтобы выбрать год.</p>
+    </figcaption>
+    <div class="table-wrap"><table id="yearly-table" class="data"></table></div>
+  </figure>
+
+  <details class="card method">
+    <summary>Метод расчёта</summary>
+    <div class="method-body">
+      <pre>невод (27):  X²<sub>ij</sub>(d) = Y²<sub>ij</sub>(d) · S(t) / (c²<sub>ij</sub>(t) · s<sub>area</sub>(d))
+сеть:        X¹<sub>ij</sub>(d) = Y¹<sub>ij</sub>(d) · S(t) / (σ(c¹<sub>ij</sub>(t)) · (V<sub>i</sub>² − r0²))   — как в старом коде (сейчас)
+  (28):      X¹<sub>ij</sub>(d) = Y¹<sub>ij</sub>(d) · S(t) / (π · V<sub>i</sub>² · σ(c¹<sub>ij</sub>(t)))          — статья (config.NET_STOCK_FORMULA)
+окончательный: X<sub>ij</sub>(t) = (N¹·X¹<sub>ij</sub>(t) + N²·X²<sub>ij</sub>(t)) / (N¹ + N²)          — N — число ловов орудия в году
+суммарный:     X<sub>i</sub>(t) = Σ<sub>j</sub> X<sub>ij</sub>(t)                                        — сумма по возрастам</pre>
+      <p>S(t) — площадь водоёма в году t; s<sub>area</sub>(d) — обловленная неводом площадь (га × 10 000);
+        V<sub>i</sub> — путь рыбы за час (крейсерская скорость × 3600); r0 — половина длины сети; σ — доля рыб первого круга, попавших в
+        сеть за время стоянки (модель баланса 12 колец); c¹, c² — уловистость сети (парабола) и невода (сигмоида).</p>
+      <p><b>По запасам</b> — среднее оценок по ловам года (как calc_yearly_stock_on_stock_3d).
+        <b>По годовому улову</b> — невод: суммарный улов за год, делённый на суммарную обловленную площадь;
+        сеть: средний улов на один лов. Для сетей оба способа совпадают, так как формула линейна по улову.</p>
+      <p><b>Уловистость «средняя по виду»</b> — одна средняя уловистость вида для всех возрастов.
+        Ловы, в которых вид не учитывался (пропуск в исходной таблице), исключаются; нулевые уловы учитываются.
+        Оценка НПЦ — из файла zhaysan_npc_assessment.py, умноженная на 1000, как в calc_stock_npc.py.</p>
+    </div>
+  </details>
+  <p class="muted small" id="footer-info"></p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', path='js/stock.js') }}"></script>
+{% endblock %}

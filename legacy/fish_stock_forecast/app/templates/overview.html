@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_title %}
+{% block title %}Обзор{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    {{ page_title("Обзор") }}
+    <p class="lead">Сводка по всем видам и состояние шагов расчёта. Нажмите на шаг, чтобы открыть его страницу,
+      или на ссылку под названием вида — страница откроется сразу с этим видом.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/api/forecast/export.xlsx">Прогноз и ПДУ в Excel</a>
+  </div>
+</section>
+
+<p id="load-state" class="muted">Загрузка…</p>
+<div id="content" hidden>
+  <section class="steps" id="steps" aria-label="Шаги расчёта"></section>
+
+  <figure class="card">
+    <figcaption>
+      <h2 id="table-title">Виды рыб</h2>
+      <p class="muted" id="table-sub"></p>
+    </figcaption>
+    <div class="table-wrap"><table id="species-table" class="data"></table></div>
+  </figure>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', path='js/overview.js') }}"></script>
+{% endblock %}

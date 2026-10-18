@@ -1,0 +1,19 @@
+# окружение и секреты
+.env
+*.env.local
+.venv/
+venv/
+node_modules/
+# рабочие данные и результаты (хранятся в томе / каталоге данных, не в Git)
+/data/
+/backups/
+deploy/data/
+# служебное
+__pycache__/
+*.pyc
+.pytest_cache/
+*.lock
+*.tmp
+frontend/dist/
+.DS_Store
+*.log

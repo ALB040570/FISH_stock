@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% from "_macros.html" import ctx_bar, page_title %}
+{% block title %}Прогноз и ПДУ{% endblock %}
+{% block ctx %}{{ ctx_bar(year=False) }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    {{ page_title("Прогноз и ПДУ", step_label) }}
+    <p class="lead">Прогноз запаса на 1–10 лет по байесовской модели: каждая из 500 выборок параметров продолжается
+      теми же уравнениями (16)–(17) от численности последнего года. Три сценария вылова: ПДУ по Баранову при
+      F = k·M, фиксированный ПДУ в тоннах и без промысла.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/api/forecast/export.xlsx">Скачать Excel</a>
+  </div>
+</section>
+
+<p id="load-state" class="muted">Загрузка…</p>
+
+<details class="card settings-card" id="settings-card" open hidden>
+  <summary>Настройки прогноза</summary>
+  <div class="fc-controls">
+    <label class="field">
+      <span class="field-label">Горизонт, лет</span>
+      <select id="horizon"></select>
+    </label>
+    <label class="field">
+      <span class="field-label">k в F = k·M</span>
+      <input id="k" class="num-input" type="number" step="any" min="0" inputmode="decimal">
+    </label>
+    <label class="field">
+      <span class="field-label" id="pdu-label">Фиксированный ПДУ, т</span>
+      <input id="pdu-t" class="num-input" type="number" step="any" min="0" inputmode="decimal">
+    </label>
+  </div>
+  <div class="table-wrap">
+    <table class="data fc-table" id="fc-table"></table>
+  </div>
+  <p class="muted small settings-help">Площадь водоёма задаётся для всех прогнозных лет (пустые ячейки — площадь
+    последнего года). Смертность — доля половозрелых рыб (возрасты от m0), погибающих за год от естественных
+    причин без хищников; форма кривой по возрастам сохраняется из модели. Пустая ячейка — «из истории»: кривая
+    выборки со случайным годовым колебанием. Фиксированный ПДУ по умолчанию равен ПДУ последнего года.</p>
+  <div class="settings-actions">
+    <button class="btn btn-primary" id="btn-save" type="button">Сохранить и пересчитать</button>
+    <button class="btn" id="btn-reset" type="button">Сбросить настройки</button>
+    <span class="muted small" id="settings-msg" role="status"></span>
+  </div>
+</details>
+
+<figure class="card" id="summary-card" hidden>
+  <figcaption>
+    <h2 id="summary-title">Сводка по видам</h2>
+    <p class="muted" id="summary-sub">Нажмите на строку, чтобы открыть вид.</p>
+  </figcaption>
+  <div class="table-wrap"><table id="summary-table" class="data"></table></div>
+</figure>
+
+<section class="filters minor" id="filters" hidden aria-label="Настройки отображения">
+  <div class="field">
+    <span class="field-label">Интервалы для сценария</span>
+    <div id="focus-tabs" class="segmented"></div>
+  </div>
+  <div class="field">
+    <span class="field-label">Шкала</span>
+    <div id="scale-toggle" class="segmented"></div>
+  </div>
+</section>
+
+<div id="empty" class="card empty" hidden></div>
+
+<div id="content" hidden>
+  <section class="tiles" id="tiles"></section>
+  <p id="status-note" class="note" hidden></p>
+
+  <figure class="card">
+    <figcaption>
+      <h2 id="total-title">Численность</h2>
+      <p class="muted">Возрасты 1–2 и старше, штук. История — байесовская модель; прогноз — медианы сценариев,
+        полосы 50 % и 95 % — для выбранного сценария.</p>
+    </figcaption>
+    <div id="chart-total" class="chart chart-tall"></div>
+  </figure>
+
+  <section class="grid-2">
+    <figure class="card">
+      <figcaption>
+        <h2>Промысловая биомасса</h2>
+        <p class="muted">Возрасты от m0 × средний вес последнего года истории, тонн.</p>
+      </figcaption>
+      <div id="chart-biomass" class="chart"></div>
+    </figure>
+    <figure class="card">
+      <figcaption>
+        <h2>ПДУ по годам</h2>
+        <p class="muted">История — ПДУ НПЦ; прогноз — F = k·M (медиана и интервалы) и фиксированный ПДУ, тонн.</p>
+      </figcaption>
+      <div id="chart-pdu" class="chart"></div>
+    </figure>
+  </section>
+
+  <section class="grid-2">
+    <figure class="card">
+      <figcaption>
+        <h2 id="ages-title">Возрастная структура</h2>
+        <p class="muted">Медианы, штук.</p>
+      </figcaption>
+      <div id="chart-ages" class="chart"></div>
+    </figure>
+    <figure class="card">
+      <figcaption>
+        <h2 id="pdu-ages-title">ПДУ по возрастам</h2>
+        <p class="muted">Медианы, штук, сценарий F = k·M.</p>
+      </figcaption>
+      <div id="chart-pdu-ages" class="chart"></div>
+    </figure>
+  </section>
+
+  <figure class="card">
+    <figcaption>
+      <h2 id="table-title">По годам прогноза</h2>
+      <p class="muted">Медиана и 95 % интервал по 500 траекториям.</p>
+    </figcaption>
+    <div class="table-wrap"><table id="years-table" class="data"></table></div>
+  </figure>
+</div>
+
+<details class="card method">
+  <summary>Метод прогноза</summary>
+  <div class="method-body">
+    <pre>Будущие годы (для каждой из 500 выборок модели):
+  s(t)   — кривая смертности выборки; задан уровень L(t) → кривая масштабируется: среднее s по j ≥ m0 = L(t);
+           не задан → годовое колебание ~ N(0, σ) из настроек модели («из истории»)
+  γ, α   — давление хищников и множитель ёмкости нерестилищ — случайный год истории той же выборки
+  K(t)   — ёмкость нерестилищ по площади водоёма года t
+  β(t)   — среднее β за 3 предыдущих года (с 4-го прогнозного года — по прогнозным годам)
+
+ПДУ года t по запасу на начало года X(t−1), промысловые возрасты j ≥ m0:
+  M_j = −ln((1 − s_j) / (1 + γ_j))                      естественная смертность вместе с хищниками
+  F   = k · M̄,   M̄ — средняя M промысловых возрастов, взвешенная по численности
+  C_j = F / (F + M_j) · (1 − e^(−(F + M_j))) · X_j(t−1)  уравнение Баранова, штук
+  ПДУ = Σ C_j · w_j / 10⁶, т
+Фиксированный ПДУ (т) распределяется по возрастам алгоритмом этапа 3 по запасу X(t−1).
+Изъятие β·ПДУ вычитается в уравнении (17); численность года t — по уравнениям (16)–(17).</pre>
+    <p>Все сценарии используют одни и те же случайные годы и колебания смертности, поэтому различаются только
+      выловом. Вероятность снижения — доля траекторий, в которых численность в последний год прогноза ниже,
+      чем в последний год истории.</p>
+  </div>
+</details>
+<p class="muted small" id="footer-info"></p>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', path='js/forecast.js') }}"></script>
+{% endblock %}

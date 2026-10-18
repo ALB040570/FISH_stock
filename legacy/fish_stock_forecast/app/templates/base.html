@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Запасы рыб{% endblock %} · {{ waterbody }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="side" id="side" aria-label="Меню">
+      <a class="side-brand" href="/">Запасы рыб<small>оз. Жайсан</small></a>
+      <nav class="side-nav">
+        {% for group in nav %}
+          {% if group.title %}<div class="side-group">{{ group.title }}</div>{% endif %}
+          {% for item in group.entries %}
+            <a href="{{ item.href }}" class="side-item{{ ' on' if item.href == active else '' }}"
+               {% if item.href == active %}aria-current="page"{% endif %}>
+              <span class="side-num">{{ item.num }}</span>
+              <span class="side-label">{{ item.title }}</span>
+              <span class="side-status {{ item.status_class }}">{{ item.status }}</span>
+            </a>
+          {% endfor %}
+        {% endfor %}
+      </nav>
+      <div class="side-src">Исходные данные:<br>{{ source_dir }}</div>
+    </aside>
+    <div class="side-backdrop" id="side-backdrop" hidden></div>
+    <div class="main">
+      <header class="mobile-bar">
+        <button class="btn" id="menu-btn" type="button" aria-controls="side" aria-expanded="false">☰ Меню</button>
+        <span class="mobile-title">{{ self.title() }}</span>
+      </header>
+      {% block ctx %}{% endblock %}
+      <main class="page">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+  <div id="tooltip" class="tooltip" role="status" hidden></div>
+  <script src="{{ url_for('static', path='js/charts.js') }}"></script>
+  <script src="{{ url_for('static', path='js/common.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
