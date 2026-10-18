@@ -1,0 +1,15 @@
+seine_catchability: запуск
+seine_catchability: done 
+stock_by_catch: запуск
+stock_by_catch: done 
+pdu_by_age: запуск
+pdu_by_age: done 
+bayes_cohort: запуск
+bayes_cohort: done 
+{"species": "lesh", "total_max_rel": 0.014771700514944608, "by_age_max_rel_main": 0.031261078460926794, "by_age_median_rel": 0.0015200310389649136, "rhat_max": 1.0080404303645487, "pass": true}
+{"species": "sudak", "total_max_rel": 0.013400852323258966, "by_age_max_rel_main": 0.023903028785591612, "by_age_median_rel": 0.0033404049079458777, "rhat_max": 1.0032249433846543, "pass": true}
+{"species": "okun", "total_max_rel": 0.006300345158639873, "by_age_max_rel_main": 0.011693129050484212, "by_age_median_rel": 0.002884967860879186, "rhat_max": 1.0058502542255103, "pass": true}
+{"species": "plotva", "total_max_rel": 0.02273735375581765, "by_age_max_rel_main": 0.045303820767921305, "by_age_median_rel": 0.008605071490883217, "rhat_max": 1.0035323191524732, "pass": true}
+{"species": "shuka", "total_max_rel": 0.034511943141788556, "by_age_max_rel_main": 0.05576719744022691, "by_age_median_rel": 0.002887739562762062, "rhat_max": 1.0055745232995723, "pass": true}
+
+[exited with code 0]
