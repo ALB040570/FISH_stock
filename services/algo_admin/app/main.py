@@ -615,14 +615,18 @@ def wb_status(user: User = Depends(require("run.view"))):
 
 
 @app.get("/water-bodies/{water_body}/monitoring-run", tags=["сводка"])
-def monitoring_run(water_body: str, user: User = Depends(require("run.view"))):
-    """Запуск для мониторинга: основной, иначе последний успешный (с пометкой)."""
+def monitoring_run(water_body: str, algorithm: str | None = None, user: User = Depends(require("run.view"))):
+    """Запуск для мониторинга: основной; если его нет — последний успешный (с пометкой), при указании
+    algorithm — последний успешный, в котором есть этот шаг."""
     mains = read_json(MAIN_RUNS, {})
     m = mains.get(water_body)
     if m and E.runs.get(m["run_id"]):
         return {"run": get_run(m["run_id"], user), "is_main": True}
     done = sorted((r for r in E.runs.list() if r["water_body"] == water_body and r["status"] == "done"),
                   key=lambda r: r["created_at"], reverse=True)
+    if algorithm:
+        done = [r for r in done if any(s["algorithm"] == algorithm and s.get("status") in ("done", "reused")
+                                       for s in r["steps"])] or done
     if done:
         return {"run": get_run(done[0]["id"], user), "is_main": False}
     return {"run": None, "is_main": False}

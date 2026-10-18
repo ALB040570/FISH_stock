@@ -220,8 +220,9 @@ def _gear_names():
     return {r["values"]["code"]: r["values"]["name_ru"] for r in recs}
 
 
-def _monitoring_run(wb):
-    return SVC["algo_admin"].get(f"/water-bodies/{wb}/monitoring-run") or {"run": None}
+def _monitoring_run(wb, algorithm=None):
+    q = f"?algorithm={algorithm}" if algorithm else ""
+    return SVC["algo_admin"].get(f"/water-bodies/{wb}/monitoring-run{q}") or {"run": None}
 
 
 def _step_index(run, algorithm):
@@ -259,7 +260,7 @@ def _rows_run(wb, algorithm, table, run_id=None):
         run = SVC["algo_admin"].get(f"/runs/{run_id}")
         info = {"run": run, "is_main": None}
     else:
-        info = _monitoring_run(wb)
+        info = _monitoring_run(wb, algorithm)
         run = info.get("run")
     if not run:
         return None, {"reason": "no_run"}
