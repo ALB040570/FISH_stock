@@ -36,7 +36,7 @@ MODE_TITLES = {"new": "новый расчёт", "check": "сверка со с�
 
 def result_stem(species: str, mode: str) -> str:
     suffix = {"new": "", "check": "_check", "prior": "_prior"}[mode]
-    return f"{app_config.WATERBODY}_bayes_{TOKENS[species]}{suffix}"
+    return f"{app_config.WATERBODY}_bayes_{TOKENS.get(species, species)}{suffix}"
 
 
 def result_path(species: str, mode: str, ext: str = "npz", results_dir: Path | None = None) -> Path:

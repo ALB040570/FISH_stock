@@ -1,0 +1,151 @@
+{
+ "version": "1.0.0",
+ "author": "перенос fish_stock_forecast (методика статьи Габбасов и др.)",
+ "entrypoint": "algorithm:run",
+ "language": "python",
+ "runtime": {
+  "python": ">=3.11",
+  "timeout_minutes": 20
+ },
+ "code": "stock_by_catch",
+ "title_ru": "Уловистость сети и запас по уловам",
+ "title_kk": "Желінің аулағыштығы және ауланым бойынша қор",
+ "description": "Парабола уловистости сети (22)–(24), балансовая модель 12 колец, запас по каждому лову (27)–(28), годовой и окончательный запас (сеть + невод).",
+ "requires": {
+  "datasets": [
+   "catches",
+   "age_samples",
+   "species_props",
+   "yearly_conditions",
+   "mean_weights",
+   "npc_stock"
+  ],
+  "steps": [
+   "seine_catchability"
+  ]
+ },
+ "parameters": [
+  {
+   "code": "NET_MIN_AGE",
+   "title_ru": "Первая возрастная группа в уловах сети",
+   "type": "integer",
+   "default": 2,
+   "category": "fixed",
+   "min": 1,
+   "max": 5
+  },
+  {
+   "code": "NET_END_LEFT",
+   "title_ru": "Левый конец параболы c̄ − a1·(j_min − c¹)²",
+   "type": "number",
+   "default": 0.1,
+   "category": "fixed",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "code": "NET_END_RIGHT",
+   "title_ru": "Правый конец параболы c̄ − a2·(m1 − c¹)²",
+   "type": "number",
+   "default": 0.2,
+   "category": "fixed",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "code": "NET_C_LOWER",
+   "title_ru": "Нижняя граница c сети (24)",
+   "type": "number",
+   "default": 0.1,
+   "category": "fixed",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "code": "NET_C_UPPER",
+   "title_ru": "Верхняя граница c сети",
+   "type": "number",
+   "default": 0.8,
+   "category": "fixed",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "code": "NET_MIN_SAMPLE",
+   "title_ru": "Мин. объём пробы, шт",
+   "type": "integer",
+   "default": 20,
+   "category": "fixed",
+   "min": 1
+  },
+  {
+   "code": "NET_STOCK_FORMULA",
+   "title_ru": "Формула запаса по сетям",
+   "type": "enum",
+   "default": "code",
+   "category": "fixed",
+   "enum": [
+    {
+     "value": "code",
+     "title_ru": "как в коде: X = Y·S / (σ·(V² − r0²))"
+    },
+    {
+     "value": "article",
+     "title_ru": "формула (28) статьи: X = Y·S / (π·V²·σ)"
+    }
+   ]
+  },
+  {
+   "code": "COMBINE_GEARS",
+   "title_ru": "Объединение сети и невода",
+   "type": "enum",
+   "default": "hauls",
+   "category": "fixed",
+   "enum": [
+    {
+     "value": "hauls",
+     "title_ru": "средневзвешенное по числу ловов"
+    },
+    {
+     "value": "mean",
+     "title_ru": "простое среднее, (29)"
+    }
+   ]
+  },
+  {
+   "code": "NPC_STOCK_MULTIPLIER",
+   "title_ru": "Множитель оценки запаса НПЦ",
+   "type": "number",
+   "default": 1000,
+   "category": "fixed",
+   "min": 0
+  }
+ ],
+ "outputs": [
+  {
+   "code": "yearly_stock",
+   "title_ru": "Годовой запас",
+   "format": "table"
+  },
+  {
+   "code": "stock_by_age",
+   "title_ru": "Окончательный запас по возрастам",
+   "format": "table"
+  },
+  {
+   "code": "net_coefficients",
+   "title_ru": "Уловистость сети",
+   "format": "table"
+  },
+  {
+   "code": "*.nc",
+   "title_ru": "Кубы NetCDF (как в data_stock)",
+   "format": "nc"
+  },
+  {
+   "code": "stock_by_catch.xlsx",
+   "title_ru": "Excel",
+   "format": "xlsx"
+  }
+ ]
+}

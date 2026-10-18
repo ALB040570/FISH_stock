@@ -50,3 +50,35 @@ def data_stack(tmp_path, monkeypatch):
     da_mod = load_service("data_admin", tmp_path, monkeypatch)
     da_mod.DICT = da_mod.DictClient(http=dm)
     return dm, TestClient(da_mod.app), da_mod
+
+
+def upload_samples(da, water_body="zhaysan", folder=None):
+    """Загрузить контрольные данные Жайсана; вернуть {тип: таблица}."""
+    folder = folder or (REPO / "samples" / "zhaysan")
+    tables = {}
+    for f in sorted(folder.glob("*.xlsx")):
+        t = f.stem
+        r = da.post("/upload", headers=H("ichthyologist"), data={"water_body": water_body, "dataset_type": t},
+                    files={"file": (f.name, f.read_bytes())}).json()
+        assert r["ok"], (t, r["errors"][:3])
+        tables[t] = da.get(f"/datasets/{r['dataset']['id']}/data", headers=H()).json()["table"]
+    return tables
+
+
+def dict_maps(dm):
+    sp = {r["values"]["code"]: r["values"]["name_ru"] for r in dm.get("/entities/species/records", headers=H()).json()}
+    gk = {r["values"]["code"]: r["values"]["kind"] for r in dm.get("/entities/gears/records", headers=H()).json()}
+    return sp, gk
+
+
+@pytest.fixture()
+def calc_stack(tmp_path, monkeypatch):
+    """data-model + data-admin + algo-admin в одном процессе, данные Жайсана загружены."""
+    dm = TestClient(load_service("data_model", tmp_path, monkeypatch).app)
+    da_mod = load_service("data_admin", tmp_path, monkeypatch)
+    da_mod.DICT = da_mod.DictClient(http=dm)
+    da = TestClient(da_mod.app)
+    upload_samples(da)
+    aa_mod = load_service("algo_admin", tmp_path, monkeypatch)
+    aa_mod.CLIENTS = aa_mod.Clients(aa_mod.ST, data_admin=da, data_model=dm)
+    return dm, da, TestClient(aa_mod.app), aa_mod

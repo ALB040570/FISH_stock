@@ -1,0 +1,92 @@
+{
+ "version": "1.0.0",
+ "author": "перенос fish_stock_forecast (методика статьи Габбасов и др.)",
+ "entrypoint": "algorithm:run",
+ "language": "python",
+ "runtime": {
+  "python": ">=3.11",
+  "timeout_minutes": 20
+ },
+ "code": "seine_catchability",
+ "title_ru": "Уловистость невода",
+ "title_kk": "Аудың аулағыштығы",
+ "description": "Сигмоида уловистости по возрастным группам, параметры — МНК по годовым уловам (формулы (24)–(26) статьи).",
+ "requires": {
+  "datasets": [
+   "catches",
+   "age_samples",
+   "species_props",
+   "yearly_conditions",
+   "mean_weights"
+  ],
+  "steps": []
+ },
+ "parameters": [
+  {
+   "code": "SEINE_MIN_AGE",
+   "title_ru": "Первая возрастная группа в уловах невода",
+   "type": "integer",
+   "default": 2,
+   "category": "fixed",
+   "min": 1,
+   "max": 5
+  },
+  {
+   "code": "SEINE_C_LOWER",
+   "title_ru": "Нижняя граница c для групп 3 и старше (26)",
+   "type": "number",
+   "default": 0.1,
+   "category": "fixed",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "code": "SEINE_C_LOWER_FIRST",
+   "title_ru": "Нижняя граница c для двухлеток",
+   "type": "number",
+   "default": 0.01,
+   "category": "fixed",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "code": "SEINE_C_UPPER",
+   "title_ru": "Верхняя граница c (26)",
+   "type": "number",
+   "default": 0.8,
+   "category": "fixed",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "code": "SEINE_MIN_SAMPLE",
+   "title_ru": "Мин. объём пробы, шт (иначе — проба за все годы)",
+   "type": "integer",
+   "default": 20,
+   "category": "fixed",
+   "min": 1
+  }
+ ],
+ "outputs": [
+  {
+   "code": "params",
+   "title_ru": "Параметры сигмоид",
+   "format": "table"
+  },
+  {
+   "code": "coefficients",
+   "title_ru": "Коэффициенты c (вид × год × возраст)",
+   "format": "table"
+  },
+  {
+   "code": "zhaysan_catchability_seine_3d.nc",
+   "title_ru": "Куб коэффициентов",
+   "format": "nc"
+  },
+  {
+   "code": "seine_catchability.xlsx",
+   "title_ru": "Excel",
+   "format": "xlsx"
+  }
+ ]
+}

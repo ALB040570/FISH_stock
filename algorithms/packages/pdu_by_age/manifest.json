@@ -1,0 +1,79 @@
+{
+ "version": "1.0.0",
+ "author": "перенос fish_stock_forecast (методика статьи Габбасов и др.)",
+ "entrypoint": "algorithm:run",
+ "language": "python",
+ "runtime": {
+  "python": ">=3.11",
+  "timeout_minutes": 20
+ },
+ "code": "pdu_by_age",
+ "title_ru": "ПДУ НПЦ по возрастам",
+ "title_kk": "ҒӨО ШРА жас бойынша",
+ "description": "Официальный ПДУ НПЦ (т) переводится в штуки по возрастам пропорционально биомассе окончательного запаса с нагрузкой j/m1 (раздел 5 статьи).",
+ "requires": {
+  "datasets": [
+   "catches",
+   "age_samples",
+   "species_props",
+   "yearly_conditions",
+   "mean_weights",
+   "npc_pdu"
+  ],
+  "steps": [
+   "stock_by_catch"
+  ]
+ },
+ "parameters": [
+  {
+   "code": "PDU_CAP",
+   "title_ru": "Доля остатка возраста за итерацию",
+   "type": "number",
+   "default": 0.75,
+   "category": "fixed",
+   "min": 0.01,
+   "max": 1
+  },
+  {
+   "code": "PDU_MAX_ITER",
+   "title_ru": "Максимум итераций",
+   "type": "integer",
+   "default": 10000,
+   "category": "fixed",
+   "min": 1
+  },
+  {
+   "code": "PDU_TOL_G",
+   "title_ru": "Квота исчерпана, если осталось меньше, г",
+   "type": "number",
+   "default": 1.0,
+   "category": "fixed",
+   "min": 0
+  },
+  {
+   "code": "PDU_FREE_STOCK_TOL_G",
+   "title_ru": "Свободного запаса нет, если меньше, г",
+   "type": "number",
+   "default": 1.0,
+   "category": "fixed",
+   "min": 0
+  }
+ ],
+ "outputs": [
+  {
+   "code": "pdu_by_age",
+   "title_ru": "ПДУ по возрастам",
+   "format": "table"
+  },
+  {
+   "code": "pdu_summary",
+   "title_ru": "Итоги по годам",
+   "format": "table"
+  },
+  {
+   "code": "zhaysan_pdu_pieces_3d.nc",
+   "title_ru": "Куб ПДУ, шт",
+   "format": "nc"
+  }
+ ]
+}

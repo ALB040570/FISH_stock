@@ -1,0 +1,133 @@
+{
+ "version": "1.0.0",
+ "author": "перенос fish_stock_forecast (методика статьи Габбасов и др.)",
+ "entrypoint": "algorithm:run",
+ "language": "python",
+ "code": "bayes_cohort",
+ "title_ru": "Байесовская когортная модель",
+ "title_kk": "Байестік когорттық модель",
+ "description": "Когортная модель одного вида по уравнениям (16)–(17) статьи, байесовский вывод (PyMC, NUTS). Правдоподобие — оценки запаса по ловам; вылов — ПДУ НПЦ по возрастам.",
+ "runtime": {
+  "python": ">=3.11",
+  "timeout_minutes": 600,
+  "long": true
+ },
+ "requires": {
+  "datasets": [
+   "catches",
+   "age_samples",
+   "species_props",
+   "yearly_conditions",
+   "mean_weights",
+   "npc_pdu"
+  ],
+  "steps": [
+   "stock_by_catch",
+   "pdu_by_age"
+  ]
+ },
+ "parameters": [
+  {
+   "code": "species",
+   "title_ru": "Виды",
+   "type": "species_list",
+   "default": null,
+   "category": "run",
+   "description": "пусто — все виды с профилем"
+  },
+  {
+   "code": "mode",
+   "title_ru": "Режим",
+   "type": "enum",
+   "default": "new",
+   "category": "run",
+   "enum": [
+    {
+     "value": "new",
+     "title_ru": "расчёт (PyMC, NUTS)"
+    },
+    {
+     "value": "prior",
+     "title_ru": "априорная проверка (секунды)"
+    }
+   ]
+  },
+  {
+   "code": "draws",
+   "title_ru": "Выборок на цепь (пусто — из профиля)",
+   "type": "integer",
+   "default": null,
+   "category": "run",
+   "min": 10
+  },
+  {
+   "code": "tune",
+   "title_ru": "Шагов настройки (пусто — из профиля)",
+   "type": "integer",
+   "default": null,
+   "category": "run",
+   "min": 0
+  },
+  {
+   "code": "chains",
+   "title_ru": "Цепей (пусто — из профиля, 0 — по умолчанию PyMC)",
+   "type": "integer",
+   "default": null,
+   "category": "run",
+   "min": 0,
+   "max": 16
+  },
+  {
+   "code": "target_accept",
+   "title_ru": "target_accept (пусто — из профиля)",
+   "type": "number",
+   "default": null,
+   "category": "run",
+   "min": 0.5,
+   "max": 0.999
+  },
+  {
+   "code": "max_treedepth",
+   "title_ru": "max_treedepth (пусто — из профиля)",
+   "type": "integer",
+   "default": null,
+   "category": "run",
+   "min": 5,
+   "max": 15
+  },
+  {
+   "code": "seed",
+   "title_ru": "seed (пусто — из профиля)",
+   "type": "integer",
+   "default": null,
+   "category": "run"
+  },
+  {
+   "code": "species_profiles",
+   "title_ru": "Профиль водоёма: априорные распределения и варианты формул по видам",
+   "type": "profile",
+   "default": null,
+   "category": "waterbody",
+   "schema": "profile_schema.json",
+   "defaults_dir": "profiles",
+   "description": "Значения для оз. Жайсан — из последних версий скриптов calc_stock_bayes_2g1p_*.py. Для других водоёмов профиль задаёт математик."
+  }
+ ],
+ "outputs": [
+  {
+   "code": "bayes_totals",
+   "title_ru": "Численность по годам (интервалы)",
+   "format": "table"
+  },
+  {
+   "code": "zhaysan_bayes_{вид}.npz",
+   "title_ru": "Сводки и 500 выборок параметров",
+   "format": "npz"
+  },
+  {
+   "code": "zhaysan_bayes_{вид}.nc",
+   "title_ru": "Результаты NetCDF",
+   "format": "nc"
+  }
+ ]
+}

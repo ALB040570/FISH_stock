@@ -235,8 +235,27 @@ def _coerce(key: str, value):
     return str(value)
 
 
+# FishStocke: настройки задаются не файлом, а профилем водоёма и параметрами запуска (см. set_runtime)
+_RUNTIME: dict | None = None
+
+
+def set_runtime(overrides: dict | None) -> None:
+    """{вид: {параметр: значение}} — профиль водоёма + параметры запуска. None — как в исходном проекте."""
+    global _RUNTIME
+    _RUNTIME = overrides
+
+
+def base_config(species: str) -> SpeciesConfig:
+    """Значения по умолчанию: скрипты оз. Жайсан для известных видов, иначе — общие значения SpeciesConfig."""
+    return DEFAULTS.get(species, SpeciesConfig())
+
+
 def get_config(species: str) -> SpeciesConfig:
     """Настройки вида: значения скрипта + сохранённые изменения."""
+    if _RUNTIME is not None:
+        over = _RUNTIME.get(species, {})
+        clean = {k: _coerce(k, v) for k, v in over.items() if k in EDITABLE}
+        return replace(base_config(species), **clean)
     base = DEFAULTS[species]
     over = _load_overrides().get(species, {})
     clean = {k: _coerce(k, v) for k, v in over.items() if k in EDITABLE}
@@ -248,7 +267,7 @@ def overrides(species: str) -> dict:
 
 
 def validate(species: str, values: dict) -> list[str]:
-    cfg = replace(DEFAULTS[species], **{k: _coerce(k, v) for k, v in values.items() if k in EDITABLE})
+    cfg = replace(base_config(species), **{k: _coerce(k, v) for k, v in values.items() if k in EDITABLE})
     errors = []
     if not (0 <= cfg.s_clip_lo < cfg.s_clip_hi <= 1):
         errors.append("границы s должны быть 0 ≤ нижняя < верхняя ≤ 1")

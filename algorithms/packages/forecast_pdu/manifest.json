@@ -1,0 +1,101 @@
+{
+ "version": "1.0.0",
+ "author": "перенос fish_stock_forecast (методика статьи Габбасов и др.)",
+ "entrypoint": "algorithm:run",
+ "language": "python",
+ "code": "forecast_pdu",
+ "title_ru": "Прогноз и ПДУ",
+ "title_kk": "Болжам және ШРА",
+ "description": "Прогноз численности по 500 выборкам байесовской модели теми же уравнениями (16)–(17); три сценария: F = k·M по Баранову, фиксированный ПДУ, без промысла.",
+ "runtime": {
+  "python": ">=3.11",
+  "timeout_minutes": 30
+ },
+ "requires": {
+  "datasets": [
+   "species_props",
+   "yearly_conditions",
+   "mean_weights",
+   "npc_pdu"
+  ],
+  "steps": [
+   "bayes_cohort"
+  ]
+ },
+ "parameters": [
+  {
+   "code": "species",
+   "title_ru": "Виды",
+   "type": "species_list",
+   "default": null,
+   "category": "run",
+   "description": "пусто — все виды с результатами модели"
+  },
+  {
+   "code": "horizon",
+   "title_ru": "Горизонт прогноза, лет",
+   "type": "integer",
+   "default": 5,
+   "category": "run",
+   "min": 1,
+   "max": 10
+  },
+  {
+   "code": "k",
+   "title_ru": "Коэффициент k в F = k·M",
+   "type": "number",
+   "default": 1.0,
+   "category": "run",
+   "min": 0,
+   "max": 10
+  },
+  {
+   "code": "areas",
+   "title_ru": "Площадь водоёма по прогнозным годам, км²",
+   "type": "year_map",
+   "default": {},
+   "category": "run",
+   "description": "пусто — последняя известная площадь"
+  },
+  {
+   "code": "mortality",
+   "title_ru": "Естественная смертность половозрелых по видам и годам (доля)",
+   "type": "species_year_map",
+   "default": {},
+   "category": "run",
+   "description": "пусто — «из истории»"
+  },
+  {
+   "code": "pdu_t",
+   "title_ru": "Фиксированный ПДУ по видам, т",
+   "type": "species_map",
+   "default": {},
+   "category": "run",
+   "description": "пусто — ПДУ НПЦ последнего года"
+  },
+  {
+   "code": "seed",
+   "title_ru": "seed прогноза",
+   "type": "integer",
+   "default": 42,
+   "category": "run"
+  }
+ ],
+ "outputs": [
+  {
+   "code": "forecast",
+   "title_ru": "Прогноз по сценариям",
+   "format": "table"
+  },
+  {
+   "code": "forecast_summary",
+   "title_ru": "Сводка по видам",
+   "format": "table"
+  },
+  {
+   "code": "forecast.xlsx",
+   "title_ru": "Excel",
+   "format": "xlsx"
+  }
+ ]
+}
