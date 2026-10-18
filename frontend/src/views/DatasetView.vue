@@ -34,7 +34,7 @@
           </el-alert>
           <el-table :data="pageRows" size="small" border max-height="620" :row-class-name="rowClass">
             <el-table-column type="index" :index="(i) => (page - 1) * size + i + 1" width="56" fixed />
-            <el-table-column v-for="c in cols" :key="c.code" :label="c.title + (c.unit ? ', ' + c.unit : '')" :min-width="c.species ? 80 : 120"
+            <el-table-column v-for="c in cols" :key="c.code" :label="c.title + (c.unit && !String(c.title).includes(c.unit) ? ', ' + c.unit : '')" :min-width="c.species ? 80 : 120"
                              :align="c.num ? 'right' : 'left'">
               <template #default="{ row }">
                 <el-input v-if="editing" v-model="row[c.code]" size="small" :class="{ num: c.num }" />

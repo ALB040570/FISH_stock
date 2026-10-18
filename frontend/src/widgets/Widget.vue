@@ -13,7 +13,7 @@
         <EChart v-else-if="widget.type === 'line' || widget.type === 'bar'" :option="chart" :height="(widget.h || 4) * 62 + 'px'" />
         <div v-else-if="widget.type === 'table'">
           <el-table :data="data.rows" size="small" :max-height="(widget.h || 5) * 62" border>
-            <el-table-column v-for="c in visibleCols" :key="c.code" :prop="c.code" :label="c.title + (c.unit ? ', ' + c.unit : '')"
+            <el-table-column v-for="c in visibleCols" :key="c.code" :prop="c.code" :label="c.title + (c.unit && !String(c.title).includes(c.unit) ? ', ' + c.unit : '')"
                              :min-width="c.type === 'number' ? 110 : 120" :align="c.type === 'number' || c.type === 'integer' ? 'right' : 'left'">
               <template #default="{ row }">{{ cell(row[c.code], c) }}</template>
             </el-table-column>

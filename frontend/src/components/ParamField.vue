@@ -3,7 +3,8 @@
     <el-input-number v-if="p.type === 'integer' || p.type === 'number'" :model-value="modelValue" :min="p.min ?? undefined" :max="p.max ?? undefined"
                      :step="p.type === 'integer' ? 1 : 0.01" :precision="p.type === 'integer' ? 0 : undefined" :disabled="disabled" controls-position="right"
                      :placeholder="placeholder" style="width:180px" @update:model-value="emit('update:modelValue', $event ?? null)" />
-    <el-select v-else-if="p.type === 'enum'" :model-value="modelValue" :disabled="disabled" style="width:360px" @update:model-value="emit('update:modelValue', $event)">
+    <el-select v-else-if="p.type === 'enum'" :model-value="modelValue" :disabled="disabled" style="width:360px" clearable
+               :placeholder="(p.enum || []).find((e) => e.value === p.default)?.title_ru || placeholder" @update:model-value="emit('update:modelValue', $event)">
       <el-option v-for="e in p.enum" :key="e.value" :label="tr(e, 'title') || e.value" :value="e.value" />
     </el-select>
     <el-switch v-else-if="p.type === 'boolean'" :model-value="!!modelValue" :disabled="disabled" @update:model-value="emit('update:modelValue', $event)" />

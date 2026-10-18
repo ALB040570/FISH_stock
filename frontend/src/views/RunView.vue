@@ -38,7 +38,7 @@
         </div>
         <div v-if="cur !== null" class="card">
           <el-tabs v-model="tab">
-            <el-tab-pane v-if="view" :label="$t('runs.view')" name="view" />
+            <el-tab-pane v-if="view && result" :label="$t('runs.view')" name="view" />
             <el-tab-pane :label="$t('runs.tables')" name="tables" />
             <el-tab-pane :label="$t('runs.files')" name="files" />
             <el-tab-pane :label="$t('common.log')" name="log" />

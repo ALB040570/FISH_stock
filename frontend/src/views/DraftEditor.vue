@@ -28,7 +28,6 @@
             <el-scrollbar max-height="64vh">
               <div v-for="f in d.files" :key="f.path" class="fl" :class="{ sel: f.path === path, dim: f.path.startsWith('fishcore/') }" @click="open(f.path)">{{ f.path }}</div>
             </el-scrollbar>
-            <div class="muted small" style="margin-top:8px">{{ $t('algo.contract') }}</div>
           </div>
           <div class="card" style="grid-column: span 9">
             <div class="row" style="margin-bottom:6px">
@@ -38,7 +37,8 @@
               <el-button size="small" type="primary" :disabled="!dirty || d.status === 'published'" @click="saveFile">{{ $t('common.save') }}</el-button>
               <el-button v-if="path !== 'manifest.json'" size="small" text type="danger" :disabled="d.status === 'published'" @click="delFile"><el-icon><Delete /></el-icon></el-button>
             </div>
-            <textarea v-model="text" class="code-editor" spellcheck="false" @input="dirty = true" @keydown.tab.prevent="tabKey" />
+            <div class="muted small" style="margin-bottom:6px">{{ $t('algo.contract') }}</div>
+            <textarea v-model="text" class="code-editor nowrap" wrap="off" spellcheck="false" @input="dirty = true" @keydown.tab.prevent="tabKey" />
           </div>
         </div>
         <div class="card">
@@ -165,4 +165,5 @@ onBeforeUnmount(() => clearInterval(poll))
 .fl:hover { background: #eef3f7; }
 .fl.sel { background: #e3eef4; font-weight: 600; }
 .fl.dim { color: #8a98a6; }
+.nowrap { white-space: pre; overflow-x: auto; overflow-wrap: normal; }
 </style>

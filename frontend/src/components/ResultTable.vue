@@ -7,7 +7,7 @@
       <el-button size="small" @click="csv">CSV</el-button>
     </div>
     <el-table :data="page" size="small" border max-height="560">
-      <el-table-column v-for="c in table.columns" :key="c.code" :prop="c.code" :label="c.title + (c.unit ? ', ' + c.unit : '')" sortable
+      <el-table-column v-for="c in table.columns" :key="c.code" :prop="c.code" :label="c.title + (c.unit && !String(c.title).includes(c.unit) ? ', ' + c.unit : '')" sortable
                        :min-width="110" :align="c.type === 'number' || c.type === 'integer' ? 'right' : 'left'">
         <template #default="{ row }">{{ cell(row[c.code], c) }}</template>
       </el-table-column>
@@ -31,7 +31,7 @@ function cell(v, c) {
   return v
 }
 function csv() {
-  const head = p.table.columns.map((c) => c.title + (c.unit ? ', ' + c.unit : ''))
+  const head = p.table.columns.map((c) => c.title + (c.unit && !String(c.title).includes(c.unit) ? ', ' + c.unit : ''))
   const lines = [head, ...filtered.value.map((r) => p.table.columns.map((c) => r[c.code] ?? ''))]
   const txt = '﻿' + lines.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n')
   const a = document.createElement('a')

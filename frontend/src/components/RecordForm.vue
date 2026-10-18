@@ -1,7 +1,7 @@
 <template>
   <el-form label-width="190px">
     <template v-for="f in fields" :key="f.code">
-      <el-form-item v-if="f.type !== 'geo_shape' && f.type !== 'geo_point'" :label="tr(f, 'title') + (f.unit ? ', ' + f.unit : '')" :required="f.required"
+      <el-form-item v-if="f.type !== 'geo_shape' && f.type !== 'geo_point'" :label="tr(f, 'title') + (f.unit && !tr(f, 'title').includes(f.unit) ? ', ' + f.unit : '')" :required="f.required"
                     :error="errs[f.code]">
         <el-select v-if="f.type === 'enum'" v-model="v[f.code]" clearable style="width:100%">
           <el-option v-for="e in f.enum" :key="e.value" :label="tr(e, 'title') || e.value" :value="e.value" />
