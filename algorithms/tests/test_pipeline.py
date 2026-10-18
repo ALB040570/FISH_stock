@@ -89,3 +89,26 @@ def test_forecast_matches_legacy(env):
                 b = np.array(new["scenarios"][sc][k], float)
                 assert np.allclose(a, b, rtol=1e-6, equal_nan=True), (ru, sc, k)
         assert old["settings"]["pdu_fixed_t"] == new["settings"]["pdu_fixed_t"]
+
+
+def test_cancel_running_step(tmp_path):
+    """Отмена выполняющегося шага: алгоритм останавливается при ближайшем ctx.progress()."""
+    import time
+    files = {"manifest.json": json.dumps({"code": "slow", "version": "0.0.1", "title_ru": "медленный", "entrypoint": "algorithm:run",
+                                          "parameters": [], "requires": {}}).encode(),
+             "algorithm.py": b"import time\ndef run(ctx):\n    for i in range(600):\n        time.sleep(0.1)\n        ctx.progress(i / 600)\n"}
+    d = tmp_path / "slow"
+    executor.prepare_step(d, files, {"water_body": "x", "params": {}})
+    t0 = time.time()
+    st = executor.run_step(d, timeout_s=120, on_poll=lambda: time.time() - t0 > 1.5, poll_s=0.5)
+    assert st["status"] == "cancelled" and time.time() - t0 < 30
+
+
+def test_failing_step_reports_error(tmp_path):
+    files = {"manifest.json": json.dumps({"code": "bad", "version": "0.0.1", "title_ru": "ошибка", "entrypoint": "algorithm:run",
+                                          "parameters": [], "requires": {}}).encode(),
+             "algorithm.py": "from fishrunner import UserError\ndef run(ctx):\n    raise UserError('нет данных за 2024 год')\n".encode()}
+    d = tmp_path / "bad"
+    executor.prepare_step(d, files, {"water_body": "x", "params": {}})
+    st = executor.run_step(d, timeout_s=60)
+    assert st["status"] == "failed" and st["message"] == "нет данных за 2024 год" and "traceback" not in st

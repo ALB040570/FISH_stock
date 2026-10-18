@@ -211,4 +211,6 @@ def main(step_dir: str) -> int:
 
 
 if __name__ == "__main__":
+    # алгоритмы делают «from fishrunner import UserError»: это должен быть тот же модуль, что выполняется
+    sys.modules.setdefault("fishrunner", sys.modules["__main__"])
     sys.exit(main(sys.argv[1]))

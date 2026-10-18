@@ -44,11 +44,21 @@ def run_step(step_dir: Path, timeout_s: float | None = None, on_poll=None, poll_
             time.sleep(poll_s)
             if on_poll and on_poll():
                 (step_dir / "CANCEL").write_text("1")
-            if (step_dir / "CANCEL").exists() and time.time() - t0 > 0:
+            if (step_dir / "CANCEL").exists():
                 try:
-                    p.wait(30)
+                    p.wait(30)          # алгоритм сам завершится при ближайшем ctx.progress()
                 except subprocess.TimeoutExpired:
                     p.kill()
+                    p.wait()
+                st = {}
+                try:
+                    st = json.loads((step_dir / "status.json").read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    pass
+                if st.get("status") not in ("done", "failed", "cancelled"):
+                    st = {"status": "cancelled", "message": "Расчёт отменён пользователем"}
+                    (step_dir / "status.json").write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
+                return st
             if timeout_s and time.time() - t0 > timeout_s:
                 p.kill()
                 p.wait()
