@@ -1,0 +1,32 @@
+{
+ "id": "20260929-233401",
+ "mode": "new",
+ "species": [
+  "судак"
+ ],
+ "state": "done",
+ "started": "2026-09-29T23:34:01",
+ "updated_ts": 1790706914.8071823,
+ "progress": {
+  "phase": "done"
+ },
+ "finished": [
+  {
+   "species": "судак",
+   "error": null,
+   "seconds": 71.2,
+   "divergences": 56,
+   "rhat_X_max": 1.0044552472453243,
+   "chains": 4,
+   "draws_per_chain": 1000
+  }
+ ],
+ "current": null,
+ "index": 0,
+ "pid": 13416,
+ "error": null,
+ "updated": "2026-09-29T23:35:14",
+ "species_started": "2026-09-29T23:34:03",
+ "species_started_ts": 1790706843.478141,
+ "ended": "2026-09-29T23:35:14"
+}

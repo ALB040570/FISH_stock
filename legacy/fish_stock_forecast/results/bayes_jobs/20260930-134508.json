@@ -1,0 +1,22 @@
+{
+ "id": "20260930-134508",
+ "mode": "new",
+ "species": [
+  "язь"
+ ],
+ "state": "cancelled",
+ "started": "2026-09-30T13:45:08",
+ "updated_ts": 1790763895.661212,
+ "progress": {
+  "phase": "cancelled"
+ },
+ "finished": [],
+ "current": null,
+ "index": 0,
+ "pid": 16144,
+ "error": null,
+ "updated": "2026-09-30T15:24:55",
+ "species_started": "2026-09-30T13:45:11",
+ "species_started_ts": 1790757911.320462,
+ "ended": "2026-09-30T15:24:56"
+}

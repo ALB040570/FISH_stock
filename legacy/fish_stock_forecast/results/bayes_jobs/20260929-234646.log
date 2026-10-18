@@ -1,0 +1,33 @@
+2026-09-29T23:46:47  новый расчёт: плотва
+Этапы 2–3: запас по уловам и ПДУ по возрастам…
+[плотва] новый расчёт: подготовка входных данных
+  исключено ловов, где вид не учитывался: 5
+  годы 2015–2024, возрасты 1..10, ловов в правдоподобии: 685
+  сборка модели PyMC; выборка: 1000 выборок, 1000 шагов настройки, target_accept 0.85, seed 42
+g++ not available, if using conda: `conda install gxx`
+Initializing NUTS using adapt_diag...
+D:\pythonprojects\fish_stock_forecast\.venv\Lib\site-packages\pytensor\tensor\rewriting\elemwise.py:1004: UserWarning: Loop fusion failed because the resulting node would exceed the kernel argument limit.
+  warn(
+D:\pythonprojects\fish_stock_forecast\.venv\Lib\site-packages\pytensor\tensor\rewriting\elemwise.py:1004: UserWarning: Loop fusion failed because the resulting node would exceed the kernel argument limit.
+  warn(
+Multiprocess sampling (4 chains in 4 jobs)
+NUTS: [density_alpha, s_base, s_juvenile_steep, s_aging_slow, s_year_fluct, press_base, beta_1d, q_raw, egg_survival_base, fec_at_m0, fec_at_m1, X_initial_older_raw, sigma_stock]
+g++ not available, if using conda: `conda install gxx`
+g++ not available, if using conda: `conda install gxx`
+g++ not available, if using conda: `conda install gxx`
+g++ not available, if using conda: `conda install gxx`
+  модель собрана за 1 мин 03 с, идёт выборка
+D:\pythonprojects\fish_stock_forecast\.venv\Lib\site-packages\pymc\step_methods\hmc\quadpotential.py:321: RuntimeWarning: overflow encountered in dot
+  return 0.5 * np.dot(x, v_out)
+D:\pythonprojects\fish_stock_forecast\.venv\Lib\site-packages\pymc\step_methods\hmc\quadpotential.py:321: RuntimeWarning: overflow encountered in dot
+  return 0.5 * np.dot(x, v_out)
+D:\pythonprojects\fish_stock_forecast\.venv\Lib\site-packages\pymc\step_methods\hmc\quadpotential.py:321: RuntimeWarning: overflow encountered in dot
+  return 0.5 * np.dot(x, v_out)
+D:\pythonprojects\fish_stock_forecast\.venv\Lib\site-packages\pymc\step_methods\hmc\quadpotential.py:321: RuntimeWarning: overflow encountered in dot
+  return 0.5 * np.dot(x, v_out)
+Sampling 4 chains for 1_000 tune and 1_000 draw iterations (4_000 + 4_000 draws total) took 337 seconds.
+  выборка закончена за 5 мин 58 с; расходимостей: 0
+  сверка уравнений numpy и PyMC: наибольшее относительное отличие X = 1.04e-13
+  сохранено: D:\pythonprojects\fish_stock_forecast\results\zhaysan_bayes_plotva.npz
+  .nc: записан
+2026-09-29T23:52:48  завершено

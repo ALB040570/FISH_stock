@@ -1,0 +1,32 @@
+{
+ "id": "20260929-235454",
+ "mode": "new",
+ "species": [
+  "щука"
+ ],
+ "state": "done",
+ "started": "2026-09-29T23:54:54",
+ "updated_ts": 1790708481.9598606,
+ "progress": {
+  "phase": "done"
+ },
+ "finished": [
+  {
+   "species": "щука",
+   "error": null,
+   "seconds": 385.3,
+   "divergences": 0,
+   "rhat_X_max": 1.0091840935854752,
+   "chains": 4,
+   "draws_per_chain": 1000
+  }
+ ],
+ "current": null,
+ "index": 0,
+ "pid": 12180,
+ "error": null,
+ "updated": "2026-09-30T00:01:21",
+ "species_started": "2026-09-29T23:54:56",
+ "species_started_ts": 1790708096.625631,
+ "ended": "2026-09-30T00:01:21"
+}

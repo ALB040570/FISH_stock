@@ -1,0 +1,32 @@
+{
+ "id": "20260930-014828",
+ "mode": "new",
+ "species": [
+  "сазан"
+ ],
+ "state": "done",
+ "started": "2026-09-30T01:48:28",
+ "updated_ts": 1790715893.7398312,
+ "progress": {
+  "phase": "done"
+ },
+ "finished": [
+  {
+   "species": "сазан",
+   "error": null,
+   "seconds": 982.2,
+   "divergences": 0,
+   "rhat_X_max": 1.003403783100313,
+   "chains": 4,
+   "draws_per_chain": 1000
+  }
+ ],
+ "current": null,
+ "index": 0,
+ "pid": 15512,
+ "error": null,
+ "updated": "2026-09-30T02:04:53",
+ "species_started": "2026-09-30T01:48:31",
+ "species_started_ts": 1790714911.4567838,
+ "ended": "2026-09-30T02:04:53"
+}

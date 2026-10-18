@@ -1,0 +1,32 @@
+{
+ "id": "20260929-233813",
+ "mode": "new",
+ "species": [
+  "окунь"
+ ],
+ "state": "done",
+ "started": "2026-09-29T23:38:13",
+ "updated_ts": 1790707261.437854,
+ "progress": {
+  "phase": "done"
+ },
+ "finished": [
+  {
+   "species": "окунь",
+   "error": null,
+   "seconds": 165.8,
+   "divergences": 0,
+   "rhat_X_max": 1.0057672987697082,
+   "chains": 4,
+   "draws_per_chain": 1000
+  }
+ ],
+ "current": null,
+ "index": 0,
+ "pid": 8444,
+ "error": null,
+ "updated": "2026-09-29T23:41:01",
+ "species_started": "2026-09-29T23:38:15",
+ "species_started_ts": 1790707095.55793,
+ "ended": "2026-09-29T23:41:01"
+}

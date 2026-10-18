@@ -1,0 +1,32 @@
+{
+ "id": "20260929-230602",
+ "mode": "new",
+ "species": [
+  "лещ"
+ ],
+ "state": "done",
+ "started": "2026-09-29T23:06:02",
+ "updated_ts": 1790705720.8905249,
+ "progress": {
+  "phase": "done"
+ },
+ "finished": [
+  {
+   "species": "лещ",
+   "error": null,
+   "seconds": 555.8,
+   "divergences": 0,
+   "rhat_X_max": 1.003993654606961,
+   "chains": 4,
+   "draws_per_chain": 1000
+  }
+ ],
+ "current": null,
+ "index": 0,
+ "pid": 17164,
+ "error": null,
+ "updated": "2026-09-29T23:15:20",
+ "species_started": "2026-09-29T23:06:04",
+ "species_started_ts": 1790705164.9821606,
+ "ended": "2026-09-29T23:15:20"
+}
