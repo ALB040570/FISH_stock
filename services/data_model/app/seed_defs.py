@@ -60,8 +60,8 @@ ENTITIES = [
             F("name_ru", "Название (рус.)", "Атауы (орыс.)", required=True, unique=True),
             F("name_kk", "Название (каз.)", "Атауы (қаз.)"),
             F("kind", "Вид орудия", "Құрал түрі", "enum", required=True, enum=[
-                {"value": "seine", "title_ru": "Невод (метод площадей)", "title_kk": "Ау (аудан әдісі)"},
-                {"value": "net", "title_ru": "Сеть (балансовый метод)", "title_kk": "Желі (баланс әдісі)"},
+                {"value": "seine", "title_ru": "Невод (метод площадей)", "title_kk": "Сүзекі (аудан әдісі)"},
+                {"value": "net", "title_ru": "Сеть (балансовый метод)", "title_kk": "Ау (баланс әдісі)"},
             ]),
         ],
     },
@@ -83,8 +83,8 @@ SPECIES = [
 ]
 
 GEARS = [
-    ("seine", "невод", "ау", "seine"),
-    ("net", "сеть", "желі", "net"),
+    ("seine", "невод", "сүзекі", "seine"),
+    ("net", "сеть", "ау", "net"),
 ]
 
 YEAR = F("year", "Год", "Жыл", "integer", required=True, min=1900, max=2100)
@@ -153,7 +153,7 @@ DATASET_TYPES = [
             F("m2", "Возраст, до которого — корм хищников m2", "Жыртқыштарға жем болатын жас m2", "integer",
               required=True, min=1, max=40),
             F("v_cr", "Крейсерская скорость, м/с", "Круиздік жылдамдық, м/с", "number", required=True, unit="м/с", min=0),
-            F("k_net", "Средняя уловистость сети", "Желінің орташа аулағыштығы", "number", required=True, min=0, max=1),
+            F("k_net", "Средняя уловистость сети", "Аудың орташа аулағыштығы", "number", required=True, min=0, max=1),
             F("k_seine", "Средняя уловистость невода", "Аудың орташа аулағыштығы", "number", required=True, min=0, max=1),
             F("is_predator", "Хищник", "Жыртқыш", "boolean", required=True),
             F("fecundity_min", "Плодовитость, мин., икринок", "Өсімталдық, мин.", "number", required=True, unit="шт", min=0),
@@ -170,8 +170,8 @@ DATASET_TYPES = [
         "columns": [
             YEAR,
             F("lake_area_km2", "Площадь водоёма, км²", "Су айдынының ауданы, км²", "number", required=True, unit="км²", min=0),
-            F("net_length_m", "Длина сети, м", "Желі ұзындығы, м", "number", required=True, unit="м", min=0),
-            F("net_hours", "Время стоянки сети, ч", "Желінің тұру уақыты, сағ", "integer", required=True, unit="ч", min=1),
+            F("net_length_m", "Длина сети, м", "Ау ұзындығы, м", "number", required=True, unit="м", min=0),
+            F("net_hours", "Время стоянки сети, ч", "Аудың тұру уақыты, сағ", "integer", required=True, unit="ч", min=1),
         ],
         "species_columns": {"enabled": False},
     },
