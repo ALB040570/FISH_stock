@@ -82,3 +82,21 @@ def calc_stack(tmp_path, monkeypatch):
     aa_mod = load_service("algo_admin", tmp_path, monkeypatch)
     aa_mod.CLIENTS = aa_mod.Clients(aa_mod.ST, data_admin=da, data_model=dm)
     return dm, da, TestClient(aa_mod.app), aa_mod
+
+
+@pytest.fixture()
+def algo_stack(tmp_path, monkeypatch):
+    """Все сервисы, кроме пользователей и дашбордов; algo-model обращается к остальным через TestClient."""
+    dm, da, aa, aa_mod = None, None, None, None
+    dm = TestClient(load_service("data_model", tmp_path, monkeypatch).app)
+    da_mod = load_service("data_admin", tmp_path, monkeypatch)
+    da_mod.DICT = da_mod.DictClient(http=dm)
+    da = TestClient(da_mod.app)
+    upload_samples(da)
+    aa_mod = load_service("algo_admin", tmp_path, monkeypatch)
+    aa_mod.CLIENTS = aa_mod.Clients(aa_mod.ST, data_admin=da, data_model=dm)
+    aa = TestClient(aa_mod.app)
+    am_mod = load_service("algo_model", tmp_path, monkeypatch)
+    for k, c in (("algo_admin", aa), ("data_admin", da), ("data_model", dm)):
+        am_mod.SVC[k] = am_mod.Svc(k, http=c)
+    return dm, da, aa, TestClient(am_mod.app), am_mod

@@ -155,6 +155,19 @@ class Context:
         return self.inputs.get(step_code)
 
 
+def _apply_fixed_early(manifest: dict, params: dict) -> None:
+    """Неизменяемые параметры с именами настроек fishcore.config применяются ДО загрузки кода алгоритма:
+    часть функций ядра берёт их значениями аргументов по умолчанию при импорте."""
+    if not (Path(sys.path[0]) / "fishcore" / "config.py").exists():
+        return
+    cfg = importlib.import_module("fishcore.config")
+    for p in manifest.get("parameters", []):
+        code = p["code"]
+        if p.get("category") == "fixed" and hasattr(cfg, code) and params.get(code) is not None:
+            cur = getattr(cfg, code)
+            setattr(cfg, code, params[code] if isinstance(cur, str) else type(cur)(params[code]))
+
+
 def main(step_dir: str) -> int:
     step_dir = Path(step_dir)
     status = {"status": "running", "started_at": _now(), "pid": os.getpid()}
@@ -166,6 +179,7 @@ def main(step_dir: str) -> int:
         manifest = json.loads((pkg / "manifest.json").read_text(encoding="utf-8"))
         mod_name, func_name = manifest.get("entrypoint", "algorithm:run").split(":")
         ctx = Context(step_dir)
+        _apply_fixed_early(manifest, ctx.params)
         ctx.log(f"алгоритм {manifest['code']} {manifest['version']}, водоём {ctx.water_body}")
         func = getattr(importlib.import_module(mod_name), func_name)
         t0 = time.time()
