@@ -1,0 +1,43 @@
+# Docker-мен орнату
+
+1. Docker және Docker Compose орнатыңыз (macOS және Windows-та — Docker Desktop).
+2. Қосымшаны жүктеп алыңыз:
+
+   ```bash
+   git clone -b develop https://github.com/ALB040570/FISH_stocke.git
+   cd FISH_stocke
+   ```
+
+3. Баптаулар файлын жасаңыз:
+
+   ```bash
+   cp .env.example .env
+   python3 -c "import secrets;print(secrets.token_urlsafe(48))"   # екі рет орындаңыз
+   ```
+
+   `.env` файлын мәтіндік редакторда ашып, мыналарды беріңіз:
+
+   | Айнымалы | Мәні |
+   |---|---|
+   | `FISH_JWT_SECRET` | бірінші кездейсоқ жол (кіру токендеріне қол қою құпиясы) |
+   | `FISH_SERVICE_TOKEN` | екінші кездейсоқ жол (қызметтер арасындағы шақырулар токені) |
+   | `FISH_ADMIN_PASSWORD` | бірінші әкімшінің құпиясөзі (логин `admin`) |
+   | `FISH_WORKERS` | бір мезгілдегі есептеулер саны (әдепкі бойынша 2) |
+   | `FISH_HTTP_PORT` | қосымша порты (әдепкі бойынша 8080) |
+
+   `.env` файлында құпиялар бар: оны жібермеңіз және Git-ке қоспаңыз.
+
+4. Жинап, іске қосыңыз:
+
+   ```bash
+   docker compose up -d --build      # алғашқы жинау — 10–20 минут
+   docker compose ps                 # барлық қызмет running / healthy күйінде болуы тиіс
+   ```
+
+5. `http://<сервер мекенжайы>:8080` ашып, кіріңіз: `admin` және `FISH_ADMIN_PASSWORD` ішіндегі құпиясөз.
+
+Деректер `fishdata` Docker томында сақталады және қайта іске қосқанда және жаңартқанда сақталады.
+
+Тоқтату: `docker compose down` (деректер сақталады). Қызмет журналдары: `docker compose logs -f algo_admin`.
+
+Әрі қарай — [Алғашқы іске қосу және деректерді жүктеу](help:first-start).

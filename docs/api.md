@@ -1,6 +1,6 @@
 # API сервисов FishStocke
 
-Сервисы доступны через шлюз: `/api/<сервис>/<путь>`, сервис — users, data-model, data-admin, algo-model, algo-admin, dashboards.
+Сервисы доступны через шлюз: `/api/<сервис>/<путь>`, сервис — users, data-model, data-admin, algo-model, algo-admin, dashboards, help.
 Авторизация — `Authorization: Bearer <access_token>` (`POST /api/users/auth/login`). Ошибки — `{"error": {"code", "message", "details"}}`.
 Интерактивная документация (Swagger) каждого сервиса — `http://<сервис>:8000/docs` внутри сети Docker или `http://127.0.0.1:800N/docs` при запуске без Docker.
 Маршруты `/internal/*` — только для вызовов между сервисами (`X-Service-Token`), шлюз их не пропускает.
@@ -43,7 +43,7 @@
 | POST | `/datasets/{ds_id}/upload` | Загрузка Excel (merge/replace, dry_run — только проверка) |
 | POST | `/upload` | Загрузка Excel с созданием набора, если его нет |
 | PUT | `/datasets/{ds_id}/data` | Правка в браузере → новая версия |
-| POST | `/datasets/{ds_id}/restore/{n}` | Восстановить версию как новую |
+| POST | `/datasets/{ds_id}/restore/{n}` | Восстановить версию статьи |
 | GET | `/datasets/{ds_id}/diff` | Сравнение двух версий |
 | GET | `/water-bodies/status` | Сводка данных по водоёмам |
 | GET | `/bundle/{water_body}` | Текущие версии наборов водоёма |
@@ -149,4 +149,27 @@
 | GET | `/tests/{tid}` | Состояние и журнал теста |
 | GET | `/tests/{tid}/result` | Результат теста |
 | POST | `/drafts/{did}/publish` | Публикация проверенной версии в каталог |
+
+## 7. Справка — `/api/help`
+
+| Метод | Путь | Назначение |
+|---|---|---|
+| GET | `/health` | Состояние сервиса |
+| GET | `/sections` | Оглавление справки: разделы и статьи |
+| GET | `/articles/{aid}` | Статья (expand=1 — с таблицами параметров и примером) |
+| GET | `/articles/{aid}/versions` | Версии статьи |
+| GET | `/search` | Поиск по справке |
+| GET | `/context` | Статья для экрана приложения |
+| GET | `/example` | Варианты примера на числах (виды, годы) |
+| GET | `/bundled/{name}` | Рисунок поставки |
+| PUT | `/articles/{aid}` | Сохранить статью → новая версия |
+| POST | `/articles/{aid}/restore/{n}` | Восстановить версию статьи |
+| POST | `/articles/{aid}/take-bundled` | Взять текст поставки |
+| POST | `/articles` | Новая статья |
+| DELETE | `/articles/{aid}` | Удалить статью |
+| POST | `/images` | Загрузить рисунок |
+| GET | `/images/{name}` | Рисунок статьи |
+| GET | `/export.docx` | Руководство / раздел / статья в Word |
+| GET | `/export.pdf` | Руководство / раздел / статья в PDF |
+| GET | `/export.md` | Руководство / раздел в Markdown |
 

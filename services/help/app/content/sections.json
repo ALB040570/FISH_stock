@@ -1,0 +1,50 @@
+[
+ {
+  "code": "general",
+  "order": 1,
+  "title_ru": "Общие сведения",
+  "title_kk": "Жалпы мәліметтер"
+ },
+ {
+  "code": "ichthyologist",
+  "order": 2,
+  "title_ru": "Ихтиологу: данные, расчёты, мониторинг",
+  "title_kk": "Ихтиологқа: деректер, есептеулер, мониторинг"
+ },
+ {
+  "code": "methodology",
+  "order": 3,
+  "title_ru": "Методика расчёта",
+  "title_kk": "Есептеу әдістемесі"
+ },
+ {
+  "code": "mathematician",
+  "order": 4,
+  "title_ru": "Математику: алгоритмы и параметры",
+  "title_kk": "Математикке: алгоритмдер және параметрлер"
+ },
+ {
+  "code": "dashboards",
+  "order": 5,
+  "title_ru": "Дашборды",
+  "title_kk": "Дашбордтар"
+ },
+ {
+  "code": "admin",
+  "order": 6,
+  "title_ru": "Администратору",
+  "title_kk": "Әкімшіге"
+ },
+ {
+  "code": "install",
+  "order": 7,
+  "title_ru": "Установка и сопровождение",
+  "title_kk": "Орнату және сүйемелдеу"
+ },
+ {
+  "code": "glossary",
+  "order": 8,
+  "title_ru": "Глоссарий",
+  "title_kk": "Глоссарий"
+ }
+]

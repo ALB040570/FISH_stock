@@ -24,6 +24,7 @@ const routes = [
   { path: '/dashboards/:id', component: L('DashboardView') },
   { path: '/users', component: L('Users'), meta: { perm: 'users.manage' } },
   { path: '/audit', component: L('Audit'), meta: { perm: 'audit.view' } },
+  { path: '/help/:id?', component: L('Help') },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 

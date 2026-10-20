@@ -37,6 +37,9 @@
           </div>
         </div>
         <div v-if="cur !== null" class="card">
+          <div v-if="METHOD[run.steps[cur].algorithm]" class="method-link">
+            <router-link :to="'/help/' + METHOD[run.steps[cur].algorithm]"><el-icon><QuestionFilled /></el-icon> {{ $t('help.method_step') }}</router-link>
+          </div>
           <el-tabs v-model="tab">
             <el-tab-pane v-if="view && result" :label="$t('runs.view')" name="view" />
             <el-tab-pane :label="$t('runs.tables')" name="tables" />
@@ -87,6 +90,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api, download } from '../api'
+const METHOD = { seine_catchability: 'method-seine', stock_by_catch: 'method-stock', pdu_by_age: 'method-pdu-age', bayes_cohort: 'method-bayes', forecast_pdu: 'method-forecast' }
 import { useAuth } from '../store/auth'
 import { fmt } from '../components/charts'
 import StateBlock from '../components/StateBlock.vue'
@@ -153,4 +157,6 @@ onBeforeUnmount(() => clearInterval(timer))
 .st.done, .st.reused { background: #f2faf6; }
 .st.failed { background: #fbf0ee; }
 .num-badge { width: 22px; height: 22px; border-radius: 50%; background: #1d5c7a; color: #fff; display: grid; place-items: center; font-size: 12px; }
+.method-link { float: right; font-size: 13px; margin-top: 10px; position: relative; z-index: 1; }
+.method-link a { color: #2b7a9e; text-decoration: none; display: inline-flex; gap: 4px; align-items: center; }
 </style>

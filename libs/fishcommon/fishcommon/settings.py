@@ -31,7 +31,7 @@ DEV_SECRET = "dev-only-secret-change-me-0123456789abcdef"
 
 SERVICE_PORTS = {
     "users": 8001, "data_model": 8002, "data_admin": 8003,
-    "algo_model": 8004, "algo_admin": 8005, "dashboards": 8006,
+    "algo_model": 8004, "algo_admin": 8005, "dashboards": 8006, "help": 8007,
 }
 
 

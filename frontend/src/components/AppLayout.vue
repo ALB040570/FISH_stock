@@ -24,12 +24,18 @@
           <el-menu-item index="/users"><el-icon><User /></el-icon><span>{{ $t('nav.users') }}</span></el-menu-item>
           <el-menu-item index="/audit"><el-icon><Document /></el-icon><span>{{ $t('nav.audit') }}</span></el-menu-item>
         </el-menu-item-group>
+        <el-menu-item-group :title="collapsed ? '' : ' '">
+          <el-menu-item index="/help"><el-icon><QuestionFilled /></el-icon><span>{{ $t('nav.help') }}</span></el-menu-item>
+        </el-menu-item-group>
       </el-menu>
     </el-aside>
     <el-container>
       <el-header class="header" height="52px">
         <el-button text @click="collapsed = !collapsed"><el-icon :size="18"><Fold v-if="!collapsed" /><Expand v-else /></el-icon></el-button>
         <div class="grow" />
+        <el-tooltip :content="$t('help.context')" placement="bottom">
+          <el-button circle size="small" @click="openContext"><el-icon><QuestionFilled /></el-icon></el-button>
+        </el-tooltip>
         <el-radio-group v-model="lang" size="small" @change="setLang">
           <el-radio-button value="ru">РУС</el-radio-button>
           <el-radio-button value="kk">ҚАЗ</el-radio-button>
@@ -50,6 +56,12 @@
       <el-main class="main"><slot /></el-main>
     </el-container>
     <PasswordDialog v-model="pwd" :forced="forced" />
+    <el-drawer v-model="ctxOpen" :title="ctxArt?.title || $t('nav.help')" size="560px">
+      <div v-if="ctxArt">
+        <HelpMarkdown :source="ctxArt.markdown" strip-title @navigate="ctxOpen = false" />
+        <el-button style="margin-top:14px" type="primary" plain @click="ctxOpen = false; router.push(`/help/${ctxArt.id}`)">{{ $t('help.open_in_help') }}</el-button>
+      </div>
+    </el-drawer>
   </el-container>
 </template>
 <script setup>
@@ -59,6 +71,8 @@ import { useI18n } from 'vue-i18n'
 import { useAuth } from '../store/auth'
 import { setLang } from '../i18n'
 import PasswordDialog from './PasswordDialog.vue'
+import HelpMarkdown from './HelpMarkdown.vue'
+import { api } from '../api'
 
 const auth = useAuth()
 const route = useRoute()
@@ -71,6 +85,15 @@ const forced = computed(() => !!auth.user?.must_change_password)
 const active = computed(() => '/' + (route.path.split('/')[1] || ''))
 const initials = computed(() => (auth.user?.name || '?').split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase())
 watch(() => auth.loggedIn, (v) => { if (!v) router.push({ path: '/login', query: { next: route.fullPath } }) })
+const ctxOpen = ref(false)
+const ctxArt = ref(null)
+async function openContext() {
+  try {
+    const c = await api.get('help', '/context', { route: route.path, lang: locale.value })
+    ctxArt.value = await api.get('help', `/articles/${c.id}`, { lang: locale.value, expand: 1 })
+    ctxOpen.value = true
+  } catch (e) { router.push('/help') }
+}
 function onCmd(c) {
   if (c === 'logout') { auth.logout(); router.push('/login') }
   if (c === 'password') pwd.value = true

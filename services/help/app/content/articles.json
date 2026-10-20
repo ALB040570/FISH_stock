@@ -1,0 +1,335 @@
+[
+ {
+  "id": "intro",
+  "section": "general",
+  "order": 1,
+  "routes": [
+   "/help"
+  ]
+ },
+ {
+  "id": "interface",
+  "section": "general",
+  "order": 2,
+  "routes": [
+   "/login"
+  ]
+ },
+ {
+  "id": "roles",
+  "section": "general",
+  "order": 3,
+  "routes": []
+ },
+ {
+  "id": "map",
+  "section": "general",
+  "order": 4,
+  "routes": [
+   "/"
+  ]
+ },
+ {
+  "id": "workflow",
+  "section": "general",
+  "order": 5,
+  "routes": []
+ },
+ {
+  "id": "dictionaries",
+  "section": "ichthyologist",
+  "order": 10,
+  "routes": [
+   "/dictionaries",
+   "/dictionaries/entities/*"
+  ]
+ },
+ {
+  "id": "water-body",
+  "section": "ichthyologist",
+  "order": 11,
+  "routes": []
+ },
+ {
+  "id": "dataset-types",
+  "section": "ichthyologist",
+  "order": 12,
+  "routes": [
+   "/dictionaries/types/*"
+  ]
+ },
+ {
+  "id": "data-upload",
+  "section": "ichthyologist",
+  "order": 20,
+  "routes": [
+   "/data"
+  ]
+ },
+ {
+  "id": "data-errors",
+  "section": "ichthyologist",
+  "order": 21,
+  "routes": []
+ },
+ {
+  "id": "data-edit",
+  "section": "ichthyologist",
+  "order": 22,
+  "routes": [
+   "/data/*"
+  ]
+ },
+ {
+  "id": "calculations",
+  "section": "ichthyologist",
+  "order": 30,
+  "routes": [
+   "/calculations",
+   "/calculations/*"
+  ]
+ },
+ {
+  "id": "runs",
+  "section": "ichthyologist",
+  "order": 31,
+  "routes": [
+   "/runs",
+   "/runs/*"
+  ]
+ },
+ {
+  "id": "monitoring",
+  "section": "ichthyologist",
+  "order": 40,
+  "routes": [
+   "/monitoring",
+   "/monitoring/*"
+  ]
+ },
+ {
+  "id": "pdu-reading",
+  "section": "ichthyologist",
+  "order": 41,
+  "routes": []
+ },
+ {
+  "id": "export",
+  "section": "ichthyologist",
+  "order": 42,
+  "routes": []
+ },
+ {
+  "id": "catalog",
+  "section": "mathematician",
+  "order": 10,
+  "routes": [
+   "/catalog"
+  ]
+ },
+ {
+  "id": "parameters",
+  "section": "mathematician",
+  "order": 11,
+  "routes": []
+ },
+ {
+  "id": "profiles",
+  "section": "mathematician",
+  "order": 12,
+  "routes": [
+   "/profiles"
+  ]
+ },
+ {
+  "id": "algo-dev",
+  "section": "mathematician",
+  "order": 20,
+  "routes": [
+   "/algorithms",
+   "/algorithms/drafts/*"
+  ]
+ },
+ {
+  "id": "algo-publish",
+  "section": "mathematician",
+  "order": 21,
+  "routes": []
+ },
+ {
+  "id": "algo-package",
+  "section": "mathematician",
+  "order": 22,
+  "routes": []
+ },
+ {
+  "id": "verification",
+  "section": "methodology",
+  "order": 12,
+  "routes": []
+ },
+ {
+  "id": "dashboards",
+  "section": "dashboards",
+  "order": 10,
+  "routes": [
+   "/dashboards"
+  ]
+ },
+ {
+  "id": "dashboard-builder",
+  "section": "dashboards",
+  "order": 11,
+  "routes": [
+   "/dashboards/*"
+  ]
+ },
+ {
+  "id": "compare",
+  "section": "dashboards",
+  "order": 12,
+  "routes": []
+ },
+ {
+  "id": "users",
+  "section": "admin",
+  "order": 10,
+  "routes": [
+   "/users"
+  ]
+ },
+ {
+  "id": "audit",
+  "section": "admin",
+  "order": 11,
+  "routes": [
+   "/audit"
+  ]
+ },
+ {
+  "id": "help-edit",
+  "section": "admin",
+  "order": 12,
+  "routes": []
+ },
+ {
+  "id": "install-overview",
+  "section": "install",
+  "order": 1,
+  "routes": []
+ },
+ {
+  "id": "install-docker",
+  "section": "install",
+  "order": 2,
+  "routes": []
+ },
+ {
+  "id": "install-local",
+  "section": "install",
+  "order": 3,
+  "routes": []
+ },
+ {
+  "id": "first-start",
+  "section": "install",
+  "order": 4,
+  "routes": []
+ },
+ {
+  "id": "update",
+  "section": "install",
+  "order": 5,
+  "routes": []
+ },
+ {
+  "id": "backup",
+  "section": "install",
+  "order": 6,
+  "routes": []
+ },
+ {
+  "id": "external",
+  "section": "install",
+  "order": 7,
+  "routes": []
+ },
+ {
+  "id": "troubleshooting",
+  "section": "install",
+  "order": 8,
+  "routes": []
+ },
+ {
+  "id": "glossary",
+  "section": "glossary",
+  "order": 1,
+  "routes": []
+ },
+ {
+  "id": "method-overview",
+  "section": "methodology",
+  "order": 1,
+  "routes": []
+ },
+ {
+  "id": "method-data",
+  "section": "methodology",
+  "order": 2,
+  "routes": []
+ },
+ {
+  "id": "method-seine",
+  "section": "methodology",
+  "order": 3,
+  "routes": []
+ },
+ {
+  "id": "method-net",
+  "section": "methodology",
+  "order": 4,
+  "routes": []
+ },
+ {
+  "id": "method-stock",
+  "section": "methodology",
+  "order": 5,
+  "routes": []
+ },
+ {
+  "id": "method-pdu-age",
+  "section": "methodology",
+  "order": 6,
+  "routes": []
+ },
+ {
+  "id": "method-bayes",
+  "section": "methodology",
+  "order": 7,
+  "routes": []
+ },
+ {
+  "id": "method-priors",
+  "section": "methodology",
+  "order": 8,
+  "routes": []
+ },
+ {
+  "id": "method-diagnostics",
+  "section": "methodology",
+  "order": 9,
+  "routes": []
+ },
+ {
+  "id": "method-forecast",
+  "section": "methodology",
+  "order": 10,
+  "routes": []
+ },
+ {
+  "id": "method-example",
+  "section": "methodology",
+  "order": 11,
+  "routes": []
+ }
+]

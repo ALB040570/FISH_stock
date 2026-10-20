@@ -13,6 +13,7 @@ x-service: &service
     FISH_URL_ALGO_MODEL: http://algo_model:8000
     FISH_URL_ALGO_ADMIN: http://algo_admin:8000
     FISH_URL_DASHBOARDS: http://dashboards:8000
+    FISH_URL_HELP: http://help:8000
   volumes:
     - fishdata:/data
 
@@ -41,12 +42,15 @@ services:
   dashboards:
     <<: *service
     build: { context: ., dockerfile: deploy/service.Dockerfile, args: { SERVICE: dashboards } }
+  help:
+    <<: *service
+    build: { context: ., dockerfile: deploy/service.Dockerfile, args: { SERVICE: help } }
   web:
     restart: unless-stopped
     build: { context: ., dockerfile: deploy/web.Dockerfile }
     ports:
       - "${FISH_HTTP_PORT:-8080}:80"
-    depends_on: [users, data_model, data_admin, algo_model, algo_admin, dashboards]
+    depends_on: [users, data_model, data_admin, algo_model, algo_admin, dashboards, help]
 
 volumes:
   fishdata:

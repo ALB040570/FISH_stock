@@ -41,6 +41,8 @@ PERMISSIONS: dict[str, set[str]] = {
     "dashboard.view": _ALL,
     "dashboard.edit": _WORK,
     "dashboard.template": {"admin", "mathematician"},
+    "help.view": _ALL,
+    "help.edit": {"admin", "mathematician"},
 }
 
 

@@ -1,0 +1,35 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#fff;font-family:"DejaVu Sans",Arial,sans-serif}
+</style></head><body>
+<svg id="s" width="1200" height="560" viewBox="0 0 1200 560" xmlns="http://www.w3.org/2000/svg">
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L9 5L1 9z" fill="#4a6a82"/></marker></defs>
+<style>
+.d{fill:#eef4f8;stroke:#7fa3bd;stroke-width:1.2}.st{fill:#dff0e8;stroke:#3f9a77;stroke-width:1.5}.o{fill:#fdf2e3;stroke:#c98a2e;stroke-width:1.2}
+.t{font-size:17px;font-weight:bold;fill:#12324a}.s{font-size:13.5px;fill:#33495c}.n{font-size:13px;font-weight:bold;fill:#3f9a77}
+.l{stroke:#4a6a82;stroke-width:1.6;fill:none}
+</style>
+<text x="20" y="30" class="t">Исходные данные</text>
+<rect x="20" y="45" width="220" height="64" rx="8" class="d"/><text x="32" y="70" class="t">Уловы по ловам</text><text x="32" y="92" class="s">сеть и невод, по видам, шт</text>
+<rect x="20" y="121" width="220" height="64" rx="8" class="d"/><text x="32" y="146" class="t">Возрастные пробы</text><text x="32" y="168" class="s">доли возрастов по годам</text>
+<rect x="20" y="197" width="220" height="64" rx="8" class="d"/><text x="32" y="222" class="t">Параметры видов</text><text x="32" y="244" class="s">m0, m1, m2, скорость, c̄, …</text>
+<rect x="20" y="273" width="220" height="64" rx="8" class="d"/><text x="32" y="298" class="t">Условия по годам</text><text x="32" y="320" class="s">площадь, сети: длина, часы</text>
+<rect x="20" y="349" width="220" height="64" rx="8" class="d"/><text x="32" y="374" class="t">Средний вес</text><text x="32" y="396" class="s">по возрастам, г</text>
+<rect x="20" y="425" width="220" height="64" rx="8" class="d"/><text x="32" y="450" class="t">ПДУ НПЦ</text><text x="32" y="472" class="s">по видам, т</text>
+<text x="300" y="30" class="t">Этапы расчёта</text>
+<rect x="300" y="45" width="330" height="80" rx="10" class="st"/><text x="314" y="66" class="n">ЭТАП 1</text><text x="314" y="88" class="t">Уловистость невода</text><text x="314" y="110" class="s">сигмоида по возрастам, МНК по уловам</text>
+<rect x="300" y="145" width="330" height="96" rx="10" class="st"/><text x="314" y="166" class="n">ЭТАП 2</text><text x="314" y="188" class="t">Уловистость сети и запас</text><text x="314" y="210" class="s">метод площадей (невод), балансовый</text><text x="314" y="228" class="s">метод (сеть), окончательный запас</text>
+<rect x="300" y="261" width="330" height="80" rx="10" class="st"/><text x="314" y="282" class="n">ЭТАП 3</text><text x="314" y="304" class="t">ПДУ НПЦ по возрастам</text><text x="314" y="326" class="s">тонны → штуки, нагрузка j/m1, ≤ 75 %</text>
+<rect x="300" y="361" width="330" height="80" rx="10" class="st"/><text x="314" y="382" class="n">ЭТАП 4</text><text x="314" y="404" class="t">Байесовская когортная модель</text><text x="314" y="426" class="s">численность поколений, PyMC (NUTS)</text>
+<rect x="300" y="461" width="330" height="80" rx="10" class="st"/><text x="314" y="482" class="n">ЭТАП 5</text><text x="314" y="504" class="t">Прогноз и ПДУ</text><text x="314" y="526" class="s">500 выборок, F = k·M, сценарии</text>
+<path class="l" d="M465 125V143" marker-end="url(#a)"/><path class="l" d="M465 241V259" marker-end="url(#a)"/><path class="l" d="M465 341V359" marker-end="url(#a)"/><path class="l" d="M465 441V459" marker-end="url(#a)"/>
+<path class="l" d="M240 77H298" marker-end="url(#a)"/><path class="l" d="M240 153H270V193H298" marker-end="url(#a)"/><path class="l" d="M240 229H270" /><path class="l" d="M240 305H270V229"/>
+<path class="l" d="M240 381H282V301H298" marker-end="url(#a)"/><path class="l" d="M240 457H282V381"/>
+<path class="l" d="M282 401H298" marker-end="url(#a)"/>
+<text x="700" y="30" class="t">Результаты</text>
+<rect x="700" y="45" width="470" height="80" rx="8" class="o"/><text x="714" y="72" class="t">Коэффициенты уловистости невода c²(j, t)</text><text x="714" y="96" class="s">по видам, возрастам и годам; кривые в мониторинге</text>
+<rect x="700" y="145" width="470" height="96" rx="8" class="o"/><text x="714" y="172" class="t">Запас по ловам и окончательный запас</text><text x="714" y="196" class="s">оценки по ловам сетью и неводом — наблюдения модели;</text><text x="714" y="216" class="s">окончательный запас по возрастам — основа ПДУ</text>
+<rect x="700" y="261" width="470" height="80" rx="8" class="o"/><text x="714" y="288" class="t">Вылов A(j, t), шт</text><text x="714" y="312" class="s">ПДУ НПЦ по возрастам; промысловая биомасса</text>
+<rect x="700" y="361" width="470" height="80" rx="8" class="o"/><text x="714" y="388" class="t">Численность X(j, t): медиана и интервалы</text><text x="714" y="412" class="s">смертность, хищники, β, пополнение; R̂, расходимости</text>
+<rect x="700" y="461" width="470" height="80" rx="8" class="o"/><text x="714" y="488" class="t">ПДУ на прогнозные годы, т</text><text x="714" y="512" class="s">медиана и 95 % интервал, P(снижение запаса)</text>
+<path class="l" d="M630 85H698" marker-end="url(#a)"/><path class="l" d="M630 193H698" marker-end="url(#a)"/><path class="l" d="M630 301H698" marker-end="url(#a)"/><path class="l" d="M630 401H698" marker-end="url(#a)"/><path class="l" d="M630 501H698" marker-end="url(#a)"/>
+</svg></body></html>
