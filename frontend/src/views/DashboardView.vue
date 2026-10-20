@@ -4,7 +4,7 @@
       <template v-if="b">
         <div class="page-head">
           <div>
-            <el-button text @click="$router.push('/dashboards')"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ $t('dash.title') }}</el-button>
+            <el-button text @click="$router.push(base)"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ design ? $t('dash.design_title') : $t('dash.title') }}</el-button>
             <h1 v-if="!editing">{{ tr(b, 'title') }}</h1>
             <el-input v-else v-model="b.title_ru" style="width:420px; font-size:18px" />
             <div class="sub">{{ b.description }}</div>
@@ -18,7 +18,7 @@
               <el-option v-for="s in species" :key="s.code" :label="tr(s, 'name')" :value="s.code" />
             </el-select>
             <template v-if="b.can_edit">
-              <el-button v-if="!editing" @click="editing = true"><el-icon><Edit /></el-icon>&nbsp;{{ $t('dash.edit') }}</el-button>
+              <el-button v-if="!editing" @click="design ? (editing = true) : $router.push({ path: '/design/dashboards/' + b.id, query: $route.query })"><el-icon><Edit /></el-icon>&nbsp;{{ $t('dash.edit') }}</el-button>
               <template v-else>
                 <el-select v-if="!b.is_template" v-model="b.visibility" style="width:170px"><el-option :label="$t('dash.private')" value="private" /><el-option :label="$t('dash.shared')" value="shared" /></el-select>
                 <el-button @click="cancelEdit">{{ $t('common.cancel') }}</el-button>
@@ -106,7 +106,10 @@ let orig = null
 const loading = ref(true)
 const error = ref(null)
 const saveErr = ref(null)
-const editing = ref(!!route.query.edit)
+// /dashboards/:id — просмотр; /design/dashboards/:id — конструктор (сразу в режиме правки)
+const design = !!route.meta.design
+const base = design ? '/design/dashboards' : '/dashboards'
+const editing = ref(design || !!route.query.edit)
 const tab = ref(null)
 const species = ref([])
 const wbs = ref([])
@@ -128,6 +131,7 @@ async function load() {
     const [d, sp, wb, dt, cat] = await Promise.all([api.get('dashboards', `/dashboards/${route.params.id}`), api.get('data-model', '/entities/species/records'),
       api.get('data-model', '/entities/water_bodies/records'), api.get('data-model', '/dataset-types'), api.get('algo-admin', '/catalog')])
     b.value = d; orig = JSON.parse(JSON.stringify(d))
+    if (!d.can_edit) editing.value = false   // чужой дашборд или шаблон: в конструкторе — только копия
     species.value = sp.map((r) => r.values); wbs.value = wb.map((r) => r.values); dtypes.value = dt; catalog.value = cat
     multiFlag.value = 'water_bodies' in (d.filters || {})
     if (multiFlag.value) f.water_bodies = d.filters.water_bodies?.length ? d.filters.water_bodies : ['zhaysan']
@@ -160,7 +164,7 @@ async function save() {
     orig = JSON.parse(JSON.stringify(b.value)); editing.value = false; ElMessage.success('Дашборд сохранён')
   } catch (e) { saveErr.value = e }
 }
-async function copy() { const d = await api.post('dashboards', `/dashboards/${b.value.id}/copy`, {}); router.push({ path: '/dashboards/' + d.id, query: { edit: 1 } }) }
-async function del() { await ElMessageBox.confirm('Удалить дашборд?', '', { type: 'warning' }); await api.del('dashboards', `/dashboards/${b.value.id}`); router.push('/dashboards') }
+async function copy() { const d = await api.post('dashboards', `/dashboards/${b.value.id}/copy`, {}); router.push('/design/dashboards/' + d.id) }
+async function del() { await ElMessageBox.confirm('Удалить дашборд?', '', { type: 'warning' }); await api.del('dashboards', `/dashboards/${b.value.id}`); router.push(base) }
 onMounted(load)
 </script>

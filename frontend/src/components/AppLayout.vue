@@ -5,34 +5,24 @@
         <svg viewBox="0 0 64 64" width="30" height="30"><path class="logo-body" d="M6 32c10-14 30-16 42-6l10-8v28l-10-8c-12 10-32 8-42-6z"/><circle class="logo-eye" cx="20" cy="29" r="3"/></svg>
         <div v-if="!collapsed"><div class="b1">FishStocke</div><div class="b2">{{ $t('app.subtitle') }}</div></div>
       </div>
-      <el-menu :default-active="active" router :collapse="collapsed">
-        <el-menu-item-group :title="collapsed ? '' : $t('nav.section_work')">
-          <el-menu-item index="/"><el-icon><MapLocation /></el-icon><span>{{ $t('nav.map') }}</span></el-menu-item>
-          <el-menu-item index="/monitoring"><el-icon><DataLine /></el-icon><span>{{ $t('nav.monitoring') }}</span></el-menu-item>
-          <el-menu-item index="/data"><el-icon><Files /></el-icon><span>{{ $t('nav.data') }}</span></el-menu-item>
-          <el-menu-item index="/calculations"><el-icon><Operation /></el-icon><span>{{ $t('nav.calculations') }}</span></el-menu-item>
-          <el-menu-item index="/runs"><el-icon><Timer /></el-icon><span>{{ $t('nav.runs') }}</span></el-menu-item>
-          <el-menu-item index="/dashboards"><el-icon><Histogram /></el-icon><span>{{ $t('nav.dashboards') }}</span></el-menu-item>
-        </el-menu-item-group>
-        <el-menu-item-group :title="collapsed ? '' : $t('nav.section_model')">
-          <el-menu-item index="/dictionaries"><el-icon><Collection /></el-icon><span>{{ $t('nav.dictionaries') }}</span></el-menu-item>
-          <el-menu-item v-if="auth.can('algo.develop')" index="/algorithms"><el-icon><Cpu /></el-icon><span>{{ $t('nav.algorithms') }}</span></el-menu-item>
-          <el-menu-item index="/catalog"><el-icon><Box /></el-icon><span>{{ $t('nav.catalog') }}</span></el-menu-item>
-          <el-menu-item index="/profiles"><el-icon><SetUp /></el-icon><span>{{ $t('nav.profiles') }}</span></el-menu-item>
-        </el-menu-item-group>
-        <el-menu-item-group v-if="auth.can('users.manage')" :title="collapsed ? '' : $t('nav.section_admin')">
-          <el-menu-item index="/users"><el-icon><User /></el-icon><span>{{ $t('nav.users') }}</span></el-menu-item>
-          <el-menu-item index="/audit"><el-icon><Document /></el-icon><span>{{ $t('nav.audit') }}</span></el-menu-item>
-        </el-menu-item-group>
-        <el-menu-item-group :title="collapsed ? '' : ' '">
-          <el-menu-item index="/help"><el-icon><QuestionFilled /></el-icon><span>{{ $t('nav.help') }}</span></el-menu-item>
-        </el-menu-item-group>
+      <el-menu ref="menuRef" :default-active="active" :default-openeds="openeds" router :collapse="collapsed" popper-class="fs-nav-popup">
+        <template v-for="(sec, si) in sections" :key="sec.key">
+          <li v-if="si === 2" class="nav-sep" />
+          <el-sub-menu :index="sec.key">
+            <template #title><el-icon><component :is="sec.icon" /></el-icon><span>{{ $t('nav.' + sec.key) }}</span></template>
+            <el-menu-item v-for="it in sec.items" :key="it.index" :index="it.index" :class="{ 'nav-dash': it.dash, 'nav-more': it.more }">
+              <span class="nav-label">{{ it.label }}</span>
+              <el-icon v-if="it.personal" class="nav-personal" :title="$t('nav.personal')"><Lock /></el-icon>
+            </el-menu-item>
+          </el-sub-menu>
+        </template>
       </el-menu>
     </el-aside>
     <el-container>
       <el-header class="header" height="52px">
         <el-button text @click="collapsed = !collapsed"><el-icon :size="18"><Fold v-if="!collapsed" /><Expand v-else /></el-icon></el-button>
         <div class="grow" />
+        <el-button text class="help-link" @click="$router.push('/help')"><el-icon><Reading /></el-icon>&nbsp;{{ $t('nav.help') }}</el-button>
         <el-tooltip :content="$t('help.context')" placement="bottom">
           <el-button circle size="small" @click="openContext"><el-icon><QuestionFilled /></el-icon></el-button>
         </el-tooltip>
@@ -65,11 +55,11 @@
   </el-container>
 </template>
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuth } from '../store/auth'
-import { setLang } from '../i18n'
+import { setLang, tr } from '../i18n'
 import PasswordDialog from './PasswordDialog.vue'
 import HelpMarkdown from './HelpMarkdown.vue'
 import { api } from '../api'
@@ -77,12 +67,59 @@ import { api } from '../api'
 const auth = useAuth()
 const route = useRoute()
 const router = useRouter()
-const { locale } = useI18n()
+const i18n = useI18n()
+const { locale } = i18n
 const lang = ref(locale.value)
 const collapsed = ref(window.innerWidth < 900)
 const pwd = ref(!!auth.user?.must_change_password)
 const forced = computed(() => !!auth.user?.must_change_password)
-const active = computed(() => '/' + (route.path.split('/')[1] || ''))
+// Меню: «создать → допустить → использовать» (docs/decisions.md, № 24). Права на экраны не меняются — пункт скрыт,
+// если у роли нет к нему доступа.
+const dashboards = ref([])
+const MAX_DASH = 8
+async function loadDashboards() {
+  try {
+    const all = await api.get('dashboards', '/dashboards')
+    dashboards.value = all.filter((d) => d.id !== 'monitoring' && (d.system || d.visibility === 'shared' || d.owner === auth.user?.id))
+      .sort((x, y) => tr(x, 'title').localeCompare(tr(y, 'title'), 'ru'))
+  } catch (e) { dashboards.value = [] }
+}
+const sections = computed(() => {
+  const t = (k) => i18n.t('nav.' + k)
+  const it = (index, key, perm) => (!perm || auth.can(perm) ? [{ index, label: t(key) }] : [])
+  const dash = dashboards.value.slice(0, MAX_DASH).map((d) => ({ index: '/dashboards/' + d.id, label: tr(d, 'title'), dash: true,
+    personal: !d.system && d.visibility !== 'shared' }))
+  return [
+    { key: 'sec_analytics', icon: 'TrendCharts', items: [...it('/', 'map'), ...it('/monitoring', 'monitoring'), ...dash,
+      { index: '/dashboards', label: t('all_dashboards'), more: true }] },
+    { key: 'sec_calc', icon: 'Odometer', items: [...it('/data', 'data'), ...it('/calculations', 'calculations')] },
+    { key: 'sec_design', icon: 'EditPen', items: [...it('/dictionaries', 'dictionaries'), ...it('/algorithms', 'algorithms', 'algo.develop'),
+      ...it('/design/calculations', 'calc_order', 'run.execute'), ...it('/design/dashboards', 'dash_design', 'dashboard.edit')] },
+    { key: 'sec_manage', icon: 'Setting', items: [...it('/catalog', 'catalog'), ...it('/profiles', 'profiles'),
+      ...it('/users', 'users', 'users.manage'), ...it('/audit', 'audit', 'audit.view')] },
+  ].filter((sec) => sec.items.length)
+})
+// пункт меню для текущего адреса: вложенные страницы подсвечивают свой пункт
+const ACTIVE = [
+  [/^\/monitoring/, '/monitoring'], [/^\/data/, '/data'], [/^\/(calculations|runs)/, '/calculations'],
+  [/^\/design\/calculations/, '/design/calculations'], [/^\/design\/dashboards/, '/design/dashboards'],
+  [/^\/dictionaries/, '/dictionaries'], [/^\/algorithms/, '/algorithms'], [/^\/catalog/, '/catalog'], [/^\/profiles/, '/profiles'],
+  [/^\/users/, '/users'], [/^\/audit/, '/audit'],
+]
+const active = computed(() => {
+  const p = route.path
+  if (p === '/') return '/'
+  const m = p.match(/^\/dashboards\/([^/]+)/)
+  if (m) return dashboards.value.slice(0, MAX_DASH).some((d) => d.id === m[1]) ? p : '/dashboards'
+  if (p === '/dashboards') return '/dashboards'
+  return ACTIVE.find(([re]) => re.test(p))?.[1] || ''
+})
+const sectionOf = (index) => sections.value.find((sec) => sec.items.some((i) => i.index === index))?.key
+const openeds = [sectionOf(active.value) || 'sec_analytics']
+const menuRef = ref(null)
+watch(active, (v) => { const k = sectionOf(v); if (k && menuRef.value) menuRef.value.open(k) })
+watch(() => route.path, (p, old) => { if (/dashboards/.test(p) || /dashboards/.test(old || '')) loadDashboards() })
+onMounted(loadDashboards)
 const initials = computed(() => (auth.user?.name || '?').split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase())
 watch(() => auth.loggedIn, (v) => { if (!v) router.push({ path: '/login', query: { next: route.fullPath } }) })
 const ctxOpen = ref(false)
@@ -109,15 +146,22 @@ function onCmd(c) {
 .b2 { font-size: 11px; color: var(--fs-nav-muted); line-height: 1.25; margin-top: 2px; }
 .aside :deep(.el-menu) { border-right: none; --el-menu-bg-color: var(--fs-nav); --el-menu-text-color: var(--fs-nav-text);
   --el-menu-active-color: #fff; --el-menu-hover-bg-color: rgba(255, 255, 255, .08); --el-menu-item-height: 44px; }
-.aside :deep(.el-menu-item) { border-radius: 6px; margin: 1px 6px; padding-left: 10px !important; padding-right: 6px; height: 40px; }
-.aside :deep(.el-menu-item span) { overflow: hidden; text-overflow: ellipsis; }
+.aside :deep(.el-sub-menu__title) { height: 42px; margin: 2px 6px; border-radius: 6px; padding-left: 10px !important; font-weight: 600; color: #fff; }
+.aside :deep(.el-sub-menu__title:hover) { background: rgba(255, 255, 255, .08); }
+.aside :deep(.el-sub-menu.is-active > .el-sub-menu__title) { color: #fff; }
+.aside :deep(.el-sub-menu .el-menu-item) { border-radius: 6px; margin: 1px 6px 1px 6px; padding-left: 40px !important; padding-right: 8px;
+  height: 34px; line-height: 34px; color: var(--fs-nav-text); }
+.aside :deep(.el-sub-menu .el-menu-item.nav-dash) { color: var(--fs-nav-muted); }
+.aside :deep(.el-sub-menu .el-menu-item.nav-more) { color: var(--fs-nav-muted); font-size: 13px; }
+.nav-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.nav-personal { font-size: 12px; margin: 0 0 0 6px !important; color: var(--fs-nav-muted); }
+.nav-sep { list-style: none; height: 1px; background: rgba(255, 255, 255, .14); margin: 10px 14px; }
+.help-link { color: var(--fs-muted); }
 .aside :deep(.el-menu--collapse) { width: 64px; }
-.aside :deep(.el-menu--collapse .el-menu-item) { margin: 1px 8px; padding: 0 !important; justify-content: center; }
-.aside :deep(.el-menu--collapse .el-menu-item span) { display: none; }
-.aside :deep(.el-menu--collapse .el-menu-item .el-icon) { margin-right: 0; }
-.aside :deep(.el-menu--collapse .el-menu-item-group__title) { padding: 8px 0 0; height: 1px; overflow: hidden; }
-.aside :deep(.el-menu-item-group__title) { color: var(--fs-nav-muted); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .07em; padding-top: 16px; }
-.aside :deep(.el-menu-item.is-active) { background: var(--fs-nav-active) !important; box-shadow: inset 3px 0 0 var(--fs-accent); font-weight: 500; }
+.aside :deep(.el-menu--collapse .el-sub-menu__title) { margin: 2px 8px; padding: 0 !important; justify-content: center; }
+.aside :deep(.el-menu--collapse .el-sub-menu__title .el-icon) { margin-right: 0; }
+.aside :deep(.el-menu--collapse .el-sub-menu__icon-arrow) { display: none; }
+.aside :deep(.el-menu-item.is-active) { color: #fff; background: var(--fs-nav-active) !important; box-shadow: inset 3px 0 0 var(--fs-accent); font-weight: 500; }
 .avatar { background: var(--fs-primary-2); font-weight: 600; }
 .header { display: flex; align-items: center; gap: 14px; background: var(--fs-card); border-bottom: 1px solid var(--fs-line); }
 .user { display: flex; align-items: center; gap: 8px; cursor: pointer; }

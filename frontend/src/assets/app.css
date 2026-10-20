@@ -128,3 +128,10 @@ h3 { font-size: 15px; margin: 12px 0 8px; font-weight: 600; }
 .el-tabs__item { font-weight: 500; }
 .el-button { font-weight: 500; }
 .el-alert__title { font-weight: 500; }
+
+/* Всплывающие подпункты свёрнутого меню */
+.fs-nav-popup { --el-menu-bg-color: var(--fs-nav); --el-menu-text-color: var(--fs-nav-text); --el-menu-active-color: #fff;
+  --el-menu-hover-bg-color: rgba(255, 255, 255, .08); --el-menu-item-height: 36px; }
+.fs-nav-popup .el-menu { padding: 4px; border-radius: 8px; }
+.fs-nav-popup .el-menu-item { border-radius: 6px; }
+.fs-nav-popup .el-menu-item.is-active { background: var(--fs-nav-active); box-shadow: inset 3px 0 0 var(--fs-accent); }

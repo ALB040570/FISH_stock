@@ -86,7 +86,9 @@
   "order": 30,
   "routes": [
    "/calculations",
-   "/calculations/*"
+   "/calculations/*",
+   "/design/calculations",
+   "/design/calculations/*"
   ]
  },
  {
@@ -173,7 +175,8 @@
   "section": "dashboards",
   "order": 10,
   "routes": [
-   "/dashboards"
+   "/dashboards",
+   "/dashboards/*"
   ]
  },
  {
@@ -181,7 +184,8 @@
   "section": "dashboards",
   "order": 11,
   "routes": [
-   "/dashboards/*"
+   "/design/dashboards",
+   "/design/dashboards/*"
   ]
  },
  {

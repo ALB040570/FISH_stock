@@ -72,6 +72,6 @@ onMounted(async () => {
 async function copy() {
   const d = await api.post('dashboards', '/dashboards/monitoring/copy', {})
   ElMessage.success(d.title_ru)
-  router.push({ path: '/dashboards/' + d.id, query: { wb: wb.value, edit: 1 } })
+  router.push({ path: '/design/dashboards/' + d.id, query: { wb: wb.value } })
 }
 </script>

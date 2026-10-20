@@ -4,33 +4,42 @@
       <template v-if="calc">
         <div class="page-head">
           <div>
-            <el-button text @click="$router.push({ path: '/calculations', query: { wb: calc.water_body } })"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ $t('calc.title') }}</el-button>
+            <el-button text @click="$router.push({ path: base, query: { wb: calc.water_body } })"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ design ? $t('calc.design_title') : $t('calc.title') }}</el-button>
             <h1>{{ calc.title }}</h1>
             <div class="sub">{{ $t('common.water_body') }}: {{ calc.water_body }} · v{{ calc.current_version }}</div>
           </div>
           <div class="row">
-            <el-button @click="check">{{ $t('calc.check') }}</el-button>
-            <el-button v-if="auth.can('run.execute')" type="primary" :loading="busy" @click="run"><el-icon><VideoPlay /></el-icon>&nbsp;{{ $t('calc.run') }}</el-button>
+            <template v-if="design">
+              <el-button @click="$router.push('/calculations/' + calc.id)">{{ $t('calc.to_run') }}</el-button>
+              <el-button @click="check">{{ $t('calc.check') }}</el-button>
+            </template>
+            <template v-else>
+              <el-button v-if="auth.can('run.execute')" @click="$router.push('/design/calculations/' + calc.id)"><el-icon><EditPen /></el-icon>&nbsp;{{ $t('calc.edit_order') }}</el-button>
+              <el-button @click="check">{{ $t('calc.check') }}</el-button>
+              <el-button v-if="auth.can('run.execute')" type="primary" :loading="busy" @click="run"><el-icon><VideoPlay /></el-icon>&nbsp;{{ $t('calc.run') }}</el-button>
+            </template>
           </div>
         </div>
         <div class="grid12">
           <div class="card" style="grid-column: span 7">
             <h2 style="margin-top:0">{{ $t('calc.steps') }}</h2>
-            <el-form label-width="120px">
+            <el-form v-if="design" label-width="120px">
               <el-form-item :label="$t('common.name')"><el-input v-model="def.title" /></el-form-item>
               <el-form-item :label="$t('common.description')"><el-input v-model="def.description" /></el-form-item>
             </el-form>
             <div v-for="(s, i) in def.steps" :key="i" class="stp">
-              <div class="row">
+              <div class="row" style="flex-wrap:nowrap">
                 <span class="num-badge">{{ i + 1 }}</span>
-                <el-select v-model="s.algorithm" style="width:330px">
+                <el-select v-model="s.algorithm" :disabled="!design" style="flex:1; min-width:220px">
                   <el-option v-for="a in catalog" :key="a.code" :label="tr(a, 'title')" :value="a.code" />
                 </el-select>
-                <el-select v-model="s.version" clearable :placeholder="$t('calc.latest')" style="width:180px">
+                <el-select v-model="s.version" :disabled="!design" clearable :placeholder="$t('calc.latest')" style="width:170px">
                   <el-option v-for="v in versionsOf(s.algorithm)" :key="v.version" :label="v.version + (v.enabled ? '' : ' (откл.)')" :value="v.version" :disabled="!v.enabled" />
                 </el-select>
-                <el-button text :disabled="i === 0" @click="moveStep(i, -1)"><el-icon><Top /></el-icon></el-button>
-                <el-button text type="danger" @click="def.steps.splice(i, 1)"><el-icon><Delete /></el-icon></el-button>
+                <template v-if="design">
+                  <el-button text :disabled="i === 0" @click="moveStep(i, -1)"><el-icon><Top /></el-icon></el-button>
+                  <el-button text type="danger" @click="def.steps.splice(i, 1)"><el-icon><Delete /></el-icon></el-button>
+                </template>
               </div>
               <div v-if="runParams(s.algorithm).length" class="params">
                 <div v-for="p in runParams(s.algorithm)" :key="p.code" class="prm">
@@ -40,12 +49,12 @@
                 </div>
               </div>
             </div>
-            <el-button size="small" @click="def.steps.push({ algorithm: catalog[0].code, version: null })"><el-icon><Plus /></el-icon>&nbsp;шаг</el-button>
+            <el-button v-if="design" size="small" @click="def.steps.push({ algorithm: catalog[0].code, version: null })"><el-icon><Plus /></el-icon>&nbsp;шаг</el-button>
             <div class="row" style="margin-top:14px">
               <span class="small">{{ $t('calc.formats') }}:</span>
-              <el-checkbox-group v-model="def.result_formats"><el-checkbox value="json">таблицы</el-checkbox><el-checkbox value="xlsx">Excel</el-checkbox><el-checkbox value="nc">NetCDF</el-checkbox><el-checkbox value="docx">Word</el-checkbox><el-checkbox value="pdf">PDF</el-checkbox></el-checkbox-group>
+              <el-checkbox-group v-model="def.result_formats" :disabled="!design"><el-checkbox value="json">таблицы</el-checkbox><el-checkbox value="xlsx">Excel</el-checkbox><el-checkbox value="nc">NetCDF</el-checkbox><el-checkbox value="docx">Word</el-checkbox><el-checkbox value="pdf">PDF</el-checkbox></el-checkbox-group>
             </div>
-            <div class="row" style="margin-top:12px">
+            <div v-if="design" class="row" style="margin-top:12px">
               <el-input v-model="def.comment" :placeholder="$t('common.comment')" style="width:340px" />
               <el-button :disabled="!auth.can('run.execute')" @click="save">{{ $t('common.save') }}</el-button>
             </div>
@@ -68,7 +77,7 @@
                 </template>
               </template>
             </div>
-            <div class="card">
+            <div v-if="!design" class="card">
               <h2 style="margin-top:0">{{ $t('runs.title') }}</h2>
               <el-form v-if="lastDone" label-position="top">
                 <el-form-item :label="$t('calc.from_step')">
@@ -102,6 +111,9 @@ import ParamField from '../components/ParamField.vue'
 import RunStatus from '../components/RunStatus.vue'
 const auth = useAuth()
 const route = useRoute()
+// /calculations/:id — запуск (порядок только просмотр, параметры запуска вводятся); /design/calculations/:id — правка порядка
+const design = !!route.meta.design
+const base = design ? '/design/calculations' : '/calculations'
 const router = useRouter()
 const calc = ref(null)
 const catalog = ref([])
