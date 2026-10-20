@@ -48,7 +48,9 @@ export const CHART = {
 
 // Состояние водоёма на карте (смысл цветов утверждён в плане, раздел 5)
 export const MAP_STATE = { no_data: '#9AA3AB', has_data: '#2F6FD1', has_run: '#2E9E5B', stale: '#E8862A' }
-export const MAP = { border: CSS.primary, shape: CSS.primary, markerStroke: '#FFFFFF' }
+// mask — заливка за пределами Казахстана (= фон страницы), land — страна в режиме «без подложки», region — границы областей
+export const MAP = { border: CSS.primary, shape: CSS.primary, markerStroke: '#FFFFFF', mask: CSS.bg, land: '#FFFFFF',
+  region: '#8FB3BA' }
 
 // Состояние шага запуска
 export const RUN_STEP = { done: '#2E9E5B', reused: '#8FCDAA', running: '#2F6FD1', failed: '#C0392B', cancelled: '#E8862A',

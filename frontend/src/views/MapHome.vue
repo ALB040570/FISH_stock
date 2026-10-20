@@ -36,6 +36,11 @@
       <div class="legend card">
         <div class="small muted" style="margin-bottom:4px">{{ $t('map.legend') }}</div>
         <div v-for="s in STATES" :key="s" class="small"><span class="tag-dot" :style="{ background: COLORS[s] }" />{{ $t('map.' + s) }}</div>
+        <div class="small muted" style="margin:8px 0 4px">{{ $t('map.basemap') }}</div>
+        <el-radio-group v-model="basemap" size="small" @change="applyBasemap">
+          <el-radio-button value="osm">{{ $t('map.basemap_osm') }}</el-radio-button>
+          <el-radio-button value="none">{{ $t('map.basemap_none') }}</el-radio-button>
+        </el-radio-group>
       </div>
       <transition name="slide">
         <div v-if="sel" class="info card">
@@ -101,6 +106,28 @@ const fSpecies = ref('')
 const sel = ref(null)
 let map = null
 let layer = null
+// Подложка: «карта» — OpenStreetMap только внутри Казахстана (снаружи — маска цветом фона);
+// «без подложки» — силуэт страны, работает без интернета. Выбор запоминается в браузере.
+const BASEMAP_KEY = 'fishstocke.basemap'
+function savedBasemap() { try { return localStorage.getItem(BASEMAP_KEY) || 'osm' } catch (e) { return 'osm' } }
+const basemap = ref(savedBasemap())
+let tiles = null
+let land = null
+function applyBasemap() {
+  try { localStorage.setItem(BASEMAP_KEY, basemap.value) } catch (e) { /* приватный режим */ }
+  if (!map) return
+  if (basemap.value === 'osm') { land && land.remove(); tiles.addTo(map) } else { tiles.remove(); land && land.addTo(map) }
+}
+// маска: прямоугольник «весь мир» с вырезанными контурами Казахстана
+function maskLatLngs(geo) {
+  const holes = []
+  const add = (g) => {
+    if (g.type === 'Polygon') holes.push(g.coordinates[0].map(([x, y]) => [y, x]))
+    else if (g.type === 'MultiPolygon') g.coordinates.forEach((p) => holes.push(p[0].map(([x, y]) => [y, x])))
+  }
+  for (const f of geo.features || [geo]) add(f.geometry || f)
+  return [[[-89, -179], [-89, 179], [89, 179], [89, -179]], ...holes]
+}
 const layers = {}
 
 const regions = computed(() => [...new Set(wbs.value.map((w) => w.region).filter(Boolean))].sort())
@@ -185,14 +212,27 @@ function select(w, fly) {
 
 onMounted(async () => {
   await nextTick()
-  map = L.map(mapEl.value, { zoomControl: true, attributionControl: true }).setView([48.2, 67.5], 5)
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 13, attribution: '© участники OpenStreetMap · контуры водоёмов: Natural Earth',
-  }).addTo(map)
+  map = L.map(mapEl.value, { zoomControl: true, attributionControl: true, zoomSnap: 0.25 }).setView([48.2, 67.5], 5)
+  map.createPane('land').style.zIndex = 250   // над подложкой, под маской
+  map.createPane('mask').style.zIndex = 350   // над подложкой, под водоёмами (overlayPane = 400)
+  tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 13, attribution: 'подложка © участники OpenStreetMap' })
+  map.attributionControl.setPrefix(false)
+  map.attributionControl.addAttribution('граница: geoBoundaries / © участники OpenStreetMap (ODbL) · контуры водоёмов: Natural Earth')
   try {
     const kz = await api.get('data-model', '/kazakhstan.geojson')
-    L.geoJSON(kz, { style: { color: MAP.border, weight: 1.4, fill: false, dashArray: '4 3' }, interactive: false }).addTo(map)
-  } catch (e) { /* граница не обязательна */ }
+    // запас отрисовки за краем экрана (padding: 1 = ещё один экран со всех сторон) — без «дыр» во время перелёта к водоёму
+    const rLand = L.svg({ pane: 'land', padding: 1 })
+    const rMask = L.svg({ pane: 'mask', padding: 1 })
+    land = L.geoJSON(kz, { pane: 'land', renderer: rLand, style: { stroke: false, fillColor: MAP.land, fillOpacity: 1 }, interactive: false })
+    L.polygon(maskLatLngs(kz), { pane: 'mask', renderer: rMask, stroke: false, fillColor: MAP.mask, fillOpacity: 1, interactive: false }).addTo(map)
+    const border = L.geoJSON(kz, { pane: 'mask', renderer: rMask, style: { color: MAP.border, weight: 1.6, fill: false }, interactive: false }).addTo(map)
+    const b = border.getBounds()
+    map.fitBounds(b, { padding: [12, 12] })
+    map.setMinZoom(Math.floor(map.getZoom() * 4) / 4 - 0.25)
+    map.setMaxBounds(b.pad(0.15))
+    map.options.maxBoundsViscosity = 1
+  } catch (e) { /* граница не обязательна: без неё — обычная карта */ }
+  if (basemap.value === 'osm' || !land) tiles.addTo(map); else land.addTo(map)
   await load()
 })
 onBeforeUnmount(() => map && map.remove())
@@ -210,7 +250,7 @@ watch(filtered, () => {})
 .item .tag-dot { margin-top: 5px; }
 .nm { font-weight: 550; }
 .mapbox { position: relative; min-height: 0; }
-.map { position: absolute; inset: 0; }
+.map { position: absolute; inset: 0; background: var(--fs-bg); }
 .legend { position: absolute; left: 12px; bottom: 22px; z-index: 500; padding: 8px 12px; }
 .info { position: absolute; right: 12px; top: 12px; width: 380px; max-height: calc(100% - 24px); overflow: auto; z-index: 500; box-shadow: var(--fs-shadow-pop); }
 .slide-enter-active, .slide-leave-active { transition: all .2s; }
