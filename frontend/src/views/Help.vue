@@ -256,21 +256,21 @@ onMounted(async () => { await Promise.all([loadToc(), load()]) })
 .help-body { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
 .toc { position: sticky; top: 8px; max-height: calc(100vh - 140px); overflow-y: auto; padding: 12px; }
 .sec { margin-top: 10px; }
-.sec-t { font-weight: 600; font-size: 13.5px; cursor: pointer; display: flex; gap: 6px; align-items: center; color: #12324a; padding: 3px 0; }
-.art { font-size: 13.5px; padding: 4px 8px 4px 20px; cursor: pointer; border-radius: 4px; color: #33495c; }
-.art:hover { background: #f0f5f9; }
-.art.active { background: #e2eef6; color: #0f3c5a; font-weight: 500; }
+.sec-t { font-weight: 600; font-size: 13.5px; cursor: pointer; display: flex; gap: 6px; align-items: center; color: var(--fs-primary); padding: 3px 0; }
+.art { font-size: 13.5px; padding: 4px 8px 4px 20px; cursor: pointer; border-radius: 4px; color: var(--el-text-color-regular); }
+.art:hover { background: var(--fs-hover); }
+.art.active { background: var(--fs-selected); color: var(--fs-primary-hover); font-weight: 500; }
 .results { margin-top: 8px; }
-.res { padding: 8px 6px; border-bottom: 1px solid #edf1f5; cursor: pointer; }
-.res:hover { background: #f5f8fb; }
+.res { padding: 8px 6px; border-bottom: 1px solid var(--fs-line-soft); cursor: pointer; }
+.res:hover { background: var(--fs-hover); }
 .rt { font-weight: 500; font-size: 14px; }
-.snip { color: #55687a; margin-top: 2px; }
+.snip { color: var(--fs-muted); margin-top: 2px; }
 .content { padding: 18px 26px; min-height: 60vh; }
 .art-head { margin-bottom: 8px; }
-.foot { margin-top: 22px; border-top: 1px solid #edf1f5; padding-top: 6px; }
-.example-bar { background: #f5f8fb; border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.foot { margin-top: 22px; border-top: 1px solid var(--fs-line-soft); padding-top: 6px; }
+.example-bar { background: var(--fs-card-soft); border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.preview { border: 1px solid #e3e9ef; border-radius: 4px; padding: 10px 14px; max-height: 80vh; overflow-y: auto; }
+.preview { border: 1px solid var(--fs-line); border-radius: 4px; padding: 10px 14px; max-height: 80vh; overflow-y: auto; }
 .mono-ta :deep(textarea) { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
 @media (max-width: 1000px) { .help-body { grid-template-columns: 1fr; } .toc { position: static; max-height: none; } .split { grid-template-columns: 1fr; } }
 </style>

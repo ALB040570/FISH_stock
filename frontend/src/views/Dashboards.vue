@@ -40,6 +40,6 @@ onMounted(async () => { try { items.value = await api.get('dashboards', '/dashbo
 <style scoped>
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .dcard { cursor: pointer; transition: box-shadow .15s; }
-.dcard:hover { box-shadow: 0 4px 16px rgba(18,50,74,.12); }
+.dcard:hover { box-shadow: none; border-color: var(--fs-primary-soft); }
 .card + .card { margin-top: 0; }
 </style>

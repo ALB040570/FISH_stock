@@ -17,6 +17,7 @@ import L from 'leaflet'
 import '@geoman-io/leaflet-geoman-free'
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css'
 import { api } from '../api'
+import { MAP } from '../theme'
 
 const p = defineProps({ point: Array, shape: Object })
 const emit = defineEmits(['update:point', 'update:shape'])
@@ -27,7 +28,7 @@ let map, marker, shapeLayer
 function drawShape(g) {
   if (shapeLayer) { shapeLayer.remove(); shapeLayer = null }
   if (!g) return
-  shapeLayer = L.geoJSON(g, { style: { color: '#1d5c7a', weight: 2, fillOpacity: 0.25 } }).addTo(map)
+  shapeLayer = L.geoJSON(g, { style: { color: MAP.shape, weight: 2, fillOpacity: 0.25 } }).addTo(map)
   shapeLayer.eachLayer((l) => l.on('pm:edit', () => emit('update:shape', shapeLayer.toGeoJSON().features[0].geometry)))
 }
 function drawPoint(pt) {

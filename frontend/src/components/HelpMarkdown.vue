@@ -56,22 +56,22 @@ function onClick(e) {
 }
 </script>
 <style>
-.help-md { line-height: 1.65; font-size: 15px; color: #1f2d3a; }
+.help-md { line-height: 1.65; font-size: 15px; color: var(--fs-text); }
 .help-md h1 { font-size: 24px; margin: 0 0 14px; }
-.help-md h2 { font-size: 19px; margin: 26px 0 10px; padding-bottom: 4px; border-bottom: 1px solid #e3e9ef; }
+.help-md h2 { font-size: 19px; margin: 26px 0 10px; padding-bottom: 4px; border-bottom: 1px solid var(--fs-line); }
 .help-md h3 { font-size: 16px; margin: 20px 0 8px; }
 .help-md p { margin: 0 0 10px; }
 .help-md ul, .help-md ol { margin: 0 0 12px; padding-left: 24px; }
 .help-md li { margin: 3px 0; }
-.help-md code { background: #f2f5f8; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
-.help-md pre { background: #f4f6f8; border-radius: 6px; padding: 10px 14px; overflow-x: auto; }
+.help-md code { background: var(--fs-code); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+.help-md pre { background: var(--fs-code); border-radius: 6px; padding: 10px 14px; overflow-x: auto; }
 .help-md pre code { background: none; padding: 0; }
-.help-md blockquote { margin: 12px 0; padding: 8px 14px; border-left: 4px solid #7fb3cf; background: #f2f7fa; color: #33495c; }
+.help-md blockquote { margin: 12px 0; padding: 8px 14px; border-left: 4px solid var(--fs-primary-soft); background: var(--fs-selected); color: var(--el-text-color-regular); border-radius: 0; }
 .help-md blockquote p:last-child { margin: 0; }
 .help-md table { border-collapse: collapse; margin: 10px 0 14px; font-size: 13.5px; display: block; overflow-x: auto; }
-.help-md th, .help-md td { border: 1px solid #d6dee6; padding: 5px 9px; text-align: left; vertical-align: top; }
-.help-md th { background: #eef3f7; font-weight: 600; }
-.help-md img { max-width: 100%; border: 1px solid #e3e9ef; border-radius: 4px; }
+.help-md th, .help-md td { border: 1px solid var(--fs-line); padding: 5px 9px; text-align: left; vertical-align: top; }
+.help-md th { background: var(--fs-card-soft); font-weight: 600; }
+.help-md img { max-width: 100%; border: 1px solid var(--fs-line); border-radius: 4px; }
 .help-md eq, .help-md eqn { font-size: 1.02em; }
 .help-md section.katex-display, .help-md .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
 </style>

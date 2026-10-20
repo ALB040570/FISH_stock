@@ -1,39 +1,101 @@
+/* Тема «Глубокая вода» (утверждена 20.10.2026). Описание и правила — docs/ui_theme.md.
+   Цвета --fs-* продублированы в src/theme.js для графиков и карты; совпадение проверяет theme.test.js.
+   Цвета в компонентах прописывать нельзя — только через эти переменные. */
 :root {
-  --fs-navy: #12324a;
-  --fs-primary: #1d5c7a;
-  --fs-primary-2: #2b7a9e;
-  --fs-teal: #2a9d8f;
-  --fs-amber: #e08a1e;
-  --fs-red: #c44536;
-  --fs-green: #2f9e6b;
-  --fs-blue: #3b82c4;
-  --fs-grey: #9aa5b1;
-  --fs-bg: #f3f6f9;
-  --fs-card: #ffffff;
-  --fs-line: #dfe5ec;
-  --fs-text: #1f2d3a;
-  --fs-muted: #627384;
-  --el-color-primary: #1d5c7a;
-  --el-color-primary-light-3: #4b88a7;
-  --el-color-primary-light-5: #7aa9c1;
-  --el-color-primary-light-7: #a9c9da;
-  --el-color-primary-light-8: #c1d8e5;
-  --el-color-primary-light-9: #e3eef4;
-  --el-color-primary-dark-2: #174a62;
-  --el-font-family: "Segoe UI", "Helvetica Neue", Roboto, Arial, "Noto Sans", sans-serif;
+  --fs-primary: #0E5E6F;
+  --fs-primary-hover: #0B4B59;
+  --fs-primary-2: #14919B;
+  --fs-primary-soft: #A9D3D6;
+  --fs-selected: #E7EFF1;
+  --fs-hover: #F0F5F6;
+  --fs-accent: #F2A541;
+  --fs-accent-text: #9A5B0A;
+  --fs-nav: #0E5E6F;
+  --fs-nav-active: #0B4B59;
+  --fs-nav-text: #E4F1F2;
+  --fs-nav-muted: #B7DCE0;
+  --fs-bg: #F4F7F8;
+  --fs-card: #FFFFFF;
+  --fs-card-soft: #F9FBFB;
+  --fs-line: #DCE5E8;
+  --fs-line-soft: #EBF0F2;
+  --fs-text: #1C2B33;
+  --fs-muted: #5B6F78;
+  --fs-faint: #74858D;
+  --fs-code: #F2F6F7;
+  --fs-success: #1B7A4B;
+  --fs-warning: #A9650F;
+  --fs-danger: #C0392B;
+  --fs-info: #6B7C85;
+  --fs-success-bg: #E8F2ED;
+  --fs-danger-bg: #F9EBEA;
+  --fs-radius: 8px;
+  --fs-shadow-pop: 0 6px 24px rgba(28, 43, 51, .14);
+
+  /* Element Plus: шкалы оттенков (light-N = смешение с белым на N×10 %, dark-2 = с чёрным на 20 %) */
+  --el-color-primary: #0E5E6F;
+  --el-color-primary-light-3: #568E9A;
+  --el-color-primary-light-5: #86AEB7;
+  --el-color-primary-light-7: #B7CFD4;
+  --el-color-primary-light-8: #CFDFE2;
+  --el-color-primary-light-9: #E7EFF1;
+  --el-color-primary-dark-2: #0B4B59;
+  --el-color-success: #1B7A4B;
+  --el-color-success-light-3: #5FA281;
+  --el-color-success-light-5: #8DBCA5;
+  --el-color-success-light-7: #BBD7C9;
+  --el-color-success-light-8: #D1E4DB;
+  --el-color-success-light-9: #E8F2ED;
+  --el-color-success-dark-2: #16623C;
+  --el-color-warning: #A9650F;
+  --el-color-warning-light-3: #C39357;
+  --el-color-warning-light-5: #D4B287;
+  --el-color-warning-light-7: #E5D1B7;
+  --el-color-warning-light-8: #EEE0CF;
+  --el-color-warning-light-9: #F6F0E7;
+  --el-color-warning-dark-2: #87510C;
+  --el-color-danger: #C0392B;
+  --el-color-danger-light-3: #D3746B;
+  --el-color-danger-light-5: #E09C95;
+  --el-color-danger-light-7: #ECC4BF;
+  --el-color-danger-light-8: #F2D7D5;
+  --el-color-danger-light-9: #F9EBEA;
+  --el-color-danger-dark-2: #9A2E22;
+  --el-color-info: #6B7C85;
+  --el-color-info-light-3: #97A3AA;
+  --el-color-info-light-5: #B5BEC2;
+  --el-color-info-light-7: #D3D8DA;
+  --el-color-info-light-8: #E1E5E7;
+  --el-color-info-light-9: #F0F2F3;
+  --el-color-info-dark-2: #56636A;
+  --el-text-color-primary: var(--fs-text);
+  --el-text-color-regular: #33454E;
+  --el-text-color-secondary: var(--fs-muted);
+  --el-text-color-placeholder: #8C9BA2;
+  --el-border-color: #CFDADE;
+  --el-border-color-light: var(--fs-line);
+  --el-border-color-lighter: var(--fs-line-soft);
+  --el-border-color-extra-light: #F2F6F7;
+  --el-fill-color-light: var(--fs-hover);
+  --el-fill-color-lighter: var(--fs-card-soft);
+  --el-bg-color-page: var(--fs-bg);
+  --el-border-radius-base: 6px;
+  --el-border-radius-small: 4px;
+  --el-font-family: Inter, "Segoe UI", "Helvetica Neue", Roboto, Arial, "Noto Sans", sans-serif;
 }
 * { box-sizing: border-box; }
 html, body, #app { height: 100%; margin: 0; }
-body { background: var(--fs-bg); color: var(--fs-text); font-family: var(--el-font-family); font-size: 14px; }
+body { background: var(--fs-bg); color: var(--fs-text); font-family: var(--el-font-family); font-size: 14px;
+  font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased; }
 a { color: var(--fs-primary); text-decoration: none; }
-a:hover { text-decoration: underline; }
-h1 { font-size: 22px; margin: 0 0 4px; font-weight: 650; letter-spacing: -0.01em; }
-h2 { font-size: 17px; margin: 18px 0 10px; font-weight: 620; }
+a:hover { color: var(--fs-primary-hover); text-decoration: underline; }
+h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.25; }
+h2 { font-size: 17px; margin: 18px 0 10px; font-weight: 600; letter-spacing: -0.01em; }
 h3 { font-size: 15px; margin: 12px 0 8px; font-weight: 600; }
 .page { padding: 20px 24px 40px; max-width: 1600px; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
 .page-head .sub { color: var(--fs-muted); margin-top: 2px; }
-.card { background: var(--fs-card); border: 1px solid var(--fs-line); border-radius: 8px; padding: 16px; }
+.card { background: var(--fs-card); border: 1px solid var(--fs-line); border-radius: var(--fs-radius); padding: 16px; }
 .card + .card { margin-top: 14px; }
 .muted { color: var(--fs-muted); }
 .small { font-size: 12px; }
@@ -44,13 +106,25 @@ h3 { font-size: 15px; margin: 12px 0 8px; font-weight: 600; }
 .num { font-variant-numeric: tabular-nums; text-align: right; }
 .tag-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
 .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
-.kpi { border: 1px solid var(--fs-line); border-radius: 8px; padding: 10px 12px; background: #fbfcfd; }
-.kpi .v { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.kpi { border: 1px solid var(--fs-line); border-radius: var(--fs-radius); padding: 10px 12px; background: var(--fs-card-soft); }
+.kpi .v { font-size: 20px; font-weight: 600; color: var(--fs-text); font-variant-numeric: tabular-nums; }
 .kpi .l { color: var(--fs-muted); font-size: 12px; margin-top: 2px; }
 .code-editor { width: 100%; min-height: 520px; font-family: "JetBrains Mono", Consolas, monospace; font-size: 12.5px;
   line-height: 1.5; border: 1px solid var(--fs-line); border-radius: 6px; padding: 10px; tab-size: 4; resize: vertical;
-  background: #fbfcfd; color: #1b2b38; }
+  background: var(--fs-code); color: var(--fs-text); }
 .state { padding: 28px; text-align: center; color: var(--fs-muted); }
 .el-table .cell { word-break: normal; }
 .leaflet-container { font-family: var(--el-font-family); }
 @media (max-width: 900px) { .grid12 { grid-template-columns: 1fr; } .grid12 > * { grid-column: 1 / -1 !important; } .page { padding: 14px; } }
+
+/* Общие элементы темы */
+.badge-num { width: 22px; height: 22px; border-radius: 50%; background: var(--fs-primary); color: #fff; display: grid;
+  place-items: center; font-size: 12px; font-weight: 600; flex: none; font-variant-numeric: tabular-nums; }
+.list-item:hover { background: var(--fs-hover); }
+.list-item.sel { background: var(--fs-selected); }
+.el-table { --el-table-header-bg-color: var(--fs-card-soft); --el-table-row-hover-bg-color: var(--fs-hover); }
+.el-table th.el-table__cell { font-weight: 600; color: var(--fs-muted); font-size: 12.5px; }
+.el-table td.el-table__cell { font-variant-numeric: tabular-nums; }
+.el-tabs__item { font-weight: 500; }
+.el-button { font-weight: 500; }
+.el-alert__title { font-weight: 500; }

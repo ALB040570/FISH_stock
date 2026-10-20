@@ -86,6 +86,6 @@ onMounted(load)
 </script>
 <style scoped>
 .fl { padding: 3px 8px; cursor: pointer; font-family: monospace; font-size: 12px; border-radius: 4px; }
-.fl:hover { background: #eef3f7; }
-.fl.sel { background: #e3eef4; font-weight: 600; }
+.fl:hover { background: var(--fs-hover); }
+.fl.sel { background: var(--fs-selected); font-weight: 600; }
 </style>

@@ -162,8 +162,8 @@ onBeforeUnmount(() => clearInterval(poll))
 </script>
 <style scoped>
 .fl { padding: 3px 6px; cursor: pointer; font-family: monospace; font-size: 12px; border-radius: 4px; }
-.fl:hover { background: #eef3f7; }
-.fl.sel { background: #e3eef4; font-weight: 600; }
-.fl.dim { color: #8a98a6; }
+.fl:hover { background: var(--fs-hover); }
+.fl.sel { background: var(--fs-selected); font-weight: 600; }
+.fl.dim { color: var(--fs-faint); }
 .nowrap { white-space: pre; overflow-x: auto; overflow-wrap: normal; }
 </style>

@@ -72,7 +72,7 @@
             <template v-else-if="tab === 'log'">
               <el-alert v-if="log?.message" :type="log.status === 'done' ? 'success' : 'error'" :closable="false" :title="log.message" style="margin-bottom:8px" />
               <pre class="code-editor" style="min-height:200px; max-height:520px; overflow:auto">{{ log?.log }}</pre>
-              <pre v-if="log?.traceback" class="code-editor" style="min-height:100px; color:#a33">{{ log.traceback }}</pre>
+              <pre v-if="log?.traceback" class="code-editor" style="min-height:100px; color:var(--fs-danger)">{{ log.traceback }}</pre>
             </template>
             <template v-else-if="tab === 'params'">
               <pre class="code-editor" style="min-height:200px">{{ JSON.stringify(run.steps[cur].params, null, 1) }}</pre>
@@ -152,11 +152,11 @@ onBeforeUnmount(() => clearInterval(timer))
 </script>
 <style scoped>
 .steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-.st { border: 1px solid var(--fs-line); border-radius: 8px; padding: 10px; cursor: pointer; background: #fbfcfd; }
-.st.sel { border-color: #1d5c7a; box-shadow: 0 0 0 1px #1d5c7a inset; }
-.st.done, .st.reused { background: #f2faf6; }
-.st.failed { background: #fbf0ee; }
-.num-badge { width: 22px; height: 22px; border-radius: 50%; background: #1d5c7a; color: #fff; display: grid; place-items: center; font-size: 12px; }
+.st { border: 1px solid var(--fs-line); border-radius: 8px; padding: 10px; cursor: pointer; background: var(--fs-card-soft); }
+.st.sel { border-color: var(--fs-primary); box-shadow: 0 0 0 1px var(--fs-primary) inset; }
+.st.done, .st.reused { background: var(--fs-success-bg); }
+.st.failed { background: var(--fs-danger-bg); }
+.num-badge { width: 22px; height: 22px; border-radius: 50%; background: var(--fs-primary); color: #fff; display: grid; place-items: center; font-size: 12px; }
 .method-link { float: right; font-size: 13px; margin-top: 10px; position: relative; z-index: 1; }
-.method-link a { color: #2b7a9e; text-decoration: none; display: inline-flex; gap: 4px; align-items: center; }
+.method-link a { color: var(--fs-primary); text-decoration: none; display: inline-flex; gap: 4px; align-items: center; }
 </style>

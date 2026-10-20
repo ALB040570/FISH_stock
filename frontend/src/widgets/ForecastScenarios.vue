@@ -24,6 +24,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import EChart from '../components/EChart.vue'
+import { CHART } from '../theme'
 import { band, base, fmt } from '../components/charts'
 import { useSpecies } from './useSpecies'
 const p = defineProps({ data: Object, filters: Object })
@@ -40,7 +41,7 @@ const totalOpt = computed(() => {
   const qf = sp.value.scenarios[sc.value].total_q
   const q = qh.map((r, k) => r.map((v, i) => (i < nh ? v : qf[k][i - nh])))
   const o = band({ x: years.value, q, name: t('w.total_median'), yName: 'шт' })
-  o.series.push({ type: 'line', name: t('w.fc_start'), data: [], markLine: { symbol: 'none', silent: true, lineStyle: { color: '#e08a1e', type: 'dashed' },
+  o.series.push({ type: 'line', name: t('w.fc_start'), data: [], markLine: { symbol: 'none', silent: true, lineStyle: { color: CHART.highlight, type: 'dashed' },
     data: [{ xAxis: String(sp.value.years_fc[0]) }] } })
   return o
 })
@@ -48,8 +49,8 @@ const pduOpt = computed(() => {
   const s = sp.value.scenarios
   const nh = sp.value.years_hist.length
   return base({ x: years.value, type: 'bar', yName: 'т', series: [
-    { name: t('w.pdu_npc_hist'), values: [...sp.value.hist.npc_pdu_t, ...Array(sp.value.years_fc.length).fill(null)], extra: { itemStyle: { color: '#a9c9da' } } },
-    { name: `${t('w.pdu')}: ${sp.value.scenario_titles[sc.value]}`, values: [...Array(nh).fill(null), ...s[sc.value].pdu_t_q[2]], extra: { itemStyle: { color: '#1d5c7a' } } }] })
+    { name: t('w.pdu_npc_hist'), values: [...sp.value.hist.npc_pdu_t, ...Array(sp.value.years_fc.length).fill(null)], extra: { itemStyle: { color: CHART.background } } },
+    { name: `${t('w.pdu')}: ${sp.value.scenario_titles[sc.value]}`, values: [...Array(nh).fill(null), ...s[sc.value].pdu_t_q[2]], extra: { itemStyle: { color: CHART.highlight } } }] })
 })
 const matureAges = computed(() => sp.value.ages.filter((a) => a >= sp.value.m0))
 const ageRows = computed(() => sp.value.years_fc.map((y, h) => {

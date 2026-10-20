@@ -1,7 +1,7 @@
 <template>
   <div class="login-wrap">
     <div class="side">
-      <svg viewBox="0 0 64 64" width="54" height="54"><path d="M6 32c10-14 30-16 42-6l10-8v28l-10-8c-12 10-32 8-42-6z" fill="#7fc4d8"/><circle cx="20" cy="29" r="3" fill="#12324a"/></svg>
+      <svg viewBox="0 0 64 64" width="54" height="54"><path class="logo-body" d="M6 32c10-14 30-16 42-6l10-8v28l-10-8c-12 10-32 8-42-6z"/><circle class="logo-eye" cx="20" cy="29" r="3"/></svg>
       <h1>FishStocke</h1>
       <p>{{ $t('app.subtitle') }}</p>
       <div class="waves" />
@@ -51,11 +51,13 @@ async function submit() {
 </script>
 <style scoped>
 .login-wrap { display: grid; grid-template-columns: 1.1fr 1fr; min-height: 100vh; }
-.side { background: linear-gradient(160deg, #12324a 0%, #1d5c7a 70%, #2a9d8f 100%); color: #fff; padding: 12vh 8vw; position: relative; overflow: hidden; }
-.side h1 { font-size: 34px; margin: 14px 0 6px; }
-.side p { color: #cfe3ee; font-size: 16px; max-width: 420px; line-height: 1.45; }
+.side { background: linear-gradient(160deg, var(--fs-primary-hover) 0%, var(--fs-primary) 60%, var(--fs-primary-2) 100%); color: #fff; padding: 12vh 8vw; position: relative; overflow: hidden; }
+.side h1 { font-size: 34px; margin: 14px 0 6px; letter-spacing: -0.02em; }
+.logo-body { fill: var(--fs-accent); }
+.logo-eye { fill: var(--fs-primary-hover); }
+.side p { color: var(--fs-nav-text); font-size: 16px; max-width: 420px; line-height: 1.45; }
 .waves { position: absolute; left: -10%; right: -10%; bottom: -40px; height: 180px; border-radius: 50%; background: rgba(255,255,255,.06); box-shadow: 0 -40px 0 rgba(255,255,255,.04); }
-.form { padding: 12vh 8vw; background: #fff; position: relative; }
+.form { padding: 12vh 8vw; background: var(--fs-card); position: relative; }
 .form h2 { font-size: 22px; margin-bottom: 18px; }
 .lang { position: absolute; top: 20px; right: 24px; }
 @media (max-width: 800px) { .login-wrap { grid-template-columns: 1fr; } .side { padding: 40px 24px; } .form { padding: 30px 24px; } }

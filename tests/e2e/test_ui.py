@@ -76,4 +76,4 @@ def test_viewer_and_language(browser):
     assert page.locator("text=Загрузить Excel").count() == 0       # наблюдатель не загружает
     assert page.locator("text=Пользователи").count() == 0
     page.get_by_text("ҚАЗ", exact=True).first.click()
-    page.wait_for_selector("text=Кіріс деректер")
+    page.wait_for_selector("text=Бастапқы деректер")

@@ -17,7 +17,7 @@
           <el-table-column prop="calculation_title" :label="$t('calc.title')" min-width="280" />
           <el-table-column prop="water_body" :label="$t('common.water_body')" width="130" />
           <el-table-column :label="$t('runs.steps')" min-width="170">
-            <template #default="{ row }"><span v-for="s in row.steps" :key="s.algorithm" class="tag-dot" :title="s.title" :style="{ background: dot[s.status] || '#ccd5de' }" /></template>
+            <template #default="{ row }"><span v-for="s in row.steps" :key="s.algorithm" class="tag-dot" :title="s.title" :style="{ background: dot[s.status] || dot.pending }" /></template>
           </el-table-column>
           <el-table-column :label="$t('common.status')" width="140"><template #default="{ row }"><RunStatus :status="row.status" /> <el-tag v-if="row.is_main" size="small">★</el-tag></template></el-table-column>
           <el-table-column prop="author_name" :label="$t('common.author')" width="150" />
@@ -30,10 +30,11 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { api } from '../api'
+import { RUN_STEP } from '../theme'
 import StateBlock from '../components/StateBlock.vue'
 import RunStatus from '../components/RunStatus.vue'
 import WaterBodySelect from '../components/WaterBodySelect.vue'
-const dot = { done: '#2f9e6b', reused: '#7cc7a3', running: '#3b82c4', failed: '#c44536', cancelled: '#e08a1e', skipped: '#ccd5de', pending: '#ccd5de' }
+const dot = RUN_STEP
 const wb = ref(null)
 const status = ref(null)
 const items = ref([])

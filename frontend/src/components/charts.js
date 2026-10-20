@@ -1,5 +1,7 @@
-// Общий вид графиков: спокойная палитра, читаемые оси, числа с пробелами.
-export const PALETTE = ['#1d5c7a', '#2a9d8f', '#e08a1e', '#7b5ea7', '#c44536', '#6c8a2e', '#3b82c4', '#b5651d', '#8a8f98', '#d4a017', '#4f6d7a', '#a23b72']
+// Общий вид графиков: палитра темы (src/theme.js), читаемые оси, числа с пробелами.
+import { CHART, CHART_PALETTE } from '../theme'
+
+export const PALETTE = CHART_PALETTE
 
 export function fmt(v, d = 0) {
   if (v === null || v === undefined || Number.isNaN(v)) return '—'
@@ -27,14 +29,14 @@ export function base({ x, series, yName = '', type = 'line', stack = false, lege
     tooltip: { trigger: 'axis', valueFormatter: (v) => fmt(v, 'auto') },
     legend: legend ? { top: 0, type: 'scroll', icon: 'roundRect', itemWidth: 12, itemHeight: 8 } : undefined,
     xAxis: { type: 'category', data: x, name: xName, nameLocation: 'middle', nameGap: 24, axisTick: { alignWithLabel: true } },
-    yAxis: { type: 'value', name: yName, nameTextStyle: { align: 'left' }, axisLabel: { formatter: compact }, splitLine: { lineStyle: { color: '#edf1f5' } } },
+    yAxis: { type: 'value', name: yName, nameTextStyle: { align: 'left' }, axisLabel: { formatter: compact }, splitLine: { lineStyle: { color: CHART.grid } } },
     series: series.map((s) => ({ type, name: s.name ?? '', data: s.values, stack: stack ? 'a' : undefined, smooth: false,
       showSymbol: type === 'line' && (x?.length || 0) < 25, connectNulls: false, barMaxWidth: 28, ...(s.extra || {}) })),
   }
 }
 
 // Полоса интервала (2,5–97,5 %, 25–75 %) + медиана + точки наблюдений
-export function band({ x, q, name = 'медиана', obs = [], yName = '', color = '#1d5c7a' }) {
+export function band({ x, q, name = 'медиана', obs = [], yName = '', color = CHART.main }) {
   const lo = q[0], hi = q[4], lo2 = q[1], hi2 = q[3]
   const series = [
     { type: 'line', data: lo, stack: 'b95', lineStyle: { opacity: 0 }, symbol: 'none', name: '95 %', tooltip: { show: false } },
@@ -53,7 +55,7 @@ export function band({ x, q, name = 'медиана', obs = [], yName = '', colo
     tooltip: { trigger: 'axis', valueFormatter: (v) => fmt(v, 0) },
     legend: { top: 0, data: [name, '95 %', '50 %', ...obs.map((o) => o.name)] },
     xAxis: { type: 'category', data: x },
-    yAxis: { type: 'value', name: yName, axisLabel: { formatter: compact }, splitLine: { lineStyle: { color: '#edf1f5' } } },
+    yAxis: { type: 'value', name: yName, axisLabel: { formatter: compact }, splitLine: { lineStyle: { color: CHART.grid } } },
     series,
   }
 }

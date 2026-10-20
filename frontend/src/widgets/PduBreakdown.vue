@@ -4,7 +4,7 @@
       <el-select v-model="chosen" size="small" style="width:150px"><el-option v-for="s in list" :key="s" :label="s" :value="s" /></el-select>
       <el-select v-model="yi" size="small" style="width:100px"><el-option v-for="(y, i) in years" :key="y" :label="y" :value="i" /></el-select>
       <div class="grow" />
-      <router-link to="/help/method-pdu-age" class="small" style="color:#2b7a9e">{{ $t('help.how_pdu') }}</router-link>
+      <router-link to="/help/method-pdu-age" class="small" style="color:var(--fs-primary)">{{ $t('help.how_pdu') }}</router-link>
     </div>
     <div class="flow">
       <div class="step"><div class="n">1</div><div><div class="v">{{ fmt(stockTotal) }} {{ $t('w.pcs') }}</div><div class="l">{{ $t('w.step1', { a: ageLabel(sp.m0), b: ageLabel(sp.m1) }) }}</div></div></div>
@@ -35,6 +35,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import EChart from '../components/EChart.vue'
+import { CHART } from '../theme'
 import { base, fmt } from '../components/charts'
 import { useSpecies } from './useSpecies'
 const p = defineProps({ data: Object, filters: Object })
@@ -56,15 +57,15 @@ const opt = computed(() => {
   const b = sp.value.by_year[yi.value]
   const bio = sp.value.ages.map((a, i) => (b.stock[i] == null || b.weight[i] == null ? null : (b.stock[i] * b.weight[i]) / 1e6))
   return base({ x: rows.value.map((r) => r.age), type: 'bar', yName: 'т', xName: t('w.age_years'), series: [
-    { name: t('w.biomass'), values: bio, extra: { itemStyle: { color: '#a9c9da' } } },
-    { name: t('w.pdu'), values: b.tonnes, extra: { itemStyle: { color: '#1d5c7a' } } }] })
+    { name: t('w.biomass'), values: bio, extra: { itemStyle: { color: CHART.background } } },
+    { name: t('w.pdu'), values: b.tonnes, extra: { itemStyle: { color: CHART.highlight } } }] })
 })
 </script>
 <style scoped>
 .flow { display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; }
-.step { flex: 1; min-width: 170px; display: flex; gap: 8px; border: 1px solid var(--fs-line); border-radius: 8px; padding: 8px 10px; background: #fbfcfd; }
-.step.hi { background: #e3eef4; border-color: #a9c9da; }
-.step .n { width: 22px; height: 22px; border-radius: 50%; background: #1d5c7a; color: #fff; display: grid; place-items: center; font-size: 12px; flex: none; }
+.step { flex: 1; min-width: 170px; display: flex; gap: 8px; border: 1px solid var(--fs-line); border-radius: 8px; padding: 8px 10px; background: var(--fs-card-soft); }
+.step.hi { background: var(--fs-selected); border-color: var(--fs-primary-soft); }
+.step .n { width: 22px; height: 22px; border-radius: 50%; background: var(--fs-primary); color: #fff; display: grid; place-items: center; font-size: 12px; flex: none; }
 .step .v { font-weight: 650; font-size: 16px; font-variant-numeric: tabular-nums; }
 .step .l { color: var(--fs-muted); font-size: 12px; line-height: 1.3; }
 .arrow { align-self: center; color: var(--fs-muted); font-size: 18px; }

@@ -181,5 +181,5 @@ async function doDiff() { diff.value = await api.get('data-admin', `/datasets/${
 onMounted(load)
 </script>
 <style scoped>
-.miss { color: #b8c2cc; }
+.miss { color: var(--fs-faint); }
 </style>

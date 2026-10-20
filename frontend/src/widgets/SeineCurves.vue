@@ -17,6 +17,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import EChart from '../components/EChart.vue'
+import { CHART } from '../theme'
 import { compact, fmt, PALETTE } from '../components/charts'
 import { useSpecies } from './useSpecies'
 const p = defineProps({ data: Object, filters: Object, options: Object })
@@ -40,13 +41,13 @@ const opt = computed(() => {
     tooltip: { trigger: 'axis', valueFormatter: (v) => fmt(v, 'auto') },
     legend: { top: 0 },
     xAxis: { type: 'category', data: ages, name: t('w.age_years'), nameLocation: 'middle', nameGap: 22 },
-    yAxis: [{ type: 'value', name: f.observed_is_catch ? t('w.catch_pcs') : t('w.sample_pcs'), axisLabel: { formatter: compact }, splitLine: { lineStyle: { color: '#edf1f5' } } },
+    yAxis: [{ type: 'value', name: f.observed_is_catch ? t('w.catch_pcs') : t('w.sample_pcs'), axisLabel: { formatter: compact }, splitLine: { lineStyle: { color: CHART.grid } } },
       { type: 'value', name: 'c', min: 0, max: 1, splitLine: { show: false } }],
     series: [
-      { type: 'bar', name: f.observed_is_catch ? t('w.catch_by_age') : t('w.age_sample'), data: f.observed, itemStyle: { color: '#a9c9da' }, barMaxWidth: 26 },
-      ...(f.fitted ? [{ type: 'line', name: t('w.catch_curve'), data: f.fitted, symbol: 'none', lineStyle: { color: '#2a9d8f' } }] : []),
-      { type: 'line', name: t('w.catchability'), data: f.c, yAxisIndex: 1, lineStyle: { width: 2.5, color: '#1d5c7a' }, itemStyle: { color: '#1d5c7a' },
-        markLine: { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: '#c44536' }, label: { formatter: '{c}' }, data: [{ yAxis: lo }, { yAxis: hi }] } },
+      { type: 'bar', name: f.observed_is_catch ? t('w.catch_by_age') : t('w.age_sample'), data: f.observed, itemStyle: { color: CHART.background }, barMaxWidth: 26 },
+      ...(f.fitted ? [{ type: 'line', name: t('w.catch_curve'), data: f.fitted, symbol: 'none', lineStyle: { color: CHART.fit } }] : []),
+      { type: 'line', name: t('w.catchability'), data: f.c, yAxisIndex: 1, lineStyle: { width: 2.5, color: CHART.main }, itemStyle: { color: CHART.main },
+        markLine: { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: CHART.limit }, label: { formatter: '{c}' }, data: [{ yAxis: lo }, { yAxis: hi }] } },
     ],
   }
 })

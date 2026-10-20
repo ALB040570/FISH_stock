@@ -1,11 +1,11 @@
 <template>
   <el-container class="layout">
-    <el-aside :width="collapsed ? '64px' : '248px'" class="aside">
+    <el-aside :width="collapsed ? '64px' : '260px'" class="aside">
       <div class="brand" @click="$router.push('/')">
-        <svg viewBox="0 0 64 64" width="30" height="30"><path d="M6 32c10-14 30-16 42-6l10-8v28l-10-8c-12 10-32 8-42-6z" fill="#7fc4d8"/><circle cx="20" cy="29" r="3" fill="#12324a"/></svg>
+        <svg viewBox="0 0 64 64" width="30" height="30"><path class="logo-body" d="M6 32c10-14 30-16 42-6l10-8v28l-10-8c-12 10-32 8-42-6z"/><circle class="logo-eye" cx="20" cy="29" r="3"/></svg>
         <div v-if="!collapsed"><div class="b1">FishStocke</div><div class="b2">{{ $t('app.subtitle') }}</div></div>
       </div>
-      <el-menu :default-active="active" router :collapse="collapsed" background-color="#12324a" text-color="#c9d7e3" active-text-color="#ffffff">
+      <el-menu :default-active="active" router :collapse="collapsed">
         <el-menu-item-group :title="collapsed ? '' : $t('nav.section_work')">
           <el-menu-item index="/"><el-icon><MapLocation /></el-icon><span>{{ $t('nav.map') }}</span></el-menu-item>
           <el-menu-item index="/monitoring"><el-icon><DataLine /></el-icon><span>{{ $t('nav.monitoring') }}</span></el-menu-item>
@@ -42,7 +42,7 @@
         </el-radio-group>
         <el-dropdown trigger="click" @command="onCmd">
           <span class="user">
-            <el-avatar :size="28" style="background:#2b7a9e">{{ initials }}</el-avatar>
+            <el-avatar :size="28" class="avatar">{{ initials }}</el-avatar>
             <span class="uname">{{ auth.user?.name }}<br><span class="urole">{{ $t('roles.' + auth.role) }}</span></span>
           </span>
           <template #dropdown>
@@ -101,14 +101,25 @@ function onCmd(c) {
 </script>
 <style scoped>
 .layout { height: 100vh; }
-.aside { background: #12324a; transition: width .2s; overflow-x: hidden; overflow-y: auto; }
+.aside { background: var(--fs-nav); transition: width .2s; overflow-x: hidden; overflow-y: auto; }
 .brand { display: flex; gap: 10px; align-items: center; padding: 14px 16px 10px; cursor: pointer; color: #fff; }
-.b1 { font-weight: 700; font-size: 16px; letter-spacing: .02em; }
-.b2 { font-size: 10.5px; color: #9fb8cc; line-height: 1.25; margin-top: 2px; }
-.aside :deep(.el-menu) { border-right: none; }
-.aside :deep(.el-menu-item-group__title) { color: #7f9bb2; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding-top: 14px; }
-.aside :deep(.el-menu-item.is-active) { background: #1d5c7a !important; }
-.header { display: flex; align-items: center; gap: 14px; background: #fff; border-bottom: 1px solid var(--fs-line); }
+.logo-body { fill: var(--fs-accent); }
+.logo-eye { fill: var(--fs-nav); }
+.b1 { font-weight: 600; font-size: 16px; letter-spacing: .01em; }
+.b2 { font-size: 11px; color: var(--fs-nav-muted); line-height: 1.25; margin-top: 2px; }
+.aside :deep(.el-menu) { border-right: none; --el-menu-bg-color: var(--fs-nav); --el-menu-text-color: var(--fs-nav-text);
+  --el-menu-active-color: #fff; --el-menu-hover-bg-color: rgba(255, 255, 255, .08); --el-menu-item-height: 44px; }
+.aside :deep(.el-menu-item) { border-radius: 6px; margin: 1px 6px; padding-left: 10px !important; padding-right: 6px; height: 40px; }
+.aside :deep(.el-menu-item span) { overflow: hidden; text-overflow: ellipsis; }
+.aside :deep(.el-menu--collapse) { width: 64px; }
+.aside :deep(.el-menu--collapse .el-menu-item) { margin: 1px 8px; padding: 0 !important; justify-content: center; }
+.aside :deep(.el-menu--collapse .el-menu-item span) { display: none; }
+.aside :deep(.el-menu--collapse .el-menu-item .el-icon) { margin-right: 0; }
+.aside :deep(.el-menu--collapse .el-menu-item-group__title) { padding: 8px 0 0; height: 1px; overflow: hidden; }
+.aside :deep(.el-menu-item-group__title) { color: var(--fs-nav-muted); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .07em; padding-top: 16px; }
+.aside :deep(.el-menu-item.is-active) { background: var(--fs-nav-active) !important; box-shadow: inset 3px 0 0 var(--fs-accent); font-weight: 500; }
+.avatar { background: var(--fs-primary-2); font-weight: 600; }
+.header { display: flex; align-items: center; gap: 14px; background: var(--fs-card); border-bottom: 1px solid var(--fs-line); }
 .user { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .uname { font-size: 13px; line-height: 1.15; }
 .urole { color: var(--fs-muted); font-size: 11px; }

@@ -81,11 +81,12 @@ import { api } from '../api'
 import { tr } from '../i18n'
 import { useAuth } from '../store/auth'
 import { fmt } from '../components/charts'
+import { MAP, MAP_STATE } from '../theme'
 import StateBlock from '../components/StateBlock.vue'
 
 const auth = useAuth()
 const STATES = ['no_data', 'has_data', 'has_run', 'stale']
-const COLORS = { no_data: '#9aa5b1', has_data: '#3b82c4', has_run: '#2f9e6b', stale: '#e08a1e' }
+const COLORS = MAP_STATE
 const { t } = useI18n()
 const typeTitle = (x) => t('wbtype.' + (x || 'other'))
 const mapEl = ref(null)
@@ -167,7 +168,7 @@ function draw() {
     lay.addTo(layer)
     layers[w.id] = lay
     if (w.state !== 'no_data' && w.point) {
-      L.circleMarker([w.point[0], w.point[1]], { radius: 4, color: '#fff', weight: 1, fillColor: COLORS[w.state], fillOpacity: 1 })
+      L.circleMarker([w.point[0], w.point[1]], { radius: 4, color: MAP.markerStroke, weight: 1, fillColor: COLORS[w.state], fillOpacity: 1 })
         .on('click', () => select(w, false)).addTo(layer)
     }
   }
@@ -190,7 +191,7 @@ onMounted(async () => {
   }).addTo(map)
   try {
     const kz = await api.get('data-model', '/kazakhstan.geojson')
-    L.geoJSON(kz, { style: { color: '#12324a', weight: 1.4, fill: false, dashArray: '4 3' }, interactive: false }).addTo(map)
+    L.geoJSON(kz, { style: { color: MAP.border, weight: 1.4, fill: false, dashArray: '4 3' }, interactive: false }).addTo(map)
   } catch (e) { /* граница не обязательна */ }
   await load()
 })
@@ -199,19 +200,19 @@ watch(filtered, () => {})
 </script>
 <style scoped>
 .map-page { display: grid; grid-template-columns: 330px 1fr; height: calc(100vh - 52px); }
-.panel { border-right: 1px solid var(--fs-line); background: #fff; display: flex; flex-direction: column; min-height: 0; }
+.panel { border-right: 1px solid var(--fs-line); background: var(--fs-card); display: flex; flex-direction: column; min-height: 0; }
 .ph { padding: 16px; border-bottom: 1px solid var(--fs-line); }
 .ph h1 { margin-bottom: 10px; }
 .list { overflow: auto; flex: 1; }
-.item { display: flex; gap: 6px; align-items: flex-start; padding: 9px 16px; cursor: pointer; border-bottom: 1px solid #f0f3f6; }
-.item:hover { background: #f4f8fb; }
-.item.sel { background: #e3eef4; }
+.item { display: flex; gap: 6px; align-items: flex-start; padding: 9px 16px; cursor: pointer; border-bottom: 1px solid var(--fs-line-soft); }
+.item:hover { background: var(--fs-hover); }
+.item.sel { background: var(--fs-selected); box-shadow: inset 3px 0 0 var(--fs-primary); }
 .item .tag-dot { margin-top: 5px; }
 .nm { font-weight: 550; }
 .mapbox { position: relative; min-height: 0; }
 .map { position: absolute; inset: 0; }
 .legend { position: absolute; left: 12px; bottom: 22px; z-index: 500; padding: 8px 12px; }
-.info { position: absolute; right: 12px; top: 12px; width: 380px; max-height: calc(100% - 24px); overflow: auto; z-index: 500; box-shadow: 0 6px 24px rgba(18,50,74,.18); }
+.info { position: absolute; right: 12px; top: 12px; width: 380px; max-height: calc(100% - 24px); overflow: auto; z-index: 500; box-shadow: var(--fs-shadow-pop); }
 .slide-enter-active, .slide-leave-active { transition: all .2s; }
 .slide-enter-from, .slide-leave-to { opacity: 0; transform: translateX(16px); }
 @media (max-width: 900px) { .map-page { grid-template-columns: 1fr; grid-template-rows: 40vh 1fr; } .info { width: auto; left: 12px; } }

@@ -110,5 +110,5 @@ onMounted(async () => {
 </script>
 <style scoped>
 .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 8px 18px; }
-.prow { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 1px dashed #eef1f4; padding: 4px 0; }
+.prow { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 1px dashed var(--fs-line-soft); padding: 4px 0; }
 </style>

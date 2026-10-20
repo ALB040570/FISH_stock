@@ -54,7 +54,7 @@
 Подробнее: [docs/plan.md](docs/plan.md) (утверждённый план), [docs/api.md](docs/api.md) (API),
 [docs/data_formats.md](docs/data_formats.md) (форматы и хранение), [docs/algorithms.md](docs/algorithms.md)
 (как добавить алгоритм), [docs/user_guide.md](docs/user_guide.md) (инструкция пользователя),
-[docs/deploy.md](docs/deploy.md) и [docs/install.md](docs/install.md) (установка, внешний доступ, резервное копирование), [docs/acceptance.md](docs/acceptance.md) (приёмка).
+[docs/deploy.md](docs/deploy.md) и [docs/install.md](docs/install.md) (установка, внешний доступ, резервное копирование), [docs/acceptance.md](docs/acceptance.md) (приёмка), [docs/ui_theme.md](docs/ui_theme.md) (тема интерфейса).
 
 ## Быстрый старт (Docker)
 
