@@ -22,7 +22,7 @@
           <el-table-column prop="water_body" :label="$t('common.water_body')" width="140" />
           <el-table-column :label="$t('calc.steps')" min-width="260"><template #default="{ row }"><span class="small">{{ row.steps.map((s) => titles[s.algorithm] || s.algorithm).join(' → ') }}</span></template></el-table-column>
           <el-table-column :label="$t('common.version')" width="80" align="right"><template #default="{ row }">v{{ row.current_version }}</template></el-table-column>
-          <el-table-column :label="$t('common.date')" width="170"><template #default="{ row }">{{ new Date(row.updated_at).toLocaleString() }}</template></el-table-column>
+          <el-table-column :label="$t('common.date')" width="170"><template #default="{ row }">{{ new Date(row.updated_at).toLocaleString('ru-RU') }}</template></el-table-column>
         </el-table>
       </div>
     </StateBlock>

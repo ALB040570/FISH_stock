@@ -19,7 +19,7 @@
                     <el-button size="small" :disabled="!details[row.code].published.length" @click="newDraft(row.code)">{{ $t('algo.new_draft') }}</el-button>
                   </div>
                   <el-table :data="details[row.code].drafts" size="small" style="margin-top:6px" @row-click="(d) => $router.push('/algorithms/drafts/' + d.id)">
-                    <el-table-column :label="$t('common.date')" width="170"><template #default="{ row: d }">{{ new Date(d.created_at).toLocaleString() }}</template></el-table-column>
+                    <el-table-column :label="$t('common.date')" width="170"><template #default="{ row: d }">{{ new Date(d.created_at).toLocaleString('ru-RU') }}</template></el-table-column>
                     <el-table-column :label="$t('common.status')" width="130"><template #default="{ row: d }"><el-tag size="small" :type="d.status === 'published' ? 'success' : 'info'">{{ d.status === 'published' ? 'опубликован ' + d.published_version : 'черновик' }}</el-tag></template></el-table-column>
                     <el-table-column label="От версии" width="100" prop="base_version" />
                     <el-table-column label="Тест" width="140"><template #default="{ row: d }"><span v-if="d.last_test">{{ $t('algo.' + d.last_test.status) }}</span></template></el-table-column>

@@ -67,10 +67,10 @@ docker compose up -d --build
 Приложение: `http://<сервер>:8080` (порт — `FISH_HTTP_PORT`). Вход — `admin` и пароль из `FISH_ADMIN_PASSWORD`
 (если пароль не задан, он создаётся и записывается в том данных: `users/INITIAL_ADMIN_PASSWORD.json`).
 
-Загрузка данных оз. Жайсан (данные заказчика) и создание расчётов:
+Загрузка данных заказчика (все водоёмы из `samples/`: Жайсан, Балхаш, Капчагай, Самарканд) и создание расчётов:
 
 ```bash
-python3 tools/seed_zhaysan.py --url http://127.0.0.1:8080 --password <пароль admin> --run stock
+python3 tools/seed_samples.py --url http://127.0.0.1:8080 --password <пароль admin> --run stock
 ```
 
 ## Запуск без Docker (Windows / macOS / Linux)

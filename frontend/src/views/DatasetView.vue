@@ -6,11 +6,11 @@
           <div>
             <el-button text @click="$router.push({ path: '/data', query: { wb: ds.water_body } })"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ $t('common.back') }}</el-button>
             <h1>{{ ds.title }}</h1>
-            <div class="sub">{{ $t('common.version') }} {{ version }} {{ version !== ds.current_version ? '(не текущая)' : '' }} · {{ vinfo?.comment }} · {{ vinfo ? new Date(vinfo.created_at).toLocaleString() : '' }}</div>
+            <div class="sub">{{ $t('common.version') }} {{ version }} {{ version !== ds.current_version ? '(не текущая)' : '' }} · {{ vinfo?.comment }} · {{ vinfo ? new Date(vinfo.created_at).toLocaleString('ru-RU') : '' }}</div>
           </div>
           <div class="row">
             <el-select v-model="version" style="width:220px" @change="loadData">
-              <el-option v-for="v in versions" :key="v.n" :label="`v${v.n} · ${new Date(v.created_at).toLocaleDateString()} · ${v.comment || ''}`" :value="v.n" />
+              <el-option v-for="v in versions" :key="v.n" :label="`v${v.n} · ${new Date(v.created_at).toLocaleDateString('ru-RU')} · ${v.comment || ''}`" :value="v.n" />
             </el-select>
             <el-button @click="download('data-admin', `/datasets/${ds.id}/export.xlsx`, { version })">{{ $t('common.export_excel') }}</el-button>
             <el-button v-if="vinfo?.origin?.startsWith('upload')" @click="download('data-admin', `/datasets/${ds.id}/versions/${version}/source`)">{{ $t('data.source_file') }}</el-button>

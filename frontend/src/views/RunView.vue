@@ -8,7 +8,7 @@
             <h1>{{ run.calculation_title }}</h1>
             <div class="sub">
               <RunStatus :status="run.status" /> <el-tag v-if="run.is_main" type="success" size="small">★ {{ $t('runs.is_main') }}</el-tag>
-              · {{ run.water_body }} · {{ run.author_name }} · {{ new Date(run.created_at).toLocaleString() }}
+              · {{ run.water_body }} · {{ run.author_name }} · {{ new Date(run.created_at).toLocaleString('ru-RU') }}
               <template v-if="run.queue_position"> · {{ $t('runs.position') }}: {{ run.queue_position }}</template>
             </div>
           </div>

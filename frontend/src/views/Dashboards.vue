@@ -12,7 +12,7 @@
             <el-tag size="small" :type="d.is_template ? 'warning' : d.visibility === 'shared' ? 'success' : 'info'">{{ d.is_template ? $t('dash.templates') : $t('dash.' + d.visibility) }}</el-tag>
           </div>
           <div class="muted small" style="margin-top:6px; min-height:34px">{{ d.description }}</div>
-          <div class="small muted">{{ d.widgets }} виджетов · v{{ d.current_version }} · {{ new Date(d.updated_at).toLocaleDateString() }}</div>
+          <div class="small muted">{{ d.widgets }} виджетов · v{{ d.current_version }} · {{ new Date(d.updated_at).toLocaleDateString('ru-RU') }}</div>
         </div>
       </div>
     </StateBlock>

@@ -109,7 +109,7 @@ const filtered = computed(() => wbs.value.filter((w) =>
   (!fSpecies.value || w.speciesCodes.includes(fSpecies.value))
 ).sort((a, b) => (a.state === 'no_data') - (b.state === 'no_data') || a.name_ru.localeCompare(b.name_ru)))
 
-const shortDate = (s) => (s ? new Date(s).toLocaleDateString() : '')
+const shortDate = (s) => (s ? new Date(s).toLocaleDateString('ru-RU') : '')
 
 async function load() {
   loading.value = true; error.value = null

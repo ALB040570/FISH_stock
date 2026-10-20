@@ -17,7 +17,7 @@
     <StateBlock :loading="loading" :error="error">
       <div class="card">
         <el-table :data="items" size="small">
-          <el-table-column :label="$t('audit.ts')" width="170"><template #default="{ row }">{{ new Date(row.ts).toLocaleString() }}</template></el-table-column>
+          <el-table-column :label="$t('audit.ts')" width="170"><template #default="{ row }">{{ new Date(row.ts).toLocaleString('ru-RU') }}</template></el-table-column>
           <el-table-column prop="login" :label="$t('audit.user')" width="130" />
           <el-table-column prop="service" :label="$t('audit.service')" width="110" />
           <el-table-column prop="action" :label="$t('audit.action')" width="180" />

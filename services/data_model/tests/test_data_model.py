@@ -5,7 +5,7 @@ def test_seed_and_records(svc):
     c = svc("data_model")
     ents = {e["code"]: e for e in c.get("/entities", headers=H("viewer")).json()}
     assert {"water_bodies", "species", "gears"} <= set(ents)
-    assert ents["species"]["records_count"] == 12
+    assert ents["species"]["records_count"] == 17
     fc = c.get("/water-bodies.geojson", headers=H("viewer")).json()
     codes = {f["properties"]["code"] for f in fc["features"]}
     assert {"zhaysan", "balkhash", "kapshagay", "alakol"} <= codes

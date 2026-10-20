@@ -53,21 +53,30 @@ def _seed() -> None:
         if not dtypes.exists(t["code"]):
             dtypes.create(copy.deepcopy(t), actor="system", obj_id=t["code"])
             dtypes.add_version(t["code"], {"schema.json": dumps(t).encode()}, {"comment": "начальная версия"}, "system")
-    if not records("species").list():
-        for code, ru, kk, latin, pred in seed_defs.SPECIES:
+    # системные записи добавляются по коду, если их ещё нет (в том числе удалённых) —
+    # так новые виды и водоёмы появляются и в уже работающей установке
+    def have(entity):
+        return {r["values"].get("code") for r in records(entity).list()}
+
+    sp = have("species")
+    for code, ru, kk, latin, pred in seed_defs.SPECIES:
+        if code not in sp:
             _create_record("species", {"code": code, "name_ru": ru, "name_kk": kk, "latin": latin,
                                        "is_predator": pred}, "system")
-    if not records("gears").list():
-        for code, ru, kk, kind in seed_defs.GEARS:
+    gr = have("gears")
+    for code, ru, kk, kind in seed_defs.GEARS:
+        if code not in gr:
             _create_record("gears", {"code": code, "name_ru": ru, "name_kk": kk, "kind": kind}, "system")
-    if not records("water_bodies").list():
-        fc = json.loads((SEED_DIR / "water_bodies.geojson").read_text(encoding="utf-8"))
-        for f in fc["features"]:
-            p = f["properties"]
-            vals = {k: p.get(k) for k in ("code", "name_ru", "name_kk", "type", "region", "area_km2", "point", "note")}
-            vals["shape"] = f.get("geometry")
-            vals["basin"] = None
-            _create_record("water_bodies", vals, "system", source=p.get("source"))
+    wbs = have("water_bodies")
+    fc = json.loads((SEED_DIR / "water_bodies.geojson").read_text(encoding="utf-8"))
+    for f in fc["features"]:
+        p = f["properties"]
+        if p.get("code") in wbs:
+            continue
+        vals = {k: p.get(k) for k in ("code", "name_ru", "name_kk", "type", "region", "area_km2", "point", "note")}
+        vals["shape"] = f.get("geometry")
+        vals["basin"] = None
+        _create_record("water_bodies", vals, "system", source=p.get("source"))
 
 
 # ------------------------------------------------------------------ сущности

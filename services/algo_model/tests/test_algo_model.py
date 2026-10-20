@@ -50,7 +50,7 @@ def test_change_builtin_and_compare(algo_stack):
     dm, da, aa, am, mod = algo_stack
     d = am.post("/algorithms/pdu_by_age/drafts", headers=H("mathematician"), json={}).json()
     m = json.loads(am.get(f"/drafts/{d['id']}/file?path=manifest.json", headers=H("mathematician")).json()["text"])
-    assert m["version"] == "1.0.1"
+    assert m["version"] == "1.0.2"
     for p in m["parameters"]:
         if p["code"] == "PDU_MAX_ITER":
             p["default"] = 1          # одна итерация и не больше 1 % остатка возраста —
@@ -58,7 +58,7 @@ def test_change_builtin_and_compare(algo_stack):
             p["default"] = 0.01
     am.put(f"/drafts/{d['id']}/file", headers=H("mathematician"),
            json={"path": "manifest.json", "text": json.dumps(m, ensure_ascii=False)})
-    t = am.post(f"/drafts/{d['id']}/test", headers=H("mathematician"), json={"compare_with": "1.0.0"}).json()
+    t = am.post(f"/drafts/{d['id']}/test", headers=H("mathematician"), json={"compare_with": "1.0.1"}).json()
     t = wait_test(am, t["id"])
     assert t["status"] == "passed", t.get("message")
     by = {x["table"]: x for x in t["comparison"]["tables"]}

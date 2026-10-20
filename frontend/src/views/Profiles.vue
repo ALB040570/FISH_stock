@@ -12,7 +12,7 @@
     <StateBlock :loading="loading" :error="error">
       <div v-if="data" class="card">
         <div class="row" style="margin-bottom:10px">
-          <el-tag v-if="data.profile" type="success">v{{ data.profile.current_version }} · {{ new Date(data.profile.updated_at).toLocaleString() }}</el-tag>
+          <el-tag v-if="data.profile" type="success">v{{ data.profile.current_version }} · {{ new Date(data.profile.updated_at).toLocaleString('ru-RU') }}</el-tag>
           <el-tag v-else type="warning">{{ $t('profiles.none') }}</el-tag>
           <div class="grow" />
           <template v-if="auth.can('profile.edit')">
@@ -49,7 +49,7 @@
         </template>
         <div v-else-if="!data.profile" class="state">{{ $t('profiles.none') }}. {{ $t('profiles.copy_from') }}.</div>
         <h3>{{ $t('common.history') }}</h3>
-        <el-table :data="data.versions" size="small"><el-table-column prop="n" label="v" width="60" /><el-table-column :label="$t('common.date')" width="200"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template></el-table-column><el-table-column prop="comment" :label="$t('common.comment')" /></el-table>
+        <el-table :data="data.versions" size="small"><el-table-column prop="n" label="v" width="60" /><el-table-column :label="$t('common.date')" width="200"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString('ru-RU') }}</template></el-table-column><el-table-column prop="comment" :label="$t('common.comment')" /></el-table>
       </div>
     </StateBlock>
   </div>

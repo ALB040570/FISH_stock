@@ -245,7 +245,8 @@ def validate_rows(dtype: dict, species_codes: list[str], species: list[dict], ra
         for rule in dtype.get("rules") or []:
             a, b = out.get(rule["left"]), out.get(rule["right"])
             if a is not None and b is not None and ((rule["type"] == "le" and a > b) or (rule["type"] == "lt" and a >= b)):
-                errors.append({"row": rn, "column": None, "field": rule["left"], "message": rule.get("message")})
+                (warnings if rule.get("level") == "warning" else errors).append(
+                    {"row": rn, "column": None, "field": rule["left"], "message": rule.get("message")})
         clean.append({"_row": rn, **out})
     keys = dtype.get("key_fields") or []
     if keys:

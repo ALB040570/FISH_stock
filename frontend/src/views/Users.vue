@@ -16,7 +16,7 @@
             </template>
           </el-table-column>
           <el-table-column :label="$t('common.status')" width="140"><template #default="{ row }"><el-tag :type="row.blocked ? 'danger' : 'success'" size="small">{{ row.blocked ? $t('users.blocked') : 'активен' }}</el-tag></template></el-table-column>
-          <el-table-column :label="$t('users.last_login')" width="170"><template #default="{ row }">{{ row.last_login_at ? new Date(row.last_login_at).toLocaleString() : '—' }}</template></el-table-column>
+          <el-table-column :label="$t('users.last_login')" width="170"><template #default="{ row }">{{ row.last_login_at ? new Date(row.last_login_at).toLocaleString('ru-RU') : '—' }}</template></el-table-column>
           <el-table-column width="330" align="right">
             <template #default="{ row }">
               <el-button v-if="!row.blocked" size="small" @click="act(row, 'block')">{{ $t('users.block') }}</el-button>

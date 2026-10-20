@@ -41,7 +41,7 @@ class HaulCatch:
     def year_index(self) -> np.ndarray:
         """Номер года (в self.years) для каждого лова."""
         pos = {y: i for i, y in enumerate(self.years)}
-        return np.array([pos[y] for y in self.meta["Year"]])
+        return np.array([pos[int(y)] for y in self.meta["Year"]], dtype=int)
 
     def totals(self) -> np.ndarray:
         """(N, виды) — улов вида в лове, штук (NaN — не учитывался)."""
@@ -107,6 +107,12 @@ def build_haul_catch(
         blocks.append(totals[:, :, None] * shares[None, :, :])  # NaN сохраняется
         metas.append(rows[[c for c in META_COLUMNS if c in rows.columns]].copy())
 
+    if not metas:
+        # FishStocke: у водоёма нет ни одного лова этим орудием (например, только сети) — пустой набор;
+        # в окончательном запасе берётся оценка другого орудия (combine_gears). Формулы не меняются.
+        metas = [pd.DataFrame({c: pd.Series(dtype=float if c in ("Year", "Area", "Instrument_size") else object)
+                               for c in META_COLUMNS})]
+        blocks = [np.zeros((0, len(species), len(ages)))]
     meta = pd.concat(metas, ignore_index=True)
     meta.insert(0, "Id", np.arange(1, len(meta) + 1))
     meta["Area"] = meta["Area"].astype(float).fillna(0.0)

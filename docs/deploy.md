@@ -11,7 +11,7 @@ git clone https://github.com/ALB040570/FISH_stocke.git /opt/fishstocke && cd /op
 cp .env.example .env && nano .env        # FISH_JWT_SECRET, FISH_SERVICE_TOKEN, FISH_ADMIN_PASSWORD, FISH_WORKERS
 docker compose up -d --build
 docker compose ps                        # все сервисы healthy
-python3 tools/seed_zhaysan.py --password <пароль admin>
+python3 tools/seed_samples.py --password <пароль admin>
 ```
 
 Обновление: `git pull && docker compose up -d --build` — данные в томе `fishdata` сохраняются; системные шаблоны

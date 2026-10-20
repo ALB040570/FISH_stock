@@ -39,7 +39,7 @@
           </el-tab-pane>
           <el-tab-pane :label="$t('common.history')" name="history">
             <div class="card">
-              <el-table :data="versions" size="small"><el-table-column prop="n" label="v" width="60" /><el-table-column :label="$t('common.date')"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template></el-table-column><el-table-column prop="comment" :label="$t('common.comment')" /></el-table>
+              <el-table :data="versions" size="small"><el-table-column prop="n" label="v" width="60" /><el-table-column :label="$t('common.date')"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString('ru-RU') }}</template></el-table-column><el-table-column prop="comment" :label="$t('common.comment')" /></el-table>
             </div>
           </el-tab-pane>
         </el-tabs>
@@ -48,7 +48,7 @@
     <el-dialog v-model="dlg" :title="cur ? $t('dict.record_edit') : $t('dict.record_new')" width="900px" top="4vh">
       <RecordForm v-if="dlg" :fields="ent.fields" :v="form" :errs="recErrs" :is-new="!cur" :locked="ent.system" />
       <div v-if="cur" class="small muted">История записи:
-        <span v-for="h in recHistory" :key="h.n">v{{ h.n }} ({{ new Date(h.created_at).toLocaleDateString() }}{{ h.comment ? ', ' + h.comment : '' }}) </span>
+        <span v-for="h in recHistory" :key="h.n">v{{ h.n }} ({{ new Date(h.created_at).toLocaleDateString('ru-RU') }}{{ h.comment ? ', ' + h.comment : '' }}) </span>
       </div>
       <StateBlock :error="recErr" />
       <template #footer>

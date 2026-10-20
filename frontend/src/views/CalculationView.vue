@@ -79,7 +79,7 @@
                 </el-form-item>
               </el-form>
               <el-table :data="runs" size="small" @row-click="(r) => $router.push('/runs/' + r.id)" style="cursor:pointer">
-                <el-table-column :label="$t('common.date')"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template></el-table-column>
+                <el-table-column :label="$t('common.date')"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString('ru-RU') }}</template></el-table-column>
                 <el-table-column :label="$t('common.status')" width="120"><template #default="{ row }"><RunStatus :status="row.status" /> <el-tag v-if="row.is_main" size="small">★</el-tag></template></el-table-column>
                 <el-table-column prop="author_name" :label="$t('common.author')" width="120" />
               </el-table>

@@ -26,7 +26,7 @@
         </el-alert>
         <el-alert v-else-if="runInfo" type="success" :closable="false" show-icon style="margin-bottom:12px" :title="$t('monitoring.run_main')">
           <router-link :to="'/runs/' + runInfo.run.id">{{ runInfo.run.calculation_title }}</router-link>
-          <span class="muted"> · {{ new Date(runInfo.run.finished_at).toLocaleString() }}</span>
+          <span class="muted"> · {{ new Date(runInfo.run.finished_at).toLocaleString('ru-RU') }}</span>
         </el-alert>
         <DashboardBoard :board="board" :filters="filters" :species="spNames" />
       </template>

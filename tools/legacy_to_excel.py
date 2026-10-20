@@ -30,8 +30,11 @@ seed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(seed)
 
 SP_CODE = {ru: code for code, ru, *_ in seed.SPECIES}
+SP_CODE.update(seed.SPECIES_ALIASES)           # «т_лоб», «беламур» … — написания в файлах заказчика
+SP_RU = {code: ru for code, ru, *_ in seed.SPECIES}
 SPECIES = [{"code": c, "name_ru": ru, "name_kk": kk} for c, ru, kk, *_ in seed.SPECIES]
 DT = {t["code"]: t for t in seed.DATASET_TYPES}
+SKIPPED: list[str] = []
 
 
 def _v(x):
@@ -68,6 +71,11 @@ def convert(src: Path, wb: str) -> dict[str, tuple[list[str], list[dict]]]:
         sp_c += [s for s in sp if s not in sp_c]
         ru = {SP_CODE[c]: c for c in df.columns if c in SP_CODE}
         for _, r in df.iterrows():
+            if r["Instrument"] not in ("невод", "сеть"):
+                # исходный код учитывает только «невод» и «сеть»; такие ловы в расчёт не входили
+                SKIPPED.append(f"{wb}_catch_{y}.py: лов {r['Date']}, {r['Place']}, орудие «{r['Instrument']}» — "
+                               "не невод и не сеть, в расчёт не входит; не перенесён")
+                continue
             d, mth, yr = str(r["Date"]).split(".")
             row = {"year": int(r["Year"]), "date": f"{yr}-{mth}-{d}", "place": r["Place"],
                    "gear": r["Instrument"], "gear_desc": None, "gear_size_m": _v(r["Instrument_size"]),
@@ -92,7 +100,7 @@ def convert(src: Path, wb: str) -> dict[str, tuple[list[str], list[dict]]]:
     props = []
     for ru, m1 in p["m1_dict"].items():
         fmin, fmax = p["fecundity_dict"][ru]
-        props.append({"species": ru, "m0": p["m0_dict"][ru], "m1": m1, "m2": p["m2_dict"][ru],
+        props.append({"species": SP_RU[SP_CODE[ru]], "m0": p["m0_dict"][ru], "m1": m1, "m2": p["m2_dict"][ru],
                       "v_cr": p["v_cr_dict"][ru], "k_net": p["k_catchability_1"][ru], "k_seine": p["k_catchability_2"][ru],
                       "is_predator": bool(p["fish_is_predator_dict"][ru]), "fecundity_min": fmin, "fecundity_max": fmax,
                       "fry_density": p["fish_density_dict"][ru]})
@@ -146,6 +154,8 @@ def main():
         data = tables.build_template(DT[code], sp, {"gears": gear_names, "species": sp_names}, "ru", rows=rows)
         (out / f"{code}.xlsx").write_bytes(data)
         print(f"{code}.xlsx: {len(rows)} строк, видов {len(sp)}")
+    for msg in SKIPPED:
+        print("ПРОПУЩЕНО:", msg)
 
 
 if __name__ == "__main__":

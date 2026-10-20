@@ -80,7 +80,17 @@ SPECIES = [
     ("lin", "линь", "оңғақ", "Tinca tinca", False),
     ("nalim", "налим", "налим", "Lota lota", True),
     ("tolstolobik", "толстолобик", "дөңмаңдай", "Hypophthalmichthys molitrix", False),
+    # виды Балхаша и Капчагая (данные заказчика 20.10.2026); хищник — значение по умолчанию,
+    # для расчёта берётся признак из «Биологических параметров видов» водоёма
+    ("zherekh", "жерех", "ақмарқа", "Leuciscus aspius", True),
+    ("som", "сом", "жайын", "Silurus glanis", True),
+    ("bersh", "берш", "берш", "Sander volgensis", True),
+    ("zmeegolov", "змееголов", "жыланбас", "Channa argus", True),
+    ("b_amur", "белый амур", "ақ амур", "Ctenopharyngodon idella", False),
 ]
+
+# написания видов в исходных файлах заказчика → код вида
+SPECIES_ALIASES = {"т_лоб": "tolstolobik", "толстолоб": "tolstolobik", "б_амур": "b_amur", "беламур": "b_amur"}
 
 GEARS = [
     ("seine", "невод", "сүзекі", "seine"),
@@ -109,7 +119,8 @@ DATASET_TYPES = [
             F("place", "Место лова", "Аулау орны", required=True),
             F("gear", "Орудие лова", "Аулау құралы", "ref", required=True, ref_entity="gears"),
             F("gear_desc", "Описание орудия", "Құрал сипаттамасы", system=False, hint="например «сети 20-80 мм»"),
-            F("gear_size_m", "Размер орудия (длина), м", "Құрал өлшемі, м", "number", required=True, unit="м", min=0),
+            F("gear_size_m", "Размер орудия (длина), м", "Құрал өлшемі, м", "number", unit="м", min=0,
+              hint="в расчётах не используется; в части данных Капчагая не указан"),
             F("area_ha", "Обловленная площадь, га", "Ауланған аудан, га", "number", unit="га", min=0,
               hint="для невода; у сетей — 0 или пусто"),
             F("catch_type", "Тип лова", "Аулау түрі", "enum", required=True, enum=[
@@ -142,7 +153,8 @@ DATASET_TYPES = [
         "key_fields": ["species"],
         "rules": [
             {"type": "le", "left": "m0", "right": "m1", "message": "m0 не может быть больше m1"},
-            {"type": "le", "left": "m2", "right": "m1", "message": "m2 не может быть больше m1"},
+            {"type": "le", "left": "m2", "right": "m1", "level": "warning",
+             "message": "m2 больше m1: кормом хищников считаются все возрасты (проверьте значение)"},
             {"type": "le", "left": "fecundity_min", "right": "fecundity_max",
              "message": "Минимальная плодовитость больше максимальной"},
         ],

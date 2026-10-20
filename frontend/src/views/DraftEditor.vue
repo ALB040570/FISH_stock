@@ -44,7 +44,7 @@
         <div class="card">
           <h2 style="margin-top:0">{{ $t('algo.test') }}</h2>
           <el-table :data="d.tests" size="small" @row-click="showTest">
-            <el-table-column :label="$t('common.date')" width="170"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template></el-table-column>
+            <el-table-column :label="$t('common.date')" width="170"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString('ru-RU') }}</template></el-table-column>
             <el-table-column :label="$t('common.status')" width="140"><template #default="{ row }"><el-tag size="small" :type="row.status === 'passed' ? 'success' : row.status === 'failed' ? 'danger' : 'info'">{{ $t('algo.' + row.status) }}</el-tag></template></el-table-column>
             <el-table-column prop="draft_version" label="ревизия" width="90" />
             <el-table-column prop="water_body" :label="$t('common.water_body')" width="120" />

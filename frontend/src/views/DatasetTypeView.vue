@@ -40,7 +40,7 @@
       </div>
       <div v-if="!isNew" class="card">
         <h3 style="margin-top:0">{{ $t('common.history') }}</h3>
-        <el-table :data="versions" size="small"><el-table-column prop="n" label="v" width="60" /><el-table-column :label="$t('common.date')"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template></el-table-column><el-table-column prop="comment" :label="$t('common.comment')" /></el-table>
+        <el-table :data="versions" size="small"><el-table-column prop="n" label="v" width="60" /><el-table-column :label="$t('common.date')"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString('ru-RU') }}</template></el-table-column><el-table-column prop="comment" :label="$t('common.comment')" /></el-table>
       </div>
     </StateBlock>
   </div>

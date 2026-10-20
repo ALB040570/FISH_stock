@@ -21,7 +21,7 @@
           </el-table-column>
           <el-table-column :label="$t('data.rows')" width="90" align="right"><template #default="{ row }">{{ row.ds?.summary?.rows ?? '—' }}</template></el-table-column>
           <el-table-column :label="$t('data.period')" width="120"><template #default="{ row }">{{ row.ds?.summary?.period_from ? row.ds.summary.period_from + '–' + row.ds.summary.period_to : '—' }}</template></el-table-column>
-          <el-table-column :label="$t('common.date')" width="170"><template #default="{ row }">{{ row.ds ? new Date(row.ds.updated_at).toLocaleString() : '' }}</template></el-table-column>
+          <el-table-column :label="$t('common.date')" width="170"><template #default="{ row }">{{ row.ds ? new Date(row.ds.updated_at).toLocaleString('ru-RU') : '' }}</template></el-table-column>
           <el-table-column :label="$t('common.actions')" width="330" align="right">
             <template #default="{ row }">
               <el-button size="small" @click="download('data-admin', `/templates/${row.type.code}.xlsx`, { water_body: wb })">{{ $t('data.template') }}</el-button>

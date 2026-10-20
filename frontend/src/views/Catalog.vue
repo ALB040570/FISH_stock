@@ -26,7 +26,7 @@
               <el-table-column prop="version" :label="$t('common.version')" width="90" />
               <el-table-column :label="$t('common.status')" width="110"><template #default="{ row }"><el-tag size="small" :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? $t('catalog.enabled') : $t('catalog.disabled') }}</el-tag></template></el-table-column>
               <el-table-column :label="$t('catalog.source')" width="120"><template #default="{ row }">{{ row.source === 'builtin' ? $t('algo.builtin') : row.source }}</template></el-table-column>
-              <el-table-column :label="$t('common.date')" width="170"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template></el-table-column>
+              <el-table-column :label="$t('common.date')" width="170"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString('ru-RU') }}</template></el-table-column>
               <el-table-column :label="$t('catalog.checksum')" min-width="160"><template #default="{ row }"><span class="mono small">{{ row.checksum.slice(0, 16) }}…</span></template></el-table-column>
               <el-table-column min-width="190"><template #default="{ row }"><span class="small muted">{{ row.report?.note || row.report?.comment || '' }}</span></template></el-table-column>
               <el-table-column width="270" align="right">
