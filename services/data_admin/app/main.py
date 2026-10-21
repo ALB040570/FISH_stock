@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import json
+from collections import Counter
 
 import httpx
 from fastapi import Depends, File, Form, Query, UploadFile
@@ -56,8 +57,41 @@ class DictClient:
     def lookup(self, entity):
         return self._get(f"/entities/{entity}/lookup")
 
+    def create_record(self, entity, values):
+        try:
+            r = self.http.post(f"/entities/{entity}/records", json={"values": values},
+                               headers={"X-Service-Token": ST.service_token})
+        except httpx.HTTPError:
+            raise AppError("dict.unavailable", "Сервис справочников недоступен, повторите позже", 503)
+        if r.status_code >= 300:
+            raise AppError("dict.error", f"Справочник не принял запись ({r.status_code})", 502, r.json().get("details"))
+        return r.json()
+
 
 DICT = DictClient()
+
+# «Тип лова» в уловах до 21.10.2026 — список значений; теперь — ссылка на справочник «Типы вылова» (коды)
+OLD_CATCH_TYPES = {"научный": "scientific", "промысловый": "commercial", "спортивно-любительский": "sport"}
+
+
+def _migrate_catch_types() -> None:
+    for d in datasets.list():
+        if d.get("deleted") or d.get("dataset_type") != "catches" or not d.get("current_version"):
+            continue
+        table = json.loads(datasets.read_version_file(d["id"], d["current_version"], "data.json"))
+        rows = table.get("rows") or []
+        if not any(str(r.get("catch_type") or "").strip().lower() in OLD_CATCH_TYPES for r in rows):
+            continue
+        for r in rows:
+            r["catch_type"] = OLD_CATCH_TYPES.get(str(r.get("catch_type") or "").strip().lower(), r.get("catch_type"))
+        info = datasets.version_info(d["id"], d["current_version"]) or {}
+        datasets.add_version(d["id"], {"data.json": dumps(table).encode("utf-8")},
+                             {"comment": "«Тип лова» — коды справочника «Типы вылова» (без изменения данных)",
+                              "origin": "migration", "type_version": info.get("type_version"),
+                              "summary": d.get("summary")}, "system", technical=True)
+
+
+_migrate_catch_types()
 
 
 def audit(user, action, oid, details=None):
@@ -66,6 +100,24 @@ def audit(user, action, oid, details=None):
 
 def _ref_maps(dtype):
     return {c["ref_entity"]: DICT.lookup(c["ref_entity"]) for c in dtype["columns"] if c["type"] == "ref"}
+
+
+def _place_maps(dtype, water_body):
+    """{код столбца: {ключ написания: название места}} — места лова своего водоёма (справочник «Места лова»)."""
+    out = {}
+    for c in dtype["columns"]:
+        ent = c.get("places_entity")
+        if not ent:
+            continue
+        m = {}
+        for r in DICT.records(ent):
+            if r.get("water_body") != water_body or not r.get("name_ru"):
+                continue
+            for cand in (r.get("name_ru"), r.get("name_kk"), *str(r.get("aliases") or "").splitlines()):
+                if cand and cand.strip():
+                    m.setdefault(tables.place_key(cand), r["name_ru"])
+        out[c["code"]] = m
+    return out
 
 
 def _ref_names(dtype, lang="ru"):
@@ -257,7 +309,8 @@ def _ingest(d, content: bytes, mode: str, dry_run: bool, comment: str, user, fil
         return _report(False, e.errors, [])
     if not raw:
         return _report(False, [{"row": 2, "column": None, "message": "В файле нет строк с данными"}], [])
-    rows, errors, warnings = tables.validate_rows(dt, sp_codes, species, raw, _ref_maps(dt))
+    rows, errors, warnings = tables.validate_rows(dt, sp_codes, species, raw, _ref_maps(dt),
+                                                  _place_maps(dt, d["water_body"]))
     if errors:
         if not dry_run:
             audit(user, "data.upload", d["id"], {"file": filename, "ok": False, "errors": len(errors)})
@@ -295,7 +348,8 @@ async def upload_new(water_body: str = Form(...), dataset_type: str = Form(...),
                 sp_codes, raw = tables.read_excel(content, dt, DICT.records("species"))
             except tables.ParseError as e:
                 return _report(False, e.errors, [])
-            rows, errors, warnings = tables.validate_rows(dt, sp_codes, DICT.records("species"), raw, _ref_maps(dt))
+            rows, errors, warnings = tables.validate_rows(dt, sp_codes, DICT.records("species"), raw, _ref_maps(dt),
+                                                          _place_maps(dt, water_body))
             table = tables.merge_rows(dt, None, rows, sp_codes, "replace")
             return _report(not errors, errors, warnings, None if errors else tables.summarize(dt, table))
         d = _create(DatasetIn(water_body=water_body, dataset_type=dataset_type), user)
@@ -325,7 +379,8 @@ def edit(ds_id: str, body: EditIn, user: User = Depends(require("data.edit"))):
     if bad:
         raise AppError("dataset.species", f"Виды не найдены в справочнике: {', '.join(bad)}", 422)
     raw = [(i + 1, r) for i, r in enumerate(body.rows)]
-    rows, errors, warnings = tables.validate_rows(dt, sp_codes, species, raw, _ref_maps(dt))
+    rows, errors, warnings = tables.validate_rows(dt, sp_codes, species, raw, _ref_maps(dt),
+                                                  _place_maps(dt, d["water_body"]))
     if errors:
         for e in errors:
             e["row"] = e["row"]  # номер строки в таблице редактора (с 1)
@@ -336,11 +391,52 @@ def edit(ds_id: str, body: EditIn, user: User = Depends(require("data.edit"))):
     return _report(True, [], warnings, summ, v["n"], datasets.get(ds_id))
 
 
+# ------------------------------------------------------------------ места лова
+@app.post("/fishing-places/collect", tags=["места лова"])
+def collect_places(water_body: str | None = None, user: User = Depends(require("dict.edit"))):
+    """Добавить в справочник «Места лова» места из текущих версий загруженных уловов, которых там ещё нет.
+    Написания, отличающиеся только регистром, пробелами, точками и дефисами, становятся одним местом:
+    название — самое частое написание, остальные — «другие написания»."""
+    created = []
+    for d in datasets.list():
+        if d.get("deleted") or not d.get("current_version") or (water_body and d["water_body"] != water_body):
+            continue
+        dt = DICT.dtype(d["dataset_type"])
+        for c in dt["columns"]:
+            if not c.get("places_entity"):
+                continue
+            known = _place_maps(dt, d["water_body"]).get(c["code"], {})
+            table, _ = _table(d["id"])
+            groups: dict[str, Counter] = {}
+            for r in table["rows"]:
+                v = r.get(c["code"])
+                if v is None or not str(v).strip():
+                    continue
+                k = tables.place_key(v)
+                if k in known:
+                    continue
+                groups.setdefault(k, Counter())[str(v).strip()] += 1
+            for k, cnt in sorted(groups.items(), key=lambda x: -sum(x[1].values())):
+                names = [n for n, _ in cnt.most_common()]
+                vals = {"water_body": d["water_body"], "name_ru": names[0]}
+                if len(names) > 1:
+                    vals["aliases"] = "\n".join(names[1:])
+                DICT.create_record(c["places_entity"], vals)
+                known[k] = names[0]
+                created.append({"water_body": d["water_body"], "name_ru": names[0], "aliases": names[1:],
+                                "rows": sum(cnt.values())})
+    audit(user, "dict.places_collect", water_body or "*", {"created": len(created)})
+    return {"created": len(created), "places": created}
+
+
 @app.post("/datasets/{ds_id}/restore/{n}", tags=["правка"])
 def restore(ds_id: str, n: int, user: User = Depends(require("data.edit"))):
     d = _get_ds(ds_id)
     table, _ = _table(ds_id, n)
     dt = DICT.dtype(d["dataset_type"])
+    if d["dataset_type"] == "catches":       # версии до 21.10.2026 — прежние значения «Типа лова»
+        for r in table.get("rows") or []:
+            r["catch_type"] = OLD_CATCH_TYPES.get(str(r.get("catch_type") or "").strip().lower(), r.get("catch_type"))
     v, _ = _save_version(d, dt, table, user, f"восстановлена версия {n}", None, f"restore:{n}")
     audit(user, "data.restore", ds_id, {"from": n, "version": v["n"]})
     return datasets.get(ds_id)

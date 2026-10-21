@@ -31,7 +31,7 @@ export default {
     must: 'Әкімші берген құпиясөзді өзгертіңіз' },
   map: {
     title: 'Қазақстанның су айдындары', basemap: 'Негіз', basemap_osm: 'Карта', basemap_none: 'Негізсіз', legend: 'Күйі', no_data: 'деректер жоқ', has_data: 'деректер бар',
-    has_run: 'есептеу бар', stale: 'есептеуден кейін деректер жаңартылды', filter_region: 'Облыс', filter_species: 'Деректердегі түр',
+    has_run: 'есептеу бар', stale: 'есептеуден кейін деректер жаңартылды', filter_region: 'Облыс', filter_type: 'Су айдынының түрі', filter_status: 'Мәртебесі', filter_origin: 'Типі', filter_species: 'Деректердегі түр',
     filter_state: 'Күйі', list: 'Тізім', monitoring: 'Мониторинг', data: 'Деректер', start_calc: 'Есептеуді іске қосу',
     years: 'Деректер жылдары', last_run: 'Соңғы есептеу', main_run: 'Негізгі іске қосу', pdu: 'ШРА', area: 'Ауданы',
     datasets: 'Деректер жиынтықтары', none_found: 'Ештеңе табылмады', species_in_data: 'Деректердегі түрлер',
@@ -46,6 +46,8 @@ export default {
     fields: 'Өрістер', field: 'Өріс', new_entity: 'Жаңа анықтамалық', new_field: 'Өріс қосу', system: 'жүйелік',
     system_hint: 'Жүйелік өрістерді есептеулер пайдаланады: оларды жоюға немесе түрін өзгертуге болмайды',
     ref_entity: 'Сілтеме анықтамалығы', enum_values: 'Тізім мәндері (әр жолға біреуден)', min: 'Ең аз', max: 'Ең көп',
+    group: 'Бөлім', group_water: 'Су айдындары', group_fish: 'Балықтар', group_catch: 'Аулау', group_other: 'Басқалар', 
+    places_collect: 'Жүктелген ауланымдардан орындарды қосу', places_collected: 'Қосылған орындар: {n}',
     unique: 'Бірегей', title_ru: 'Атауы (орыс.)', title_kk: 'Атауы (қаз.)', hint: 'Кеңес',
     record_new: 'Жаңа жазба', record_edit: 'Анықтамалық жазбасы', columns: 'Бағандар', species_columns: 'Түрлер бағандары',
     species_cols_enabled: 'Кестеде әр балық түріне бір баған бар', key_fields: 'Кілттік өрістер', period_field: 'Кезең өрісі',
@@ -72,7 +74,7 @@ export default {
     contract: 'Интерфейс: run(ctx) — ctx.tables, ctx.params, ctx.load_state(қадам), ctx.add_table/add_frame/add_file, ctx.log, ctx.progress.',
     publish_hint: 'Жоба нұсқасы сынақтан сәтті өткеннен кейін жариялауға болады.',
   },
-  catalog: {
+  catalog: { model_type: 'Модель типі', stock_method: 'Қорды есептеу әдісі', classification: 'Алгоритм жіктемесі', 
     title: 'Алгоритмдер каталогы', enabled: 'қосулы', disabled: 'өшірулі', enable: 'Қосу', disable: 'Өшіру',
     checksum: 'Бақылау сомасы', source: 'Дереккөз', params: 'Параметрлер', requires: 'Қажетті деректер',
     steps: 'Алдыңғы қадамдар', outputs: 'Нәтижелер', cat_fixed: 'өзгермейтін', cat_waterbody: 'су айдыны', cat_run: 'іске қосу',
@@ -118,7 +120,6 @@ export default {
   },
   audit: { title: 'Әрекеттер журналы', ts: 'Уақыты', user: 'Пайдаланушы', service: 'Қызмет', action: 'Әрекет',
     object: 'Нысан', ok: 'Сәтті', retention: 'Жазбалар {days} күн сақталады', export: 'Excel-ге экспорттау' },
-  wbtype: { lake: 'Көл', reservoir: 'Су қоймасы', river: 'Өзен', sea: 'Теңіз', other: 'Басқа' },
   w: {
     reason_no_run: 'Су айдыны үшін әлі орындалған есептеу жоқ',
     reason_no_step: 'Мониторингке арналған іске қосуда бұл есептеу қадамы жоқ',

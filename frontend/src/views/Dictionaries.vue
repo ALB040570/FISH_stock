@@ -7,7 +7,8 @@
     <StateBlock :loading="loading" :error="error">
       <div class="card">
         <h2 style="margin-top:0">{{ $t('dict.entities') }}</h2>
-        <el-table :data="entities" @row-click="(r) => $router.push('/dictionaries/entities/' + r.code)" style="cursor:pointer">
+        <el-table :data="grouped" @row-click="(r) => $router.push('/dictionaries/entities/' + r.code)" style="cursor:pointer">
+          <el-table-column :label="$t('dict.group')" width="150"><template #default="{ row }"><span class="muted">{{ $t('dict.group_' + row.group) }}</span></template></el-table-column>
           <el-table-column :label="$t('common.name')" min-width="200"><template #default="{ row }"><b>{{ tr(row, 'title') }}</b> <el-tag v-if="row.system" size="small" type="info">{{ $t('dict.system') }}</el-tag><div class="muted small">{{ row.description }}</div></template></el-table-column>
           <el-table-column prop="code" :label="$t('common.code')" width="160" />
           <el-table-column :label="$t('dict.fields')" width="90" align="right"><template #default="{ row }">{{ row.fields.length }}</template></el-table-column>
@@ -41,7 +42,7 @@
   </div>
 </template>
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
 import { tr } from '../i18n'
@@ -52,6 +53,18 @@ const auth = useAuth()
 const router = useRouter()
 const entities = ref([])
 const dtypes = ref([])
+// разделы справочников (порядок показа)
+const GROUPS = {
+  water: ['water_bodies', 'water_body_types', 'water_body_statuses', 'water_body_origins', 'fishery_kinds', 'regions', 'fishing_places'],
+  fish: ['species', 'fish_families', 'fish_sexes', 'forage_bases'],
+  catch: ['gears', 'gear_categories', 'catch_types'],
+}
+const grouped = computed(() => {
+  const order = Object.values(GROUPS).flat()
+  const group = (c) => Object.keys(GROUPS).find((g) => GROUPS[g].includes(c)) || 'other'
+  return entities.value.map((e) => ({ ...e, group: group(e.code) }))
+    .sort((a, b) => ((order.indexOf(a.code) + 1) || 999) - ((order.indexOf(b.code) + 1) || 999) || tr(a, 'title').localeCompare(tr(b, 'title')))
+})
 const loading = ref(true)
 const error = ref(null)
 const dlg = ref(false)

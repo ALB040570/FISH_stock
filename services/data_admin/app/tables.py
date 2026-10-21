@@ -32,6 +32,11 @@ def _norm(s) -> str:
     return re.sub(r"\s+", " ", s)
 
 
+def place_key(s) -> str:
+    """Ключ сравнения мест лова: без регистра, пробелов, точек, дефисов и кавычек; ё = е."""
+    return re.sub(r"[\s.\-–—,«»\"'()]+", "", str(s or "").lower().replace("ё", "е"))
+
+
 def header_title(col: dict, lang: str = "ru") -> str:
     t = col.get(f"title_{lang}") or col.get("title_ru") or col["code"]
     return t + (" *" if col.get("required") else "")
@@ -221,8 +226,13 @@ def read_excel(content: bytes, dtype: dict, species: list[dict]) -> tuple[list[s
 
 # ------------------------------------------------------------------ проверка
 def validate_rows(dtype: dict, species_codes: list[str], species: list[dict], raw_rows: list[tuple[int, dict]],
-                  ref_maps: dict[str, dict]) -> tuple[list[dict], list[dict], list[dict]]:
-    """Проверка строк. Возвращает (чистые строки, ошибки, предупреждения)."""
+                  ref_maps: dict[str, dict], place_maps: dict[str, dict] | None = None
+                  ) -> tuple[list[dict], list[dict], list[dict]]:
+    """Проверка строк. Возвращает (чистые строки, ошибки, предупреждения).
+    place_maps: {код столбца: {ключ написания: название места}} — места лова водоёма; известное написание
+    приводится к названию места, неизвестное оставляется как есть с предупреждением."""
+    place_maps = place_maps or {}
+    unknown_places: dict[tuple, list[int]] = {}
     cols = dtype["columns"]
     sp_by_code = {s["code"]: s for s in species}
     sp_fields = [species_value_field(dtype, sp_by_code.get(c, {"code": c})) for c in species_codes]
@@ -236,6 +246,12 @@ def validate_rows(dtype: dict, species_codes: list[str], species: list[dict], ra
             v, err = coerce(c, rec.get(c["code"]), ref_maps.get(c.get("ref_entity") or ""))
             if err:
                 errors.append({"row": rn, "column": c.get("title_ru"), "field": c["code"], "message": err})
+            elif v is not None and c["code"] in place_maps:
+                name = place_maps[c["code"]].get(place_key(v))
+                if name:
+                    v = name
+                else:
+                    unknown_places.setdefault((c["code"], c.get("title_ru"), v), []).append(rn)
             out[c["code"]] = v
         for f in sp_fields:
             v, err = coerce(f, rec.get(f["code"]), None)
@@ -266,6 +282,17 @@ def validate_rows(dtype: dict, species_codes: list[str], species: list[dict], ra
                 if d and y and int(d[:4]) != int(y):
                     warnings.append({"row": r["_row"], "column": "Дата", "field": "date",
                                      "message": f"Год даты {d[:4]} не совпадает с годом {y}"})
+    for code in place_maps:
+        if not place_maps[code] and any(k[0] == code for k in unknown_places):
+            warnings.append({"row": None, "column": None, "field": code,
+                             "message": "Для этого водоёма в справочнике «Места лова» ещё нет мест — их можно добавить "
+                                        "из загруженных уловов (Структура данных → Места лова)"})
+            unknown_places = {k: x for k, x in unknown_places.items() if k[0] != code}
+    for (code, title, v), rns in unknown_places.items():
+        more = f" (строк: {len(rns)})" if len(rns) > 1 else ""
+        warnings.append({"row": rns[0], "column": title, "field": code,
+                         "message": f"Места «{v}» нет в справочнике «Места лова» этого водоёма{more} — "
+                                    "проверьте написание или добавьте место"})
     for r in clean:
         r.pop("_row", None)
     return clean, errors, warnings

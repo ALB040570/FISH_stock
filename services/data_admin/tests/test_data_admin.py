@@ -109,3 +109,74 @@ def test_template(data_stack):
     assert head[0] == "Год *" and head[-2:] == ["лещ", "судак"] and "Описание" in wb.sheetnames
     r = up(da, "catches", r.content).json()
     assert not r["ok"] and "нет строк" in r["errors"][0]["message"]
+
+
+def test_catch_types_and_places(data_stack):
+    """Тип лова — коды справочника «Типы вылова»; место лова сверяется со справочником мест водоёма."""
+    dm, da, mod = data_stack
+    content = (SAMPLES / "catches.xlsx").read_bytes()
+    j = up(da, "catches", content).json()
+    assert j["ok"]
+    assert any("ещё нет мест" in w["message"] for w in j["warnings"])
+    ds = j["dataset"]["id"]
+    rows = da.get(f"/datasets/{ds}/data", headers=H()).json()["table"]["rows"]
+    assert {r["catch_type"] for r in rows} <= {"scientific", "commercial"}
+    # ихтиолог не правит справочник
+    assert da.post("/fishing-places/collect", headers=H("viewer")).status_code == 403
+    r = da.post("/fishing-places/collect", headers=H("mathematician")).json()
+    places = {p["name_ru"]: p for p in r["places"]}
+    assert places["м. Волчий"]["aliases"] == ["м.Волчий"]           # отличие только пробелом — одно место
+    assert "Тополев мыс" in places and "м. Тополев" in places      # разные написания — до подтверждения раздельно
+    assert all(p["water_body"] == "zhaysan" for p in r["places"])
+    assert da.post("/fishing-places/collect", headers=H("mathematician")).json()["created"] == 0
+    # подтверждённое другое написание: «Тополев мыс» → «м. Тополев»
+    recs = dm.get("/entities/fishing_places/records", headers=H()).json()
+    top = next(x for x in recs if x["values"]["name_ru"] == "м. Тополев")
+    dup = next(x for x in recs if x["values"]["name_ru"] == "Тополев мыс")
+    dm.delete(f"/entities/fishing_places/records/{dup['id']}", headers=H())
+    v = dict(top["values"], aliases=(top["values"]["aliases"] or "") + "\nТополев мыс")
+    assert dm.put(f"/entities/fishing_places/records/{top['id']}", headers=H(), json={"values": v}).status_code == 200
+    j = up(da, "catches", content, mode="replace").json()
+    assert j["ok"] and not [w for w in j["warnings"] if w["field"] == "place"]
+    rows = da.get(f"/datasets/{ds}/data", headers=H()).json()["table"]["rows"]
+    names = {r["place"] for r in rows}
+    assert "Тополев мыс" not in names and "м.Волчий" not in names and "м. Тополев" in names
+    # неизвестное место — предупреждение, не ошибка
+    wb = load_workbook(SAMPLES / "catches.xlsx"); ws = wb["Данные"]
+    ws["C2"] = "Новое место"; ws["C3"] = "Новое место"
+    buf = io.BytesIO(); wb.save(buf)
+    j = up(da, "catches", buf.getvalue(), dry_run="true").json()
+    assert j["ok"]
+    w = [x for x in j["warnings"] if x["field"] == "place"]
+    assert len(w) == 1 and "Новое место" in w[0]["message"] and "строк: 2" in w[0]["message"]
+    # тип лова — по справочнику
+    ws["H2"] = "трал"
+    buf = io.BytesIO(); wb.save(buf)
+    j = up(da, "catches", buf.getvalue(), dry_run="true").json()
+    assert not j["ok"] and any(e["field"] == "catch_type" for e in j["errors"])
+
+
+def test_catch_types_migration(data_stack):
+    """Наборы уловов до 21.10: «научный»/«промысловый» → коды справочника, новой версией."""
+    import json as _json
+    from fishcommon.storage import dumps
+    dm, da, mod = data_stack
+    j = up(da, "catches", (SAMPLES / "catches.xlsx").read_bytes()).json()
+    ds = j["dataset"]["id"]
+    tab = da.get(f"/datasets/{ds}/data", headers=H()).json()["table"]
+    for r in tab["rows"]:
+        r["catch_type"] = {"scientific": "научный", "commercial": "промысловый"}[r["catch_type"]]
+    mod.datasets.add_version(ds, {"data.json": dumps(tab).encode()}, {"comment": "старая версия"}, "test")
+    before = mod.datasets.get(ds)["updated_at"]
+    mod._migrate_catch_types()
+    d = mod.datasets.get(ds)
+    assert d["current_version"] == 3 and d["updated_at"] == before      # данные не «изменились после расчёта»
+    new = _json.loads(mod.datasets.read_version_file(ds, 3, "data.json"))
+    assert {r["catch_type"] for r in new["rows"]} == {"scientific", "commercial"}
+    assert [r["place"] for r in new["rows"]] == [r["place"] for r in tab["rows"]]
+    mod._migrate_catch_types()
+    assert mod.datasets.get(ds)["current_version"] == 3
+    # восстановление старой версии приводит значения к кодам
+    da.post(f"/datasets/{ds}/restore/2", headers=H())
+    rows = da.get(f"/datasets/{ds}/data", headers=H()).json()["table"]["rows"]
+    assert {r["catch_type"] for r in rows} == {"scientific", "commercial"}

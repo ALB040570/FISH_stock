@@ -14,9 +14,22 @@
             </el-option>
           </el-select>
         </div>
-        <el-select v-model="fSpecies" clearable :placeholder="$t('map.filter_species')" style="width:100%; margin-top:8px">
-          <el-option v-for="s in species" :key="s.code" :label="tr(s, 'name')" :value="s.code" />
-        </el-select>
+        <div class="row" style="margin-top:8px">
+          <el-select v-model="fType" clearable :placeholder="$t('map.filter_type')" style="flex:1">
+            <el-option v-for="o in dictOptions('water_body_types')" :key="o.code" :label="o.label" :value="o.code" />
+          </el-select>
+          <el-select v-model="fStatus" clearable :placeholder="$t('map.filter_status')" style="flex:1">
+            <el-option v-for="o in dictOptions('water_body_statuses')" :key="o.code" :label="o.label" :value="o.code" />
+          </el-select>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <el-select v-model="fOrigin" clearable :placeholder="$t('map.filter_origin')" style="flex:1">
+            <el-option v-for="o in dictOptions('water_body_origins')" :key="o.code" :label="o.label" :value="o.code" />
+          </el-select>
+          <el-select v-model="fSpecies" clearable :placeholder="$t('map.filter_species')" style="flex:1">
+            <el-option v-for="s in species" :key="s.code" :label="tr(s, 'name')" :value="s.code" />
+          </el-select>
+        </div>
       </div>
       <StateBlock :loading="loading" :error="error" :retry="load">
         <div class="list">
@@ -48,6 +61,8 @@
             <div>
               <h2 style="margin:0">{{ tr(sel, 'name') }}</h2>
               <div class="muted small">{{ typeTitle(sel.type) }} · {{ regionNames(sel.regions) || '—' }}</div>
+              <div v-if="sel.status || sel.origin" class="muted small">{{ [dictName('water_body_statuses', sel.status), dictName('water_body_origins', sel.origin)].filter(Boolean).join(' · ') }}</div>
+              <div v-if="sel.fishery_kinds?.length" class="muted small">{{ dictNames('fishery_kinds', sel.fishery_kinds) }}</div>
             </div>
             <el-button text @click="sel = null"><el-icon><Close /></el-icon></el-button>
           </div>
@@ -80,6 +95,7 @@
 </template>
 <script setup>
 import { loadRegions, regionName, regionNames } from '../regions'
+import { dictName, dictNames, dictOptions, loadDict } from '../dicts'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import { useI18n } from 'vue-i18n'
@@ -94,7 +110,7 @@ const auth = useAuth()
 const STATES = ['no_data', 'has_data', 'has_run', 'stale']
 const COLORS = MAP_STATE
 const { t } = useI18n()
-const typeTitle = (x) => t('wbtype.' + (x || 'other'))
+const typeTitle = (x) => dictName('water_body_types', x) || '—'
 const mapEl = ref(null)
 const loading = ref(true)
 const error = ref(null)
@@ -104,6 +120,9 @@ const q = ref('')
 const fRegion = ref('')
 const fState = ref('')
 const fSpecies = ref('')
+const fType = ref('')
+const fStatus = ref('')
+const fOrigin = ref('')
 const sel = ref(null)
 let map = null
 let layer = null
@@ -135,7 +154,8 @@ const regions = computed(() => [...new Set(wbs.value.flatMap((w) => w.regions ||
 const filtered = computed(() => wbs.value.filter((w) =>
   (!q.value || (w.name_ru + ' ' + (w.name_kk || '')).toLowerCase().includes(q.value.toLowerCase())) &&
   (!fRegion.value || (w.regions || []).includes(fRegion.value)) && (!fState.value || w.state === fState.value) &&
-  (!fSpecies.value || w.speciesCodes.includes(fSpecies.value))
+  (!fSpecies.value || w.speciesCodes.includes(fSpecies.value)) && (!fType.value || w.type === fType.value) &&
+  (!fStatus.value || w.status === fStatus.value) && (!fOrigin.value || w.origin === fOrigin.value)
 ).sort((a, b) => (a.state === 'no_data') - (b.state === 'no_data') || a.name_ru.localeCompare(b.name_ru)))
 
 const shortDate = (s) => (s ? new Date(s).toLocaleDateString('ru-RU') : '')
@@ -143,6 +163,7 @@ const shortDate = (s) => (s ? new Date(s).toLocaleDateString('ru-RU') : '')
 async function load() {
   loading.value = true; error.value = null
   loadRegions()
+  for (const e of ['water_body_types', 'water_body_statuses', 'water_body_origins', 'fishery_kinds']) loadDict(e)
   try {
     const [fc, ds, rs, sp] = await Promise.all([
       api.get('data-model', '/water-bodies.geojson'), api.get('data-admin', '/water-bodies/status'),

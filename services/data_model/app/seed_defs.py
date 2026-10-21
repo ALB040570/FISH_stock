@@ -12,15 +12,110 @@ def F(code, ru, kk, type_="string", **kw):
     return d
 
 
-WATER_BODY_TYPES = [
-    {"value": "lake", "title_ru": "Озеро", "title_kk": "Көл"},
-    {"value": "reservoir", "title_ru": "Водохранилище", "title_kk": "Су қоймасы"},
-    {"value": "river", "title_ru": "Река", "title_kk": "Өзен"},
-    {"value": "sea", "title_ru": "Море", "title_kk": "Теңіз"},
-    {"value": "other", "title_ru": "Другое", "title_kk": "Басқа"},
+TOFI = F("tofi_code", "Код ТОФИ", "ТОФИ коды", system=False,
+         hint="код значения в классификаторе ТОФИ (например _FV_1001)")
+
+
+def simple_entity(code, ru, kk, description, extra=(), aliases=False):
+    """Справочник «код — название (рус./каз.) — код ТОФИ» (классификатор «Факторы» ТОФИ, 21.10.2026)."""
+    fields = [
+        F("code", "Код", "Код", required=True, unique=True),
+        F("name_ru", "Название (рус.)", "Атауы (орыс.)", required=True, unique=True),
+        F("name_kk", "Название (каз.)", "Атауы (қаз.)"),
+        *extra,
+    ]
+    if aliases:
+        fields.append(ALIASES)
+    fields.append(TOFI)
+    return {"code": code, "title_ru": ru, "title_kk": kk, "system": True, "description": description,
+            "display_field": "name_ru", "fields": fields}
+
+
+ALIASES = F("aliases", "Другие написания", "Басқа жазылуы", "text", system=False,
+            hint="по одному в строке; при загрузке файлов такие написания приводятся к названию записи")
+
+# Значения справочников из классификатора «Факторы» ТОФИ (файл заказчика 21.10.2026):
+# (код, название рус., название каз., код ТОФИ). Казахские названия — перевод разработчика, на проверку.
+CLASSIFIERS = {
+    "water_body_types": [
+        ("sea", "море", "теңіз", "_FV_1001"),
+        ("lake", "озеро", "көл", "_FV_1002"),
+        ("river", "река", "өзен", "_FV_1003"),
+        ("reservoir", "водохранилище", "су қоймасы", "_FV_1004"),
+        ("pond", "пруд", "тоған", "_FV_1005"),
+        ("dam", "плотина", "бөгет", "_FV_1006"),
+        ("channel", "проток", "арна", "_FV_1007"),
+    ],
+    "water_body_statuses": [
+        ("international", "водоём международного значения", "халықаралық маңызы бар су айдыны", "_FV_1011"),
+        ("republican", "водоём республиканского значения", "республикалық маңызы бар су айдыны", "_FV_1012"),
+        ("local", "водоём местного значения", "жергілікті маңызы бар су айдыны", "_FV_1013"),
+    ],
+    "water_body_origins": [
+        ("natural", "естественный водоём", "табиғи су айдыны", "_FV_1015"),
+        ("artificial", "искусственный водоём", "жасанды су айдыны", "_FV_1016"),
+    ],
+    "fishery_kinds": [
+        ("amateur", "любительское (спортивное) рыболовство", "әуесқойлық (спорттық) балық аулау", "_FV_1049"),
+        ("commercial", "промысловое рыболовство", "кәсіпшілік балық аулау", "_FV_1050"),
+        ("lake_farm", "озёрно-товарное рыбоводное хозяйство", "көлдік-тауарлық балық өсіру шаруашылығы", "_FV_1051"),
+        ("cage_farm", "садковое рыбоводное хозяйство", "торлы балық өсіру шаруашылығы", "_FV_1052"),
+    ],
+    "catch_types": [
+        ("scientific", "научный лов", "ғылыми аулау", "_FV_1087"),
+        ("commercial", "промысловый лов", "кәсіпшілік аулау", "_FV_1088"),
+        ("sport", "спортивно-любительский лов", "спорттық-әуесқойлық аулау", "_FV_1089"),
+    ],
+    "gear_categories": [
+        ("commercial", "промысловые орудия", "кәсіпшілік құралдар", "_FV_1084"),
+        ("non_commercial", "непромысловые орудия", "кәсіпшілікке жатпайтын құралдар", "_FV_1085"),
+    ],
+    "fish_sexes": [
+        ("female", "самка", "аналық", "_FV_1091"),
+        ("male", "самец", "аталық", "_FV_1092"),
+        ("juvenile", "ювенильные", "ювенильді (жыныстық жетілмеген)", "_FV_1093"),
+    ],
+    "forage_bases": [
+        ("zoobenthos", "зообентос", "зообентос", "_FV_1095"),
+        ("zooplankton", "зоопланктон", "зоопланктон", "_FV_1096"),
+    ],
+}
+# прежние значения в данных и файлах заказчика → запись справочника (другие написания)
+CLASSIFIER_ALIASES = {
+    ("catch_types", "scientific"): "научный",
+    ("catch_types", "commercial"): "промысловый",
+    ("catch_types", "sport"): "спортивно-любительский\nлюбительский",
+}
+
+# семейства рыб: (код = латинское название, рус., каз., код ТОФИ)
+FAMILIES = [
+    ("acipenseridae", "Осетровые", "Бекіре тұқымдастар", "_FV_1054"),
+    ("salmonidae", "Лососевые", "Албырт тұқымдастар", "_FV_1055"),
+    ("clupeidae", "Сельдевые", "Майшабақ тұқымдастар", "_FV_1056"),
+    ("cyprinidae", "Карповые", "Тұқы тұқымдастар", "_FV_1057"),
+    ("percidae", "Окуневые", "Алабұға тұқымдастар", "_FV_1058"),
+    ("gadidae", "Тресковые", "Нәлім тұқымдастар", "_FV_1059"),
+    ("pleuronectidae", "Камбаловые", "Камбала тұқымдастар", "_FV_1060"),
+    ("scombridae", "Скумбриевые", "Скумбрия тұқымдастар", "_FV_1061"),
+    ("thunnini", "Тунцовые", "Тунец тұқымдастар", "_FV_1062"),
+    ("carangidae", "Ставридовые", "Ставрида тұқымдастар", "_FV_1063"),
+    ("esocidae", "Щуковые", "Шортан тұқымдастар", "_FV_1064"),
+    ("siluridae", "Сомовые", "Жайын тұқымдастар", "_FV_1065"),
+    ("petromyzontidae", "Миноговые", "Миноға тұқымдастар", "_FV_1066"),
+    ("anguillidae", "Угревые", "Жыланбалық тұқымдастар", "_FV_1067"),
+    ("osmeridae", "Корюшковые", "Корюшка тұқымдастар", "_FV_1068"),
+    ("channidae", "Змееголовые", "Жыланбас тұқымдастар", "_FV_1069"),
 ]
 
 ENTITIES = [
+    simple_entity("water_body_types", "Виды водоёмов", "Су айдындарының түрлері",
+                  "Вид водоёма: море, озеро, река, водохранилище и др. (классификатор ТОФИ)."),
+    simple_entity("water_body_statuses", "Статусы водоёмов для отрасли", "Су айдындарының салалық мәртебесі",
+                  "Значение водоёма для рыбного хозяйства: международное, республиканское, местное."),
+    simple_entity("water_body_origins", "Типы водоёмов", "Су айдындарының типтері",
+                  "Естественный или искусственный водоём."),
+    simple_entity("fishery_kinds", "Виды ведения рыбного хозяйства", "Балық шаруашылығын жүргізу түрлері",
+                  "Рыболовство и рыбоводство на водоёме; у водоёма может быть несколько видов."),
     {
         "code": "regions", "title_ru": "Области", "title_kk": "Облыстар", "system": True,
         "description": "Административное деление Казахстана (с 2022 г.): области и города республиканского значения.",
@@ -40,7 +135,13 @@ ENTITIES = [
               hint="латиница, например zhaysan; используется в файлах и расчётах"),
             F("name_ru", "Название (рус.)", "Атауы (орыс.)", required=True),
             F("name_kk", "Название (каз.)", "Атауы (қаз.)"),
-            F("type", "Тип", "Түрі", "enum", required=True, enum=WATER_BODY_TYPES),
+            F("type", "Вид водоёма", "Су айдынының түрі", "ref", required=True, ref_entity="water_body_types"),
+            F("origin", "Тип водоёма", "Су айдынының типі", "ref", ref_entity="water_body_origins", system=False,
+              hint="естественный или искусственный"),
+            F("status", "Статус для отрасли", "Салалық мәртебесі", "ref", ref_entity="water_body_statuses",
+              system=False),
+            F("fishery_kinds", "Виды ведения рыбного хозяйства", "Балық шаруашылығын жүргізу түрлері", "ref_list",
+              ref_entity="fishery_kinds", system=False, hint="одно или несколько"),
             F("regions", "Области", "Облыстар", "ref_list", ref_entity="regions",
               hint="одна или несколько областей; водоём находится по фильтру любой из них"),
             F("basin", "Бассейн", "Алап"),
@@ -48,6 +149,17 @@ ENTITIES = [
             F("point", "Точка на карте", "Картадағы нүкте", "geo_point", required=True),
             F("shape", "Контур", "Контуры", "geo_shape"),
             F("note", "Примечание", "Ескертпе", "text", system=False),
+        ],
+    },
+    {
+        "code": "fish_families", "title_ru": "Семейства рыб", "title_kk": "Балық тұқымдастары", "system": True,
+        "description": "Систематические семейства рыб (классификатор ТОФИ).",
+        "display_field": "name_ru",
+        "fields": [
+            F("code", "Код", "Код", required=True, unique=True, hint="латинское название семейства"),
+            F("name_ru", "Название (рус.)", "Атауы (орыс.)", required=True, unique=True),
+            F("name_kk", "Название (каз.)", "Атауы (қаз.)"),
+            TOFI,
         ],
     },
     {
@@ -59,9 +171,13 @@ ENTITIES = [
             F("name_ru", "Название (рус.)", "Атауы (орыс.)", required=True, unique=True),
             F("name_kk", "Название (каз.)", "Атауы (қаз.)"),
             F("latin", "Латинское название", "Латынша атауы", system=False),
+            F("family", "Семейство", "Тұқымдасы", "ref", ref_entity="fish_families", system=False),
             F("is_predator", "Хищник", "Жыртқыш", "boolean"),
+            TOFI,
         ],
     },
+    simple_entity("gear_categories", "Типы орудий лова", "Аулау құралдарының типтері",
+                  "Промысловые и непромысловые орудия (классификатор ТОФИ)."),
     {
         "code": "gears", "title_ru": "Орудия лова", "title_kk": "Аулау құралдары", "system": True,
         "description": "Орудия научного лова. Вид орудия определяет формулу расчёта запаса.",
@@ -74,9 +190,32 @@ ENTITIES = [
                 {"value": "seine", "title_ru": "Невод (метод площадей)", "title_kk": "Сүзекі (аудан әдісі)"},
                 {"value": "net", "title_ru": "Сеть (балансовый метод)", "title_kk": "Ау (баланс әдісі)"},
             ]),
+            F("category", "Тип орудия лова", "Аулау құралының типі", "ref", ref_entity="gear_categories",
+              system=False),
         ],
     },
+    simple_entity("catch_types", "Типы вылова", "Аулау түрлері",
+                  "Научный, промысловый, спортивно-любительский лов (столбец «Тип лова» в уловах).", aliases=True),
+    {
+        "code": "fishing_places", "title_ru": "Места лова", "title_kk": "Аулау орындары", "system": True,
+        "description": "Места лова на каждом водоёме. При загрузке уловов место сверяется с местами своего "
+                       "водоёма; другие написания приводятся к названию места.",
+        "display_field": "name_ru",
+        "fields": [
+            F("water_body", "Водоём", "Су айдыны", "ref", required=True, ref_entity="water_bodies"),
+            F("name_ru", "Название (рус.)", "Атауы (орыс.)", required=True),
+            F("name_kk", "Название (каз.)", "Атауы (қаз.)"),
+            ALIASES,
+            F("point", "Точка на карте", "Картадағы нүкте", "geo_point", system=False),
+            F("note", "Примечание", "Ескертпе", "text", system=False),
+        ],
+    },
+    simple_entity("fish_sexes", "Пол рыбы", "Балықтың жынысы",
+                  "Для данных биологического анализа (пока в расчётах не используется)."),
+    simple_entity("forage_bases", "Кормовая база", "Азық қоры",
+                  "Группы кормовых организмов (пока в расчётах не используется)."),
 ]
+
 
 SPECIES = [
     ("lesh", "лещ", "тыран", "Abramis brama", False),
@@ -98,7 +237,25 @@ SPECIES = [
     ("bersh", "берш", "берш", "Sander volgensis", True),
     ("zmeegolov", "змееголов", "жыланбас", "Channa argus", True),
     ("b_amur", "белый амур", "ақ амур", "Ctenopharyngodon idella", False),
+    # из классификатора «Факторы» ТОФИ (21.10.2026); казахские названия — на проверку
+    ("elets", "елец", "шабақ", "Leuciscus leuciscus", False),
+    ("karp", "карп (зеркальный)", "тұқы (айналы)", "Cyprinus carpio", False),
+    ("rak", "рак", "шаян", "Pontastacus leptodactylus", None),     # не рыба; признак хищника не задан
 ]
+# семейство и код ТОФИ вида (рак — не рыба, семейства рыб нет)
+SPECIES_FAMILY = {
+    "lesh": "cyprinidae", "plotva": "cyprinidae", "sazan": "cyprinidae", "yaz": "cyprinidae", "karas": "cyprinidae",
+    "lin": "cyprinidae", "tolstolobik": "cyprinidae", "zherekh": "cyprinidae", "b_amur": "cyprinidae",
+    "elets": "cyprinidae", "karp": "cyprinidae",
+    "sudak": "percidae", "okun": "percidae", "yorsh": "percidae", "bersh": "percidae",
+    "shuka": "esocidae", "nalim": "gadidae", "som": "siluridae", "zmeegolov": "channidae",
+}
+SPECIES_TOFI = {
+    "lesh": "_FV_1025", "sudak": "_FV_1026", "okun": "_FV_1027", "plotva": "_FV_1028", "sazan": "_FV_1029",
+    "shuka": "_FV_1030", "yaz": "_FV_1031", "karas": "_FV_1032", "yorsh": "_FV_1033", "nalim": "_FV_1034",
+    "tolstolobik": "_FV_1035", "lin": "_FV_1036", "karp": "_FV_1037", "bersh": "_FV_1038", "elets": "_FV_1039",
+    "zmeegolov": "_FV_1040", "zherekh": "_FV_1041", "som": "_FV_1042", "rak": "_FV_1043", "b_amur": "_FV_1109",
+}
 
 # Области и города республиканского значения (деление с 2022 г.)
 REGIONS = [
@@ -174,17 +331,15 @@ DATASET_TYPES = [
         "columns": [
             YEAR,
             F("date", "Дата лова", "Аулау күні", "date", required=True),
-            F("place", "Место лова", "Аулау орны", required=True),
+            F("place", "Место лова", "Аулау орны", required=True, places_entity="fishing_places",
+              hint="сверяется со справочником «Места лова» своего водоёма; другие написания приводятся к названию"),
             F("gear", "Орудие лова", "Аулау құралы", "ref", required=True, ref_entity="gears"),
             F("gear_desc", "Описание орудия", "Құрал сипаттамасы", system=False, hint="например «сети 20-80 мм»"),
             F("gear_size_m", "Размер орудия (длина), м", "Құрал өлшемі, м", "number", unit="м", min=0,
               hint="в расчётах не используется; в части данных Капчагая не указан"),
             F("area_ha", "Обловленная площадь, га", "Ауланған аудан, га", "number", unit="га", min=0,
               hint="для невода; у сетей — 0 или пусто"),
-            F("catch_type", "Тип лова", "Аулау түрі", "enum", required=True, enum=[
-                {"value": "научный", "title_ru": "научный", "title_kk": "ғылыми"},
-                {"value": "промысловый", "title_ru": "промысловый", "title_kk": "кәсіптік"},
-            ]),
+            F("catch_type", "Тип лова", "Аулау түрі", "ref", required=True, ref_entity="catch_types"),
         ],
         "species_columns": species_cols("integer", "шт", "Улов по видам, шт", "Түрлер бойынша ауланым, дана"),
     },

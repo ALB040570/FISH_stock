@@ -21,6 +21,7 @@ from fishcommon.auth import User, current_user, require
 from fishcommon.errors import AppError, not_found
 from fishcommon.storage import atomic_write_json, now_iso, read_json
 
+from . import classifiers
 from . import params as P
 from .clients import Clients
 from .engine import STEP_ORDER, TERMINAL, Engine, build
@@ -52,6 +53,7 @@ def catalog(user: User = Depends(require("catalog.view"))):
                                                             "created_by", "report")} for v in vs],
                     "latest": latest["version"] if latest else None,
                     "manifest": latest["manifest"] if latest else (vs[0]["manifest"] if vs else None),
+                    "classification": _classification(a),
                     "order": STEP_ORDER.get(a["code"], 99)})
     return sorted(out, key=lambda a: (a["order"], a["code"]))
 
@@ -61,7 +63,37 @@ def catalog_item(code: str, user: User = Depends(require("catalog.view"))):
     a = E.catalog.get(code)
     if not a:
         raise not_found("Алгоритм")
-    return {**a, "versions": E.versions(code)}
+    return {**a, "classification": _classification(a), "versions": E.versions(code)}
+
+
+def _classification(a: dict) -> dict:
+    return a.get("classification") or classifiers.DEFAULT_CLASSIFICATION.get(a["code"]) or \
+        {"model_type": None, "stock_methods": []}
+
+
+@app.get("/classifiers", tags=["каталог"])
+def get_classifiers(user: User = Depends(require("catalog.view"))):
+    """Тип модели, методы расчёта запаса, значения параметров (классификатор ТОФИ)."""
+    return classifiers.ALL
+
+
+class ClassificationIn(BaseModel):
+    model_type: str | None = None
+    stock_methods: list[str] = []
+
+
+@app.put("/catalog/{code}/classification", tags=["каталог"])
+def set_classification(code: str, body: ClassificationIn, user: User = Depends(require("catalog.manage"))):
+    a = E.catalog.get(code)
+    if not a:
+        raise not_found("Алгоритм")
+    d = body.model_dump()
+    errs = classifiers.check(d)
+    if errs:
+        raise AppError("catalog.classification", "Классификация задана неверно", 422, errs)
+    E.catalog.update(code, {"classification": d}, actor=user.id)
+    audit(user, "catalog.classification", "algorithm", code, d)
+    return {**E.catalog.get(code), "classification": d}
 
 
 @app.get("/catalog/{code}/versions/{version}/package.zip", tags=["каталог"])
@@ -130,6 +162,9 @@ def _profile_schema(code: str):
         return None, []
     files = E.package_files(code, v["version"])
     schema = json.loads(files["profile_schema.json"]) if "profile_schema.json" in files else None
+    for row in schema or []:
+        if row.get("type") == "float" and classifiers.value_kind(row.get("key")):
+            row["value_kind"] = classifiers.value_kind(row["key"])
     return schema, _waterbody_params(v["manifest"])
 
 

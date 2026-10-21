@@ -101,7 +101,7 @@ const saveErrors = ref([])
 const page = ref(1)
 const size = 50
 const spNames = ref({})
-const gearNames = ref({})
+const refNames = ref({})   // {справочник: {код: название}}
 const diffOpen = ref(false)
 const da = ref(null)
 const db = ref(null)
@@ -119,7 +119,7 @@ const pageRows = computed(() => rows.value.slice((page.value - 1) * size, page.v
 const changedFlat = computed(() => (diff.value?.changed || []).flatMap((c) => c.cells.map((x) => ({ key: c.key, ...x }))))
 function show(v, c) {
   if (v === null || v === undefined) return '·'
-  if (c.type === 'ref') return (c.ref === 'species' ? spNames.value : gearNames.value)[v] || v
+  if (c.type === 'ref') return (refNames.value[c.ref] || {})[v] || v
   if (c.type === 'boolean') return v ? 'да' : 'нет'
   if (c.type === 'date') { const [y, m, d] = String(v).split('-'); return `${d}.${m}.${y}` }
   if (typeof v === 'number' && c.code !== 'year') return fmt(v, 'auto')
@@ -130,12 +130,13 @@ async function load() {
   loading.value = true; error.value = null
   try {
     ds.value = await api.get('data-admin', `/datasets/${route.params.id}`)
-    const [t, vs, sp, gr] = await Promise.all([api.get('data-model', `/dataset-types/${ds.value.dataset_type}`),
-      api.get('data-admin', `/datasets/${ds.value.id}/versions`), api.get('data-model', '/entities/species/records'),
-      api.get('data-model', '/entities/gears/records')])
+    const [t, vs, sp] = await Promise.all([api.get('data-model', `/dataset-types/${ds.value.dataset_type}`),
+      api.get('data-admin', `/datasets/${ds.value.id}/versions`), api.get('data-model', '/entities/species/records')])
     dtype.value = t; versions.value = vs
     spNames.value = Object.fromEntries(sp.map((r) => [r.values.code, r.values.name_ru]))
-    gearNames.value = Object.fromEntries(gr.map((r) => [r.values.code, r.values.name_ru]))
+    const ents = [...new Set(t.columns.filter((c) => c.type === 'ref').map((c) => c.ref_entity))]
+    const lists = await Promise.all(ents.map((e) => api.get('data-model', `/entities/${e}/records`)))
+    refNames.value = Object.fromEntries(ents.map((e, i) => [e, Object.fromEntries(lists[i].map((r) => [r.values.code || r.id, r.values.name_ru]))]))
     version.value = ds.value.current_version
     da.value = vs[1]?.n || vs[0]?.n; db.value = vs[0]?.n
     await loadData()
@@ -152,7 +153,7 @@ function startEdit() {
     for (const c of cols.value) {
       if (c.type === 'date' && o[c.code]) { const [y, m, d] = o[c.code].split('-'); o[c.code] = `${d}.${m}.${y}` }
       if (c.type === 'boolean' && o[c.code] !== null) o[c.code] = o[c.code] ? 'да' : 'нет'
-      if (c.type === 'ref' && o[c.code]) o[c.code] = (c.ref === 'species' ? spNames.value : gearNames.value)[o[c.code]] || o[c.code]
+      if (c.type === 'ref' && o[c.code]) o[c.code] = (refNames.value[c.ref] || {})[o[c.code]] || o[c.code]
       if (o[c.code] === null || o[c.code] === undefined) o[c.code] = ''
       else o[c.code] = String(o[c.code])
     }
@@ -168,6 +169,8 @@ async function save() {
     const r = await api.put('data-admin', `/datasets/${ds.value.id}/data`, { rows: rows.value, comment: comment.value, base_version: ds.value.current_version })
     if (!r.ok) { saveErrors.value = r.errors; return }
     ElMessage.success(`${'Сохранена версия'} v${r.version}`)
+    if (r.warnings?.length) ElMessage({ type: 'warning', duration: 8000, showClose: true,
+      message: r.warnings.slice(0, 3).map((w) => w.message).join('\n') + (r.warnings.length > 3 ? ` … (+${r.warnings.length - 3})` : '') })
     editing.value = false; comment.value = ''
     await load()
   } catch (e) { saveErrors.value = [{ row: '', message: e.message }] } finally { busy.value = false }

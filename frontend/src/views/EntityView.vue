@@ -12,7 +12,12 @@
         <el-tabs v-model="tab">
           <el-tab-pane :label="$t('dict.records') + ` (${records.length})`" name="records">
             <div class="card">
-              <el-input v-model="q" :placeholder="$t('common.search')" clearable style="width:300px; margin-bottom:8px" prefix-icon="Search" />
+              <div class="row" style="gap:8px; margin-bottom:8px; flex-wrap:wrap">
+                <el-input v-model="q" :placeholder="$t('common.search')" clearable style="width:300px" prefix-icon="Search" />
+                <WaterBodySelect v-if="hasWb" v-model="fWb" clearable />
+                <el-button v-if="code === 'fishing_places' && auth.can('dict.edit')" :loading="collecting" @click="collectPlaces">
+                  <el-icon><Download /></el-icon>&nbsp;{{ $t('dict.places_collect') }}</el-button>
+              </div>
               <el-table :data="shown" size="small" max-height="640" @row-dblclick="openRec">
                 <el-table-column v-for="f in listFields" :key="f.code" :label="tr(f, 'title')" :min-width="f.code === 'name_ru' ? 200 : 120">
                   <template #default="{ row }">{{ cell(row.values[f.code], f) }}</template>
@@ -59,18 +64,20 @@
   </div>
 </template>
 <script setup>
-import { loadRegions, regionNames } from '../regions'
-loadRegions()
+import { dictName, dictNames, loadDict } from '../dicts'
+import WaterBodySelect from '../components/WaterBodySelect.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '../api'
+import { useI18n } from 'vue-i18n'
 import { tr } from '../i18n'
 import { useAuth } from '../store/auth'
 import StateBlock from '../components/StateBlock.vue'
 import FieldsEditor from '../components/FieldsEditor.vue'
 import RecordForm from '../components/RecordForm.vue'
 const auth = useAuth()
+const { t } = useI18n()
 const route = useRoute()
 const code = route.params.code
 const ent = ref(null)
@@ -89,15 +96,29 @@ const recErrs = ref({})
 const recErr = ref(null)
 const recHistory = ref([])
 const busy = ref(false)
-const listFields = computed(() => (ent.value?.fields || []).filter((f) => !['geo_shape', 'text'].includes(f.type)).slice(0, 8))
-const shown = computed(() => records.value.filter((r) => !q.value || JSON.stringify(r.values).toLowerCase().includes(q.value.toLowerCase())))
+const listFields = computed(() => (ent.value?.fields || []).filter((f) => f.code === 'aliases' || !['geo_shape', 'text'].includes(f.type)).slice(0, 8))
+const hasWb = computed(() => (ent.value?.fields || []).some((f) => f.code === 'water_body' && f.ref_entity === 'water_bodies'))
+const fWb = ref(null)
+const shown = computed(() => records.value.filter((r) => (!fWb.value || r.values.water_body === fWb.value) &&
+  (!q.value || JSON.stringify(r.values).toLowerCase().includes(q.value.toLowerCase()))))
+const collecting = ref(false)
+async function collectPlaces() {
+  collecting.value = true
+  try {
+    const r = await api.post('data-admin', '/fishing-places/collect' + (fWb.value ? `?water_body=${fWb.value}` : ''))
+    ElMessage.success(t('dict.places_collected', { n: r.created }))
+    await load()
+  } catch (e) { ElMessage.error(e.message || String(e)) } finally { collecting.value = false }
+}
 function cell(v, f) {
   if (v === null || v === undefined) return '—'
   if (f.type === 'boolean') return v ? 'да' : 'нет'
   if (f.type === 'geo_point') return `${v[0]}, ${v[1]}`
   if (f.type === 'enum') { const e = (f.enum || []).find((x) => x.value === v); return e ? tr(e, 'title') : v }
-  if (f.type === 'ref_list' && Array.isArray(v)) return f.ref_entity === 'regions' ? regionNames(v) : v.join(', ')
+  if (f.type === 'ref_list' && Array.isArray(v)) return dictNames(f.ref_entity, v)
+  if (f.type === 'ref') return dictName(f.ref_entity, v)
   if (f.type === 'geo_shape') return v.type
+  if (f.code === 'aliases') return String(v).split('\n').filter(Boolean).join('; ') || '—'
   return v
 }
 async function load() {
@@ -106,6 +127,8 @@ async function load() {
     ;[ent.value, records.value, versions.value] = await Promise.all([api.get('data-model', `/entities/${code}`),
       api.get('data-model', `/entities/${code}/records`), api.get('data-model', `/entities/${code}/versions`)])
     schema.fields = JSON.parse(JSON.stringify(ent.value.fields))
+    await Promise.all([...new Set(ent.value.fields.filter((f) => ['ref', 'ref_list'].includes(f.type)).map((f) => f.ref_entity))]
+      .map((e) => loadDict(e, true)))
   } catch (e) { error.value = e } finally { loading.value = false }
 }
 async function openRec(r) {

@@ -2,11 +2,28 @@
   <div class="page">
     <div class="page-head"><div><h1>{{ $t('catalog.title') }}</h1><div class="sub">Опубликованные проверенные версии алгоритмов. Для расчётов доступны только включённые версии.</div></div></div>
     <StateBlock :loading="loading" :error="error">
-      <div v-for="a in items" :key="a.code" class="card">
+      <div class="row" style="gap:8px; margin-bottom:10px">
+        <el-select v-model="fModel" clearable :placeholder="$t('catalog.model_type')" style="width:220px">
+          <el-option v-for="m in cls.model_types || []" :key="m.code" :label="tr(m, 'name')" :value="m.code" />
+        </el-select>
+        <el-select v-model="fMethod" clearable :placeholder="$t('catalog.stock_method')" style="width:240px">
+          <el-option v-for="m in cls.stock_methods || []" :key="m.code" :label="tr(m, 'name')" :value="m.code" />
+        </el-select>
+      </div>
+      <div v-for="a in shown" :key="a.code" class="card">
         <div class="row" style="justify-content:space-between">
           <div>
             <h2 style="margin:0">{{ tr(a, 'title') }} <span class="muted small mono">{{ a.code }}</span></h2>
             <div class="muted small">{{ a.description }}</div>
+            <div class="row small" style="gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center">
+              <span class="muted">{{ $t('catalog.model_type') }}:</span>
+              <el-tag size="small" :type="a.classification?.model_type === 'stochastic' ? 'warning' : 'info'">{{ clsName('model_types', a.classification?.model_type) }}</el-tag>
+              <template v-if="a.classification?.stock_methods?.length">
+                <span class="muted" style="margin-left:6px">{{ $t('catalog.stock_method') }}:</span>
+                <el-tag v-for="m in a.classification.stock_methods" :key="m" size="small" effect="plain">{{ clsName('stock_methods', m) }}</el-tag>
+              </template>
+              <el-button v-if="auth.can('catalog.manage')" size="small" text @click="editCls(a)"><el-icon><Edit /></el-icon></el-button>
+            </div>
           </div>
           <el-tag v-if="a.latest" type="success">{{ $t('common.version') }} {{ a.latest }}</el-tag>
         </div>
@@ -44,6 +61,24 @@
         </el-collapse>
       </div>
     </StateBlock>
+    <el-dialog v-model="clsOpen" :title="$t('catalog.classification')" width="460px">
+      <el-form label-position="top">
+        <el-form-item :label="$t('catalog.model_type')">
+          <el-radio-group v-model="clsForm.model_type">
+            <el-radio v-for="m in cls.model_types || []" :key="m.code" :value="m.code">{{ tr(m, 'name') }}</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item :label="$t('catalog.stock_method')">
+          <el-checkbox-group v-model="clsForm.stock_methods">
+            <el-checkbox v-for="m in cls.stock_methods || []" :key="m.code" :value="m.code">{{ tr(m, 'name') }}</el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="clsOpen = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="saveCls">{{ $t('common.save') }}</el-button>
+      </template>
+    </el-dialog>
     <el-drawer v-model="codeOpen" :title="codeTitle" size="70%">
       <div class="row" style="align-items:flex-start; gap:12px">
         <el-scrollbar style="width:280px; height:78vh"><div v-for="f in files" :key="f.path" class="fl" :class="{ sel: f.path === filePath }" @click="openFile(f.path)">{{ f.path }}</div></el-scrollbar>
@@ -53,7 +88,7 @@
   </div>
 </template>
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { api, download } from '../api'
 import { tr } from '../i18n'
 import { useAuth } from '../store/auth'
@@ -68,8 +103,32 @@ const files = ref([])
 const filePath = ref('')
 const fileText = ref('')
 let cur = null
+const cls = ref({})
+const fModel = ref('')
+const fMethod = ref('')
+const shown = computed(() => items.value.filter((a) => (!fModel.value || a.classification?.model_type === fModel.value) &&
+  (!fMethod.value || (a.classification?.stock_methods || []).includes(fMethod.value))))
+function clsName(group, code) {
+  const r = (cls.value[group] || []).find((x) => x.code === code)
+  return r ? tr(r, 'name') : (code || '—')
+}
+const clsOpen = ref(false)
+const clsForm = reactive({ model_type: null, stock_methods: [] })
+let clsCode = null
+function editCls(a) {
+  clsCode = a.code
+  clsForm.model_type = a.classification?.model_type || null
+  clsForm.stock_methods = [...(a.classification?.stock_methods || [])]
+  clsOpen.value = true
+}
+async function saveCls() {
+  await api.put('algo-admin', `/catalog/${clsCode}/classification`, { ...clsForm })
+  clsOpen.value = false; await load()
+}
 async function load() {
-  try { items.value = await api.get('algo-admin', '/catalog') } catch (e) { error.value = e } finally { loading.value = false }
+  try {
+    ;[items.value, cls.value] = await Promise.all([api.get('algo-admin', '/catalog'), api.get('algo-admin', '/classifiers')])
+  } catch (e) { error.value = e } finally { loading.value = false }
 }
 async function toggle(a, v, on) { await api.post('algo-admin', `/catalog/${a.code}/versions/${v.version}/${on ? 'enable' : 'disable'}`); await load() }
 async function showCode(a, v) {

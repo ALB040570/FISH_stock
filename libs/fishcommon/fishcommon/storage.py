@@ -192,8 +192,10 @@ class Collection:
         return sorted(out, key=lambda v: v["n"])
 
     def add_version(self, obj_id: str, files: dict[str, bytes], info: dict | None = None,
-                    actor: str | None = None) -> dict:
-        """Новая неизменяемая версия: files — {имя файла: содержимое}."""
+                    actor: str | None = None, technical: bool = False) -> dict:
+        """Новая неизменяемая версия: files — {имя файла: содержимое}.
+        technical=True — служебная версия (перевод формата без изменения данных): время изменения объекта
+        не обновляется, чтобы данные не выглядели изменёнными после расчёта."""
         with locked(self._meta_path(obj_id)):
             existing = self.list_versions(obj_id)
             n = (existing[-1]["n"] + 1) if existing else 1
@@ -210,8 +212,9 @@ class Collection:
             os.replace(tmp, vdir)
             cur = read_json(self._meta_path(obj_id)) or {}
             cur["current_version"] = n
-            cur["updated_at"] = now_iso()
-            cur["updated_by"] = actor
+            if not technical:
+                cur["updated_at"] = now_iso()
+                cur["updated_by"] = actor
             atomic_write_json(self._meta_path(obj_id), cur)
             return vinfo
 

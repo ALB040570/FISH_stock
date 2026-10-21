@@ -34,6 +34,9 @@ def bundle(data_stack):
     return Bundle("zhaysan", tables, sp, gk)
 
 
+LEGACY_CATCH_TYPE = {"научный": "scientific", "промысловый": "commercial"}
+
+
 def _close(a, b, what, rtol=1e-6):
     a, b = np.asarray(a, float), np.asarray(b, float)
     assert a.shape == b.shape, (what, a.shape, b.shape)
@@ -62,7 +65,9 @@ def test_inputs_identical(bundle):
         cn, sn = new.load_year(y, "zhaysan", bundle)
         assert list(co.columns[:7]) == list(cn.columns[:7]) and set(co.columns) == set(cn.columns), y
         for c in co.columns:
-            if not pd.api.types.is_numeric_dtype(co[c]):
+            if c == "CatchType":     # с 21.10.2026 — коды справочника «Типы вылова» вместо слов
+                assert [LEGACY_CATCH_TYPE.get(x, x) for x in co[c]] == cn[c].tolist(), (y, c)
+            elif not pd.api.types.is_numeric_dtype(co[c]):
                 assert co[c].tolist() == cn[c].tolist(), (y, c)
             else:
                 _close(co[c].values, cn[c].values, f"{y} {c}")

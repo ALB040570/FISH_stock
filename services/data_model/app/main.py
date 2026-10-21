@@ -58,17 +58,35 @@ def _seed() -> None:
     def have(entity):
         return {r["values"].get("code") for r in records(entity).list()}
 
+    for ent, rows in seed_defs.CLASSIFIERS.items():
+        got = have(ent)
+        for code, ru, kk, tofi in rows:
+            if code not in got:
+                vals = {"code": code, "name_ru": ru, "name_kk": kk, "tofi_code": tofi}
+                if seed_defs.CLASSIFIER_ALIASES.get((ent, code)):
+                    vals["aliases"] = seed_defs.CLASSIFIER_ALIASES[(ent, code)]
+                _create_record(ent, vals, "system")
+    fam = have("fish_families")
+    for code, ru, kk, tofi in seed_defs.FAMILIES:
+        if code not in fam:
+            _create_record("fish_families", {"code": code, "name_ru": ru, "name_kk": kk, "tofi_code": tofi}, "system")
+
     rg = have("regions")
     for code, ru, kk in seed_defs.REGIONS:
         if code not in rg:
             _create_record("regions", {"code": code, "name_ru": ru, "name_kk": kk}, "system")
     _migrate_regions()
+    _upgrade_schemas()
 
     sp = have("species")
     for code, ru, kk, latin, pred in seed_defs.SPECIES:
         if code not in sp:
             _create_record("species", {"code": code, "name_ru": ru, "name_kk": kk, "latin": latin,
-                                       "is_predator": pred}, "system")
+                                       "family": seed_defs.SPECIES_FAMILY.get(code),
+                                       "is_predator": pred, "tofi_code": seed_defs.SPECIES_TOFI.get(code)}, "system")
+    _fill_missing("species", lambda v: {"family": seed_defs.SPECIES_FAMILY.get(v.get("code")),
+                                        "tofi_code": seed_defs.SPECIES_TOFI.get(v.get("code"))},
+                  "семейство и код ТОФИ (классификатор ТОФИ)")
     gr = have("gears")
     for code, ru, kk, kind in seed_defs.GEARS:
         if code not in gr:
@@ -114,6 +132,69 @@ def _migrate_regions() -> None:
         col.update(r["id"], {"values": v}, actor="system")
         col.add_version(r["id"], {"record.json": dumps(v).encode()},
                         {"comment": f"области: «{old or '—'}» → {', '.join(v['regions'] or []) or '—'}"}, "system")
+
+
+def _sig(f: dict) -> tuple:
+    return f.get("type"), f.get("ref_entity"), f.get("places_entity")
+
+
+def _upgrade_fields(old: list[dict], seed: list[dict]) -> tuple[list[dict], list[str]]:
+    """Поля поставки, которых нет в установке, добавляются; поле поставки со сменившимся типом или
+    ссылкой заменяется описанием поставки. Поля, добавленные пользователем, остаются в конце."""
+    by = {f["code"]: f for f in old}
+    out, notes = [], []
+    for sf in seed:
+        of = by.get(sf["code"])
+        if of is None:
+            out.append(copy.deepcopy(sf))
+            notes.append(f"+{sf['code']}")
+        elif _sig(of) != _sig(sf):
+            out.append(copy.deepcopy(sf))
+            notes.append(f"{sf['code']}: {of.get('type')} → {sf.get('type')}")
+        else:
+            out.append(of)
+    seed_codes = {f["code"] for f in seed}
+    out += [f for f in old if f["code"] not in seed_codes]
+    return out, notes
+
+
+def _upgrade_schemas() -> None:
+    """Установки до 21.10.2026: справочники классификатора ТОФИ — новые поля и ссылки вместо списков."""
+    for sd in seed_defs.ENTITIES:
+        e = entities.get(sd["code"])
+        if not e:
+            continue
+        fields, notes = _upgrade_fields(e["fields"], sd["fields"])
+        if notes:
+            d = {**e, "fields": fields}
+            entities.update(sd["code"], {"fields": fields}, actor="system")
+            entities.add_version(sd["code"], {"schema.json": dumps(d).encode()},
+                                 {"comment": "обновление поставки (классификатор ТОФИ): " + ", ".join(notes)}, "system")
+    for sd in seed_defs.DATASET_TYPES:
+        t = dtypes.get(sd["code"])
+        if not t:
+            continue
+        cols, notes = _upgrade_fields(t["columns"], sd["columns"])
+        if notes:
+            d = {**t, "columns": cols}
+            dtypes.update(sd["code"], {"columns": cols}, actor="system")
+            dtypes.add_version(sd["code"], {"schema.json": dumps(d).encode()},
+                               {"comment": "обновление поставки: " + ", ".join(notes)}, "system")
+
+
+def _fill_missing(entity: str, make, comment: str) -> None:
+    """Заполнить у системных записей новые поля, которых в записи ещё нет (значения пользователя не трогаются)."""
+    col = records(entity)
+    for r in col.list():
+        if r.get("deleted"):
+            continue
+        v = dict(r.get("values", {}))
+        add = {k: x for k, x in make(v).items() if k not in v and x is not None}
+        if not add:
+            continue
+        v.update(add)
+        col.update(r["id"], {"values": v}, actor="system")
+        col.add_version(r["id"], {"record.json": dumps(v).encode()}, {"comment": comment}, "system")
 
 
 # ------------------------------------------------------------------ сущности
@@ -255,9 +336,10 @@ def lookup_map(ent: str) -> dict:
             continue
         vals = r.get("values", {})
         key = vals.get("code") or r["id"]
-        for cand in (r["id"], vals.get("code"), vals.get("name_ru"), vals.get("name_kk")):
-            if cand:
-                m[str(cand).strip().lower()] = key
+        aliases = str(vals.get("aliases") or "").splitlines()
+        for cand in (r["id"], vals.get("code"), vals.get("name_ru"), vals.get("name_kk"), *aliases):
+            if cand and str(cand).strip():
+                m.setdefault(str(cand).strip().lower(), key)
     return m
 
 
@@ -336,7 +418,7 @@ def update_record(code: str, rid: str, body: RecordIn, user: User = Depends(requ
     errors += _check_unique(code, e["fields"], clean, rid)
     if errors:
         raise AppError("record.invalid", "Запись содержит ошибки", 422, errors)
-    if code in ("species", "gears", "water_bodies") and clean.get("code") != cur["values"].get("code"):
+    if e.get("system") and "code" in clean and clean.get("code") != cur["values"].get("code"):
         raise AppError("record.code_change", "Код записи используется в данных и расчётах — менять нельзя", 400)
     col.update(rid, {"values": clean}, actor=user.id)
     v = col.add_version(rid, {"record.json": dumps(clean).encode()}, {"comment": body.comment}, user.id)
@@ -374,8 +456,10 @@ def water_bodies_geojson(user: User = Depends(require("dict.view"))):
         v = r["values"]
         pt = v.get("point")
         geom = v.get("shape") or ({"type": "Point", "coordinates": [pt[1], pt[0]]} if pt else None)
-        props = {k: v.get(k) for k in ("code", "name_ru", "name_kk", "type", "regions", "basin", "area_km2", "point")}
+        props = {k: v.get(k) for k in ("code", "name_ru", "name_kk", "type", "origin", "status", "fishery_kinds",
+                                    "regions", "basin", "area_km2", "point")}
         props["regions"] = props.get("regions") or []
+        props["fishery_kinds"] = props.get("fishery_kinds") or []
         props["id"] = r["id"]
         feats.append({"type": "Feature", "id": r["id"], "geometry": geom, "properties": props})
     return {"type": "FeatureCollection", "features": feats,

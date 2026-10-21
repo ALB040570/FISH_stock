@@ -30,7 +30,7 @@
             <el-collapse-item v-for="(rows, g) in groups" :key="g" :name="g" :title="g">
               <div class="pgrid">
                 <div v-for="r in rows" :key="r.key" class="prow">
-                  <div class="small">{{ r.label }} <el-tag v-if="r.category === 'run'" size="small" type="success">по умолчанию для запуска</el-tag><div class="mono muted small">{{ r.key }}</div></div>
+                  <div class="small">{{ r.label }} <el-tag v-if="r.category === 'run'" size="small" type="success">по умолчанию для запуска</el-tag><div class="mono muted small">{{ r.key }}<span v-if="r.value_kind" class="vk">{{ kindName(r.value_kind) }}</span></div></div>
                   <el-select v-if="r.type === 'select'" v-model="values[sp][r.key]" size="small" style="width:260px" :disabled="!auth.can('profile.edit')">
                     <el-option v-for="o in r.options" :key="o.value" :label="o.label" :value="o.value" />
                   </el-select>
@@ -101,6 +101,9 @@ async function save() {
   } catch (e) { saveErr.value = e } finally { busy.value = false }
 }
 async function copyFrom() { await api.post('algo-admin', `/profiles/${algo.value}/${wb.value}/copy-from/${src.value}`); await load() }
+const kinds = ref({})
+const kindName = (k) => (kinds.value[k] ? tr(kinds.value[k], 'name') : k)
+api.get('algo-admin', '/classifiers').then((c) => { kinds.value = Object.fromEntries((c.param_values || []).map((x) => [x.code, x])) }).catch(() => {})
 onMounted(async () => {
   const [cat, s] = await Promise.all([api.get('algo-admin', '/catalog'), api.get('data-model', '/entities/species/records')])
   algos.value = cat.filter((a) => (a.manifest?.parameters || []).some((p) => p.category === 'waterbody'))
@@ -109,6 +112,7 @@ onMounted(async () => {
 })
 </script>
 <style scoped>
+.vk { margin-left: 8px; font-family: inherit; color: var(--fs-muted); }
 .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 8px 18px; }
 .prow { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 1px dashed var(--fs-line-soft); padding: 4px 0; }
 </style>

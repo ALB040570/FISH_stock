@@ -5,7 +5,7 @@ def test_seed_and_records(svc):
     c = svc("data_model")
     ents = {e["code"]: e for e in c.get("/entities", headers=H("viewer")).json()}
     assert {"water_bodies", "species", "gears"} <= set(ents)
-    assert ents["species"]["records_count"] == 17
+    assert ents["species"]["records_count"] == 20
     fc = c.get("/water-bodies.geojson", headers=H("viewer")).json()
     codes = {f["properties"]["code"] for f in fc["features"]}
     assert {"zhaysan", "balkhash", "kapshagay", "alakol"} <= codes
@@ -100,3 +100,80 @@ def test_regions_migration(tmp_path, monkeypatch):
                                              col.get(next(r["id"] for r in col.list()
                                                           if r["values"]["code"] == "alakol"))["current_version"],
                                              "record.json"))["regions"] == ["zhetysu", "abai"]
+
+
+def test_tofi_classifiers(svc):
+    """Справочники классификатора ТОФИ (21.10.2026): значения, коды ТОФИ, другие написания, ссылки."""
+    c = svc("data_model")
+    recs = lambda e: {r["values"]["code"]: r["values"] for r in c.get(f"/entities/{e}/records", headers=H()).json()}
+    wt = recs("water_body_types")
+    assert list(wt) == ["sea", "lake", "river", "reservoir", "pond", "dam", "channel"]
+    assert wt["lake"]["tofi_code"] == "_FV_1002"
+    assert set(recs("water_body_statuses")) == {"international", "republican", "local"}
+    assert set(recs("water_body_origins")) == {"natural", "artificial"}
+    assert len(recs("fishery_kinds")) == 4 and len(recs("fish_sexes")) == 3 and len(recs("forage_bases")) == 2
+    fam = recs("fish_families")
+    assert len(fam) == 16 and fam["osmeridae"]["name_ru"] == "Корюшковые"
+    assert set(recs("gear_categories")) == {"commercial", "non_commercial"}
+    # прежние значения «Типа лова» — другие написания справочника
+    lk = c.get("/entities/catch_types/lookup", headers=H()).json()
+    assert lk["научный"] == "scientific" and lk["научный лов"] == "scientific" and lk["промысловый"] == "commercial"
+    sp = recs("species")
+    assert len(sp) == 20 and {"elets", "karp", "rak"} <= set(sp)
+    assert sp["sudak"]["family"] == "percidae" and sp["sudak"]["tofi_code"] == "_FV_1026"
+    assert sp["rak"]["family"] is None and sp["b_amur"]["tofi_code"] == "_FV_1109"
+    wbs = recs("water_bodies")
+    assert wbs["zhaysan"]["type"] == "reservoir"
+    e = c.get("/entities/water_bodies", headers=H()).json()
+    f = {x["code"]: x for x in e["fields"]}
+    assert f["type"]["type"] == "ref" and f["type"]["ref_entity"] == "water_body_types"
+    assert f["fishery_kinds"]["type"] == "ref_list"
+    # водоём с новыми свойствами; неизвестное значение — ошибка
+    rid = next(r["id"] for r in c.get("/entities/water_bodies/records", headers=H()).json() if r["values"]["code"] == "zhaysan")
+    v = dict(wbs["zhaysan"], origin="искусственный водоём", status="republican", fishery_kinds="промысловое рыболовство; amateur")
+    r = c.put(f"/entities/water_bodies/records/{rid}", headers=H("mathematician"), json={"values": v}).json()
+    assert r["values"]["origin"] == "artificial" and r["values"]["fishery_kinds"] == ["commercial", "amateur"]
+    v["type"] = "болото"
+    assert c.put(f"/entities/water_bodies/records/{rid}", headers=H(), json={"values": v}).status_code == 422
+    # коды записей системных справочников менять нельзя
+    cid = next(r["id"] for r in c.get("/entities/catch_types/records", headers=H()).json() if r["values"]["code"] == "sport")
+    assert c.put(f"/entities/catch_types/records/{cid}", headers=H(),
+                 json={"values": dict(recs("catch_types")["sport"], code="amateur")}).status_code == 400
+    dt = c.get("/dataset-types/catches", headers=H()).json()
+    cols = {x["code"]: x for x in dt["columns"]}
+    assert cols["catch_type"]["type"] == "ref" and cols["place"]["places_entity"] == "fishing_places"
+
+
+def test_tofi_upgrade_old_install(tmp_path, monkeypatch):
+    """Установка до 21.10: вид водоёма и тип лова — списки значений, новых полей нет → обновление поставки."""
+    from conftest import load_service
+    mod = load_service("data_model", tmp_path, monkeypatch)
+    e = mod.entities.get("water_bodies")
+    old = [dict(f, type="enum", ref_entity=None, enum=[{"value": "lake"}, {"value": "reservoir"}])
+           if f["code"] == "type" else f for f in e["fields"] if f["code"] not in ("origin", "status", "fishery_kinds")]
+    old.append({"code": "my_field", "title_ru": "Моё поле", "type": "string", "system": False})
+    mod.entities.update("water_bodies", {"fields": old}, actor="test")
+    sp = mod.entities.get("species")
+    mod.entities.update("species", {"fields": [f for f in sp["fields"] if f["code"] not in ("family", "tofi_code")]}, actor="t")
+    col = mod.records("species")
+    for r in col.list():
+        v = {k: x for k, x in r["values"].items() if k not in ("family", "tofi_code")}
+        if v["code"] == "som":
+            v["family"] = "percidae"            # значение пользователя не перезаписывается
+        col.update(r["id"], {"values": v}, actor="test")
+    dt = mod.dtypes.get("catches")
+    mod.dtypes.update("catches", {"columns": [dict(c, type="enum", enum=[{"value": "научный"}], places_entity=None)
+                                              if c["code"] == "catch_type" else c for c in dt["columns"]]}, actor="t")
+    n0 = mod.entities.get("water_bodies")["current_version"]
+    mod._seed()
+    wf = [f["code"] for f in mod.entities.get("water_bodies")["fields"]]
+    assert {"origin", "status", "fishery_kinds"} <= set(wf) and wf[-1] == "my_field"
+    assert next(f for f in mod.entities.get("water_bodies")["fields"] if f["code"] == "type")["type"] == "ref"
+    assert mod.entities.get("water_bodies")["current_version"] == n0 + 1
+    vals = {r["values"]["code"]: r["values"] for r in col.list()}
+    assert vals["sudak"]["family"] == "percidae" and vals["sudak"]["tofi_code"] == "_FV_1026"
+    assert vals["som"]["family"] == "percidae"
+    assert next(c for c in mod.dtypes.get("catches")["columns"] if c["code"] == "catch_type")["type"] == "ref"
+    # повторный запуск ничего не меняет
+    mod._seed()
+    assert mod.entities.get("water_bodies")["current_version"] == n0 + 1

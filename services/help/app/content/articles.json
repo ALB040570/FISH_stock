@@ -59,6 +59,14 @@
   ]
  },
  {
+  "id": "fishing-places",
+  "section": "ichthyologist",
+  "order": 13,
+  "routes": [
+   "/dictionaries/entities/fishing_places"
+  ]
+ },
+ {
   "id": "data-upload",
   "section": "ichthyologist",
   "order": 20,

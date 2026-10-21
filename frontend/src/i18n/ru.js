@@ -29,7 +29,7 @@ export default {
     mismatch: 'Пароли не совпадают', changed: 'Пароль изменён', must: 'Смените пароль, выданный администратором' },
   map: {
     title: 'Водоёмы Казахстана', basemap: 'Подложка', basemap_osm: 'Карта', basemap_none: 'Без подложки', legend: 'Состояние', no_data: 'нет данных', has_data: 'есть данные',
-    has_run: 'есть расчёт', stale: 'данные новее расчёта', filter_region: 'Область', filter_species: 'Вид в данных',
+    has_run: 'есть расчёт', stale: 'данные новее расчёта', filter_region: 'Область', filter_type: 'Вид водоёма', filter_status: 'Статус', filter_origin: 'Тип', filter_species: 'Вид в данных',
     filter_state: 'Состояние', list: 'Список', monitoring: 'Мониторинг', data: 'Данные', start_calc: 'Запустить расчёт',
     years: 'Годы данных', last_run: 'Последний расчёт', main_run: 'Основной запуск', pdu: 'ПДУ', area: 'Площадь',
     datasets: 'Наборов данных', none_found: 'Ничего не найдено', species_in_data: 'Виды в данных',
@@ -44,6 +44,8 @@ export default {
     fields: 'Поля', field: 'Поле', new_entity: 'Новый справочник', new_field: 'Добавить поле', system: 'системное',
     system_hint: 'Системные поля используются расчётами: их нельзя удалить или сменить тип',
     ref_entity: 'Справочник для ссылки', enum_values: 'Значения списка (по одному в строке)', min: 'Минимум', max: 'Максимум',
+    group: 'Раздел', group_water: 'Водоёмы', group_fish: 'Рыбы', group_catch: 'Лов', group_other: 'Другие', 
+    places_collect: 'Добавить места из загруженных уловов', places_collected: 'Добавлено мест: {n}',
     unique: 'Уникальное', title_ru: 'Название (рус.)', title_kk: 'Название (каз.)', hint: 'Подсказка',
     record_new: 'Новая запись', record_edit: 'Запись справочника', columns: 'Столбцы', species_columns: 'Столбцы видов',
     species_cols_enabled: 'Таблица содержит столбец на каждый вид рыбы', key_fields: 'Ключевые поля', period_field: 'Поле периода',
@@ -70,7 +72,7 @@ export default {
     contract: 'Контракт: run(ctx) — ctx.tables, ctx.params, ctx.load_state(шаг), ctx.add_table/add_frame/add_file, ctx.log, ctx.progress.',
     publish_hint: 'Публикация доступна после успешного тестового прогона текущей версии черновика.',
   },
-  catalog: {
+  catalog: { model_type: 'Тип модели', stock_method: 'Метод расчёта запаса', classification: 'Классификация алгоритма', 
     title: 'Каталог алгоритмов', enabled: 'включена', disabled: 'отключена', enable: 'Включить', disable: 'Отключить',
     checksum: 'Контрольная сумма', source: 'Источник', params: 'Параметры', requires: 'Требует данных',
     steps: 'Предыдущие шаги', outputs: 'Результаты', cat_fixed: 'неизменяемый', cat_waterbody: 'водоём', cat_run: 'запуск',
@@ -115,7 +117,6 @@ export default {
   },
   audit: { title: 'Журнал действий', ts: 'Время', user: 'Пользователь', service: 'Сервис', action: 'Действие',
     object: 'Объект', ok: 'Успешно', retention: 'Записи хранятся {days} дней', export: 'Выгрузить в Excel' },
-  wbtype: { lake: 'Озеро', reservoir: 'Водохранилище', river: 'Река', sea: 'Море', other: 'Другое' },
   w: {
     reason_no_run: 'Для водоёма ещё нет выполненного расчёта',
     reason_no_step: 'В запуске для мониторинга нет этого шага расчёта',

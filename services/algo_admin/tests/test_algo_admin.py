@@ -87,3 +87,26 @@ def test_cancel_and_errors(calc_stack):
     chk = aa.post(f"/calculations/{c2['id']}/check", headers=H()).json()
     assert not chk["ok"] and any("не загружен набор" in e for e in chk["errors"])
     assert any("профиля" in e for e in chk["errors"])
+
+
+def test_classification(calc_stack):
+    """Тип модели и метод расчёта запаса (классификатор ТОФИ) — в каталоге; значения параметров — в профиле."""
+    dm, da, aa, mod = calc_stack
+    cl = aa.get("/classifiers", headers=H("viewer")).json()
+    assert [m["code"] for m in cl["model_types"]] == ["deterministic", "stochastic"]
+    assert [m["code"] for m in cl["stock_methods"]] == ["area", "balance", "model"]
+    assert cl["param_values"][0]["tofi_code"] == "_FV_1124"
+    cat = {a["code"]: a["classification"] for a in aa.get("/catalog", headers=H("viewer")).json()}
+    assert cat["bayes_cohort"] == {"model_type": "stochastic", "stock_methods": ["model"]}
+    assert cat["stock_by_catch"]["stock_methods"] == ["area", "balance"]
+    body = {"model_type": "deterministic", "stock_methods": ["balance"]}
+    assert aa.put("/catalog/pdu_by_age/classification", headers=H("ichthyologist"), json=body).status_code == 403
+    assert aa.put("/catalog/pdu_by_age/classification", headers=H("mathematician"),
+                  json={"model_type": "x", "stock_methods": ["kushnarenko"]}).status_code == 422
+    assert aa.put("/catalog/pdu_by_age/classification", headers=H("mathematician"), json=body).status_code == 200
+    assert aa.get("/catalog/pdu_by_age", headers=H()).json()["classification"] == body
+    p = aa.get("/profiles/bayes_cohort/zhaysan", headers=H("viewer")).json()
+    kinds = {r["key"]: r.get("value_kind") for r in p["schema"]}
+    assert kinds["beta_mu"] == "mu" and kinds["beta_sigma"] == "sigma"
+    assert kinds["beta_lower"] == "lower" and kinds["x0_hi"] == "upper" and kinds["s_clip_lo"] == "lower"
+    assert kinds.get("draws") is None
