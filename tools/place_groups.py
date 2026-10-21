@@ -10,8 +10,10 @@ suggest — читает справочник «Места лова» и чис�
 В столбце «Решение» ихтиолог оставляет «объединить» или пишет «отдельно», при необходимости правит
 «Название места». Группы, которые нужно проверить особенно, помечены в «Примечании».
 
-apply — для каждой группы с решением «объединить»: первая запись группы получает название из таблицы,
-остальные написания становятся её «другими написаниями», остальные записи удаляются (история сохраняется).
+apply — для каждой группы с решением «объединить» (или каждой группы из services/data_admin/app/seed/place_groups.json —
+написания, уже подтверждённые заказчиком): записи водоёма с написаниями группы сводятся в одну — название из таблицы,
+остальные написания становятся «другими написаниями», лишние записи удаляются (история сохраняется).
+Записи ищутся по водоёму и написанию, поэтому таблицу можно применить и на другой установке.
 Загруженные данные не меняются: новые загрузки и правки приводят написания к названию места.
 """
 from __future__ import annotations
@@ -19,6 +21,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import getpass
+import json
 import re
 import sys
 from collections import Counter, defaultdict
@@ -201,40 +204,77 @@ def suggest(a):
     print(f"{a.out}: групп {gno}, мест без пары {single.max_row - 1}")
 
 
-def apply(a):
-    c = client(a)
-    ws = load_workbook(a.file)["Объединение"]
+def load_groups(path: str, wb_by_name: dict[str, str]) -> list[tuple[str, str, list[str]]]:
+    """[(код водоёма, название места, все написания)] из таблицы ихтиолога (.xlsx) или из
+    services/data_admin/app/seed/place_groups.json (подтверждённые группы поставки)."""
+    out = []
+    if path.endswith(".json"):
+        for wb, gs in json.loads(open(path, encoding="utf-8").read()).items():
+            if wb.startswith("_"):
+                continue
+            out += [(wb, g["name"], [g["name"], *g["spellings"]]) for g in gs]
+        return out
+    ws = load_workbook(path)["Объединение"]
     groups = defaultdict(list)
     for r in ws.iter_rows(min_row=2, values_only=True):
-        if r[1] is None or not r[8]:
-            continue
-        groups[int(r[1])].append(r)
-    recs = {r["id"]: r for r in c.get("/data-model/entities/fishing_places/records").raise_for_status().json()}
-    done = 0
-    for gno, rows in sorted(groups.items()):
+        if r[1] is not None and r[3]:
+            groups[int(r[1])].append(r)
+    for _, rows in sorted(groups.items()):
         head = rows[0]
         if str(head[6] or "").strip().lower() != "объединить" or len(rows) < 2:
             continue
-        main = recs.get(head[8])
-        others = [recs.get(r[8]) for r in rows[1:] if recs.get(r[8])]
-        if not main or not others:
-            continue
-        name = str(head[2] or main["values"]["name_ru"]).strip()
         spell = []
-        for r in [main, *others]:
+        for r in rows:
+            spell += [r[3], *[x.strip() for x in str(r[4] or "").split(";") if x.strip()]]
+        out.append((wb_by_name.get(head[0], head[0]), str(head[2] or head[3]).strip(), spell))
+    return out
+
+
+def apply(a):
+    c = client(a)
+    wbs = {r["values"]["name_ru"]: r["values"]["code"]
+           for r in c.get("/data-model/entities/water_bodies/records").raise_for_status().json()}
+    recs = c.get("/data-model/entities/fishing_places/records").raise_for_status().json()
+    done = 0
+    for wb, name, spellings in load_groups(a.file, wbs):
+        keys = {key(x) for x in spellings} | {key(name)}
+        hit = []
+        for r in recs:
             v = r["values"]
-            spell += [v["name_ru"], *[x for x in str(v.get("aliases") or "").splitlines() if x.strip()]]
-        aliases = [s for s in dict.fromkeys(spell) if s != name]
+            if r.get("deleted") or v.get("water_body") != wb:
+                continue
+            own = [v["name_ru"], *[x for x in str(v.get("aliases") or "").splitlines() if x.strip()]]
+            if {key(x) for x in own} & keys:
+                hit.append((r, own))
+        if not hit:
+            continue
+        hit.sort(key=lambda h: key(h[0]["values"]["name_ru"]) != key(name))     # запись с названием группы — первой
+        main = hit[0][0]
+        spell = [x for _, own in hit for x in own] + list(spellings)
+        seen, aliases = {key(name)}, []
+        for x in (s.strip() for s in spell):            # одно написание на ключ (без повторов регистра и пробелов)
+            if x and key(x) not in seen:
+                seen.add(key(x))
+                aliases.append(x)
         vals = dict(main["values"], name_ru=name, aliases="\n".join(aliases))
-        print(f"группа {gno}: «{name}» ← {', '.join(aliases)}")
+        if len(hit) == 1 and vals == main["values"]:
+            continue
+        print(f"{wb}: «{name}» ← {', '.join(aliases)}")
         if a.dry_run:
             continue
         c.put(f"/data-model/entities/fishing_places/records/{main['id']}",
-              json={"values": vals, "comment": "объединение написаний (таблица ихтиолога)"}).raise_for_status()
-        for o in others:
-            c.delete(f"/data-model/entities/fishing_places/records/{o['id']}").raise_for_status()
+              json={"values": vals, "comment": "объединение написаний (подтверждено ихтиологом)"}).raise_for_status()
+        for r, _ in hit[1:]:
+            c.delete(f"/data-model/entities/fishing_places/records/{r['id']}").raise_for_status()
+            r["deleted"] = True
+        main["values"] = vals
         done += 1
     print(f"объединено групп: {done}" + (" (проверка без изменений)" if a.dry_run else ""))
+
+
+def key(s) -> str:
+    """Как в сервисе данных: без регистра, пробелов, точек, дефисов и кавычек; ё = е."""
+    return re.sub(r"[\s.\-–—,«»\"'()]+", "", str(s or "").lower().replace("ё", "е"))
 
 
 def main():

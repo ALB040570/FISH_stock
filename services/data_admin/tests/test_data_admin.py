@@ -125,17 +125,11 @@ def test_catch_types_and_places(data_stack):
     assert da.post("/fishing-places/collect", headers=H("viewer")).status_code == 403
     r = da.post("/fishing-places/collect", headers=H("mathematician")).json()
     places = {p["name_ru"]: p for p in r["places"]}
-    assert places["м. Волчий"]["aliases"] == ["м.Волчий"]           # отличие только пробелом — одно место
-    assert "Тополев мыс" in places and "м. Тополев" in places      # разные написания — до подтверждения раздельно
+    assert places["м. Волчий"]["aliases"] == []                      # «м.Волчий» — то же написание без пробела
+    # подтверждённые заказчиком написания (seed/place_groups.json) — одно место
+    assert "Тополев мыс" not in places and {"Тополев мыс", "м.Топалев", "Тополев м."} <= set(places["м. Тополев"]["aliases"])
     assert all(p["water_body"] == "zhaysan" for p in r["places"])
     assert da.post("/fishing-places/collect", headers=H("mathematician")).json()["created"] == 0
-    # подтверждённое другое написание: «Тополев мыс» → «м. Тополев»
-    recs = dm.get("/entities/fishing_places/records", headers=H()).json()
-    top = next(x for x in recs if x["values"]["name_ru"] == "м. Тополев")
-    dup = next(x for x in recs if x["values"]["name_ru"] == "Тополев мыс")
-    dm.delete(f"/entities/fishing_places/records/{dup['id']}", headers=H())
-    v = dict(top["values"], aliases=(top["values"]["aliases"] or "") + "\nТополев мыс")
-    assert dm.put(f"/entities/fishing_places/records/{top['id']}", headers=H(), json={"values": v}).status_code == 200
     j = up(da, "catches", content, mode="replace").json()
     assert j["ok"] and not [w for w in j["warnings"] if w["field"] == "place"]
     rows = da.get(f"/datasets/{ds}/data", headers=H()).json()["table"]["rows"]

@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import json
 from collections import Counter
+from pathlib import Path
 
 import httpx
 from fastapi import Depends, File, Form, Query, UploadFile
@@ -392,11 +393,25 @@ def edit(ds_id: str, body: EditIn, user: User = Depends(require("data.edit"))):
 
 
 # ------------------------------------------------------------------ места лова
+PLACE_GROUPS = json.loads((Path(__file__).parent / "seed" / "place_groups.json").read_text(encoding="utf-8"))
+
+
+def _confirmed_groups(water_body: str) -> dict[str, tuple[str, dict]]:
+    """{ключ написания: (ключ группы, группа)} — подтверждённые заказчиком написания мест водоёма."""
+    out = {}
+    for g in PLACE_GROUPS.get(water_body, []):
+        gk = tables.place_key(g["name"])
+        for n in [g["name"], *g["spellings"]]:
+            out[tables.place_key(n)] = (gk, g)
+    return out
+
+
 @app.post("/fishing-places/collect", tags=["места лова"])
 def collect_places(water_body: str | None = None, user: User = Depends(require("dict.edit"))):
     """Добавить в справочник «Места лова» места из текущих версий загруженных уловов, которых там ещё нет.
-    Написания, отличающиеся только регистром, пробелами, точками и дефисами, становятся одним местом:
-    название — самое частое написание, остальные — «другие написания»."""
+    Написания, отличающиеся только регистром, пробелами, точками и дефисами, и написания из групп, подтверждённых
+    заказчиком (seed/place_groups.json), становятся одним местом: название — название группы или самое частое
+    написание, остальные — «другие написания»."""
     created = []
     for d in datasets.list():
         if d.get("deleted") or not d.get("current_version") or (water_body and d["water_body"] != water_body):
@@ -407,6 +422,7 @@ def collect_places(water_body: str | None = None, user: User = Depends(require("
                 continue
             known = _place_maps(dt, d["water_body"]).get(c["code"], {})
             table, _ = _table(d["id"])
+            confirmed = _confirmed_groups(d["water_body"])
             groups: dict[str, Counter] = {}
             for r in table["rows"]:
                 v = r.get(c["code"])
@@ -415,15 +431,28 @@ def collect_places(water_body: str | None = None, user: User = Depends(require("
                 k = tables.place_key(v)
                 if k in known:
                     continue
+                k = confirmed.get(k, (k, None))[0]
                 groups.setdefault(k, Counter())[str(v).strip()] += 1
             for k, cnt in sorted(groups.items(), key=lambda x: -sum(x[1].values())):
                 names = [n for n, _ in cnt.most_common()]
-                vals = {"water_body": d["water_body"], "name_ru": names[0]}
-                if len(names) > 1:
-                    vals["aliases"] = "\n".join(names[1:])
+                grp = next((g for kk, g in confirmed.values() if kk == k), None)
+                if grp:                          # подтверждённая группа: название и все её написания
+                    main = grp["name"]
+                    names = [main, *grp["spellings"], *names]
+                else:
+                    main = names[0]
+                seen, aliases = {tables.place_key(main)}, []
+                for n in names:                  # одно написание на ключ
+                    if tables.place_key(n) not in seen:
+                        seen.add(tables.place_key(n))
+                        aliases.append(n)
+                vals = {"water_body": d["water_body"], "name_ru": main}
+                if aliases:
+                    vals["aliases"] = "\n".join(aliases)
                 DICT.create_record(c["places_entity"], vals)
-                known[k] = names[0]
-                created.append({"water_body": d["water_body"], "name_ru": names[0], "aliases": names[1:],
+                for n in [main, *aliases]:
+                    known[tables.place_key(n)] = main
+                created.append({"water_body": d["water_body"], "name_ru": main, "aliases": aliases,
                                 "rows": sum(cnt.values())})
     audit(user, "dict.places_collect", water_body or "*", {"created": len(created)})
     return {"created": len(created), "places": created}
