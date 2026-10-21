@@ -164,8 +164,16 @@ def test_tofi_upgrade_old_install(tmp_path, monkeypatch):
     dt = mod.dtypes.get("catches")
     mod.dtypes.update("catches", {"columns": [dict(c, type="enum", enum=[{"value": "научный"}], places_entity=None)
                                               if c["code"] == "catch_type" else c for c in dt["columns"]]}, actor="t")
+    g = mod.entities.get("gears")
+    mod.entities.update("gears", {"fields": [dict(f, enum=[{"value": "seine", "title_ru": "Невод (метод площадей)"},
+                                                           {"value": "net", "title_ru": "Сеть (балансовый метод)"}])
+                                             if f["code"] == "kind" else f for f in g["fields"]]}, actor="t")
     n0 = mod.entities.get("water_bodies")["current_version"]
     mod._seed()
+    kind = next(f for f in mod.entities.get("gears")["fields"] if f["code"] == "kind")
+    assert kind["enum"][0]["title_ru"] == "Невод — активное орудие (метод площадей)"
+    area = next(c for c in mod.dtypes.get("catches")["columns"] if c["code"] == "area_ha")
+    assert area["only_for_gear_kind"] == "seine"
     wf = [f["code"] for f in mod.entities.get("water_bodies")["fields"]]
     assert {"origin", "status", "fishery_kinds"} <= set(wf) and wf[-1] == "my_field"
     assert next(f for f in mod.entities.get("water_bodies")["fields"] if f["code"] == "type")["type"] == "ref"

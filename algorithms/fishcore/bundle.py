@@ -96,7 +96,8 @@ class Bundle:
             "Instrument": [GEAR_KIND_RU.get(self.gear_kinds.get(r["gear"], r["gear"]), r["gear"]) for r in rows],
             "Instrument_size": [_num(r.get("gear_size_m")) for r in rows],
             "CatchType": [r.get("catch_type") for r in rows],
-            "Area": [_f(r.get("area_ha")) for r in rows],
+            # площадь облова у сети не указывается (пусто); в формате исходного ядра — 0 (используется только для невода)
+            "Area": [0.0 if r.get("area_ha") is None else _f(r.get("area_ha")) for r in rows],
         }
         for c in present:
             data[self.ru(c)] = [_f(r.get(c)) for r in rows]

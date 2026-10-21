@@ -30,6 +30,8 @@ def run(ctx):
     for code, title, cols, rows in views.stock_tables(res):
         ctx.add_table(code, title, cols, rows)
     ctx.add_table(*views.catchability_tables(net_c.cube_frame(), "net_coefficients", "Коэффициенты уловистости сети c"))
+    for code, title, cols, rows, desc in views.catch_by_age_tables(res):     # формула (20) — для мониторинга
+        ctx.add_table(code, title, cols, rows, desc)
     ctx.add_frame("net_params", "Параметры парабол сети", net_c.params_frame())
     ctx.add_frame("totals", "Годовой запас (итоги)", res.totals_frame())
     ctx.set_payload({"net": views.net_payload(res, net_c, props), "stock": views.stock_payload(res)})

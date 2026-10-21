@@ -13,6 +13,7 @@ from collections import OrderedDict
 
 import httpx
 from fastapi import Depends
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from fishcommon.app import create_app
@@ -20,15 +21,16 @@ from fishcommon.auth import User, require
 from fishcommon.errors import AppError, not_found
 from fishcommon.storage import Collection, dumps
 
-from . import templates
+from . import export, insights, kk, templates
 
 app = create_app("dashboards", "Администрирование дашбордов",
                  "Шаблоны мониторинга, конструктор дашбордов, данные виджетов, доступ.")
 ST = app.state.settings
 ROOT = ST.service_dir()
 boards = Collection(ROOT, "dashboards")
-WIDGET_TYPES = ("kpi", "line", "bar", "table", "band", "text", "special")
-SOURCE_KINDS = ("dataset", "run", "payload", "status")
+WIDGET_TYPES = ("kpi", "line", "bar", "table", "band", "text", "special", "view")
+SOURCE_KINDS = ("dataset", "run", "payload", "status", "insight")
+settings = Collection(ROOT, "settings")
 
 
 class Svc:
@@ -337,8 +339,10 @@ def widget_data(body: DataIn, user: User = Depends(require("dashboard.view"))):
     species = flt.get("species")
     wbs = flt.get("water_bodies") if src.get("multi") else None
     wbs = wbs or ([flt.get("water_body")] if flt.get("water_body") else [])
-    if kind in ("dataset", "run", "payload") and not wbs:
+    if kind in ("dataset", "run", "payload", "insight") and not wbs:
         return {"empty": True, "reason": "no_water_body", "message": "Выберите водоём"}  # noqa
+    if kind == "insight":
+        return _insight(src, flt, opt, wbs[0])
     if kind == "status":
         wb = wbs[0]
         data = SVC["data_admin"].get("/water-bodies/status") or {}
@@ -404,3 +408,171 @@ def _empty_msg(meta):
     return {"no_run": "Для водоёма ещё нет выполненного расчёта",
             "no_step": "В запуске для мониторинга нет этого шага расчёта",
             "no_table": "В результатах шага нет этой таблицы"}.get(r, "Нет данных")
+
+
+# ================================================================ представления исходных данных
+def _rules() -> dict:
+    d = settings.get("signal_rules")
+    return {r["code"]: r for r in (d or {}).get("rules", [])}
+
+
+def _all_wbs(lang):
+    recs = SVC["data_model"].get("/entities/water_bodies/records") or []
+    names = {r["values"]["code"]: (lang == "kk" and r["values"].get("name_kk")) or r["values"]["name_ru"] for r in recs}
+    st = SVC["data_admin"].get("/water-bodies/status") or {}
+    return [(c, names.get(c, c), insights.Data(c, SVC, lang)) for c in st if "species_props" in (st[c].get("datasets") or {})]
+
+
+def _insight(src, flt, opt, wb):
+    view = src.get("view")
+    fn = insights.VIEWS.get(view)
+    if fn is None:
+        raise AppError("widget.view", f"Неизвестное представление «{view}»", 400)
+    lang = flt.get("lang") or opt.get("lang") or "ru"
+    D = insights.Data(wb, SVC, lang)
+    o = {**{k: v for k, v in opt.items() if k not in ("raw",)}, "species": flt.get("species") or opt.get("species")}
+    if flt.get("year"):
+        o["year"] = flt["year"]
+    try:
+        if view in insights.NEEDS_RULES:
+            res = fn(D, o, _rules())
+        elif view == "params_compare":
+            res = fn(D, o, _all_wbs(lang))
+        else:
+            res = fn(D, o)
+    except insights.NoData as e:
+        return {"empty": True, "message": kk.tr(e.message) if lang == "kk" else e.message}
+    if lang == "kk":
+        res = kk.translate(res)
+    cmp = flt.get("compare") or []
+    if len(cmp) == 2 and all(cmp):
+        res = insights.compare_years(res, int(cmp[0]), int(cmp[1]))
+    return {**res, "view": view}
+
+
+class DrillIn(BaseModel):
+    source: dict
+    filters: dict = {}
+    options: dict = {}
+    where: dict = {}
+    dataset_type: str | None = None
+
+
+@app.post("/widgets/drill", tags=["данные виджетов"])
+def widget_drill(body: DrillIn, user: User = Depends(require("dashboard.view"))):
+    """Строки исходных данных, из которых сложилась точка, столбец или клетка представления."""
+    wb = body.filters.get("water_body")
+    if not wb:
+        raise AppError("widget.wb", "Выберите водоём", 400)
+    dtype = body.dataset_type or body.where.pop("_dataset_type", None) or "catches"
+    D = insights.Data(wb, SVC, body.filters.get("lang") or "ru")
+    o = {**body.options, "species": body.filters.get("species")}
+    lang = body.filters.get("lang") or "ru"
+    try:
+        res = insights.drill_rows(D, dtype, body.where, o)
+        return kk.translate(res) if lang == "kk" else res
+    except insights.NoData as e:
+        return {"empty": True, "message": kk.tr(e.message) if lang == "kk" else e.message, "columns": [], "rows": [], "total": 0}
+
+
+class ExportIn(BaseModel):
+    title: str
+    subtitle: str = ""
+    context: str = ""
+    columns: list[dict] = []
+    rows: list[dict] = []
+    sources: list[dict] = []
+    notes: list[str] = []
+    filter_label: str = ""
+    image: str | None = None
+
+
+def _fname(s):
+    return "".join(ch if ch.isalnum() else "_" for ch in s)[:60] or "widget"
+
+
+@app.post("/widgets/export.xlsx", tags=["выгрузка"])
+def export_xlsx(body: ExportIn, user: User = Depends(require("dashboard.view"))):
+    content = export.to_xlsx(body.model_dump())
+    from urllib.parse import quote
+    return Response(content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(_fname(body.title))}.xlsx"})
+
+
+@app.post("/widgets/export.pdf", tags=["выгрузка"])
+def export_pdf(body: ExportIn, user: User = Depends(require("dashboard.view"))):
+    content = export.to_pdf(body.title, body.context, [body.model_dump()])
+    from urllib.parse import quote
+    return Response(content, media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(_fname(body.title))}.pdf"})
+
+
+class ReportIn(BaseModel):
+    title: str
+    context: str = ""
+    widgets: list[ExportIn] = []
+
+
+@app.post("/reports/section.pdf", tags=["выгрузка"])
+def section_pdf(body: ReportIn, user: User = Depends(require("dashboard.view"))):
+    """Отчёт раздела: все виджеты раздела одним PDF (рисунки и таблицы такие, как на экране)."""
+    content = export.to_pdf(body.title, body.context, [w.model_dump() for w in body.widgets])
+    audit(user, "dashboard.report", "section", {"title": body.title, "widgets": len(body.widgets)})
+    from urllib.parse import quote
+    return Response(content, media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(_fname(body.title))}.pdf"})
+
+
+# ================================================================ правила замечаний
+@app.get("/signal-rules", tags=["правила замечаний"])
+def get_signal_rules(user: User = Depends(require("dashboard.view"))):
+    """Правила «На что обратить внимание»: описание, пороги (по умолчанию и текущие), включено ли."""
+    cur = _rules()
+    out = []
+    for r in insights.RULES:
+        en, p = insights.rule_params(cur, r["code"])
+        out.append({**r, "enabled": en, "values": p})
+    d = settings.get("signal_rules") or {}
+    return {"rules": out, "updated_at": d.get("updated_at"), "updated_by": d.get("updated_by_name"),
+            "can_edit": user.can("dashboard.edit")}
+
+
+class RulesIn(BaseModel):
+    rules: list[dict]
+    comment: str = ""
+
+
+@app.put("/signal-rules", tags=["правила замечаний"])
+def put_signal_rules(body: RulesIn, user: User = Depends(require("dashboard.edit"))):
+    errs, clean = [], []
+    for r in body.rules:
+        d = insights.RULES_BY.get(r.get("code"))
+        if not d:
+            errs.append(f"Неизвестное правило «{r.get('code')}»")
+            continue
+        vals = {}
+        for k, spec in d["params"].items():
+            v = (r.get("values") or r.get("params") or {}).get(k, spec["default"])
+            try:
+                v = float(v)
+            except (TypeError, ValueError):
+                errs.append(f"«{d['title_ru']}»: «{spec['title']}» — нужно число")
+                continue
+            if v < spec.get("min", float("-inf")) or v > spec.get("max", float("inf")):
+                errs.append(f"«{d['title_ru']}»: «{spec['title']}» — от {spec.get('min')} до {spec.get('max')}")
+            vals[k] = int(v) if v == int(v) else v
+        clean.append({"code": d["code"], "enabled": bool(r.get("enabled", True)), "params": vals})
+    if errs:
+        raise AppError("rules.invalid", "Правила заданы с ошибками", 422, errs)
+    if settings.exists("signal_rules"):
+        settings.update("signal_rules", {"rules": clean, "updated_by_name": user.name}, actor=user.id)
+    else:
+        settings.create({"rules": clean, "updated_by_name": user.name}, actor=user.id, obj_id="signal_rules")
+    settings.add_version("signal_rules", {"rules.json": dumps(clean).encode()}, {"comment": body.comment}, user.id)
+    audit(user, "dashboard.signal_rules", "signal_rules", {"rules": len(clean)})
+    return get_signal_rules(user)
+
+
+@app.get("/signal-rules/versions", tags=["правила замечаний"])
+def signal_rules_versions(user: User = Depends(require("dashboard.view"))):
+    return list(reversed(settings.list_versions("signal_rules"))) if settings.exists("signal_rules") else []

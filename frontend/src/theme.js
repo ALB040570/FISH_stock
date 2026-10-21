@@ -72,3 +72,12 @@ export const ECHARTS_THEME = {
     nameTextStyle: { color: CHART.label }, splitLine: { lineStyle: { color: CHART.grid } } },
   dataZoom: { borderColor: CSS.line, fillerColor: 'rgba(14,94,111,.12)', handleStyle: { color: CSS.primary } },
 }
+
+// Тепловые карты: последовательная шкала (число ловов, доли) и расходящаяся (отклонения ±, синий — ниже, оранжевый — выше)
+export const HEAT = {
+  seq: ['#F2F8F8', '#BFE0E2', '#6FC2C6', '#14919B', '#0E5E6F', '#073A45'],
+  div: ['#2B5FA8', '#8DB2E0', '#F5F6F4', '#F2B27E', '#C25420'],
+  label: CSS.text, labelOnDark: '#FFFFFF',
+}
+// Замечания «На что обратить внимание»
+export const SIGNAL = { error: CSS.danger, warning: CSS.warning, info: CSS.info }

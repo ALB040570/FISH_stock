@@ -83,3 +83,20 @@ export async function download(service, path, query, filename) {
   document.body.appendChild(a); a.click(); a.remove()
   setTimeout(() => URL.revokeObjectURL(a.href), 2000)
 }
+
+// Скачивание файла, который сервис строит по присланному содержимому (выгрузка виджета, отчёт раздела)
+export async function downloadPost(service, path, body, filename) {
+  const r = await request(service, path, { method: 'POST', body, raw: true })
+  const blob = await r.blob()
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+
+export function downloadDataUrl(url, filename) {
+  const a = document.createElement('a')
+  a.href = url; a.download = filename
+  document.body.appendChild(a); a.click(); a.remove()
+}

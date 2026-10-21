@@ -226,14 +226,16 @@ def read_excel(content: bytes, dtype: dict, species: list[dict]) -> tuple[list[s
 
 # ------------------------------------------------------------------ проверка
 def validate_rows(dtype: dict, species_codes: list[str], species: list[dict], raw_rows: list[tuple[int, dict]],
-                  ref_maps: dict[str, dict], place_maps: dict[str, dict] | None = None
-                  ) -> tuple[list[dict], list[dict], list[dict]]:
+                  ref_maps: dict[str, dict], place_maps: dict[str, dict] | None = None,
+                  gear_kinds: dict[str, str] | None = None) -> tuple[list[dict], list[dict], list[dict]]:
     """Проверка строк. Возвращает (чистые строки, ошибки, предупреждения).
     place_maps: {код столбца: {ключ написания: название места}} — места лова водоёма; известное написание
     приводится к названию места, неизвестное оставляется как есть с предупреждением."""
     place_maps = place_maps or {}
     unknown_places: dict[tuple, list[int]] = {}
     cols = dtype["columns"]
+    gear_rules = [c for c in cols if c.get("only_for_gear_kind")] if gear_kinds is not None else []
+    gear_cleared: dict[str, list[int]] = {}
     sp_by_code = {s["code"]: s for s in species}
     sp_fields = [species_value_field(dtype, sp_by_code.get(c, {"code": c})) for c in species_codes]
     clean, errors, warnings = [], [], []
@@ -253,6 +255,17 @@ def validate_rows(dtype: dict, species_codes: list[str], species: list[dict], ra
                 else:
                     unknown_places.setdefault((c["code"], c.get("title_ru"), v), []).append(rn)
             out[c["code"]] = v
+        for c in gear_rules:        # площадь облова: только для невода (активное орудие)
+            kind = gear_kinds.get(out.get("gear"))
+            v = out.get(c["code"])
+            if kind == c["only_for_gear_kind"]:
+                if v is None or v <= 0:
+                    errors.append({"row": rn, "column": c.get("title_ru"), "field": c["code"],
+                                   "message": f"«{c.get('title_ru')}»: для невода (активное орудие) обязательна и больше нуля"})
+            elif kind and v is not None:
+                out[c["code"]] = None
+                if v != 0:
+                    gear_cleared.setdefault(c["code"], []).append(rn)
         for f in sp_fields:
             v, err = coerce(f, rec.get(f["code"]), None)
             if err:
@@ -288,6 +301,11 @@ def validate_rows(dtype: dict, species_codes: list[str], species: list[dict], ra
                              "message": "Для этого водоёма в справочнике «Места лова» ещё нет мест — их можно добавить "
                                         "из загруженных уловов (Структура данных → Места лова)"})
             unknown_places = {k: x for k, x in unknown_places.items() if k[0] != code}
+    for code, rns in gear_cleared.items():
+        title = next(c.get("title_ru") for c in cols if c["code"] == code)
+        warnings.append({"row": rns[0], "column": title, "field": code,
+                         "message": f"«{title}» указана для сети (пассивное орудие) — не учитывается и не сохраняется "
+                                    f"(строк: {len(rns)})"})
     for (code, title, v), rns in unknown_places.items():
         more = f" (строк: {len(rns)})" if len(rns) > 1 else ""
         warnings.append({"row": rns[0], "column": title, "field": code,

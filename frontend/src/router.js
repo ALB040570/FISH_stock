@@ -26,6 +26,7 @@ const routes = [
   { path: '/dashboards', component: L('Dashboards') },
   { path: '/dashboards/:id', component: L('DashboardView') },
   { path: '/design/dashboards', component: L('Dashboards'), meta: { design: true, perm: 'dashboard.edit' } },
+  { path: '/design/signal-rules', component: L('SignalRules'), meta: { perm: 'dashboard.edit' } },
   { path: '/design/dashboards/:id', component: L('DashboardView'), meta: { design: true, perm: 'dashboard.edit' } },
   { path: '/users', component: L('Users'), meta: { perm: 'users.manage' } },
   { path: '/audit', component: L('Audit'), meta: { perm: 'audit.view' } },

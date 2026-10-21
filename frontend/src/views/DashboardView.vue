@@ -39,17 +39,33 @@
           <el-checkbox v-model="multiFlag">{{ $t('dash.water_bodies') }}</el-checkbox>
           <StateBlock :error="saveErr" />
         </div>
-        <DashboardBoard v-model="tab" :board="b" :filters="filters" :species="spNames" :editing="editing" @edit-widget="editW" @move="move" @remove="remove" />
+        <DashboardBoard v-model="tab" :board="b" :filters="filters" :wb-name="spNames[f.water_body]" :species="spNames" :editing="editing" @edit-widget="editW" @move="move" @remove="remove" />
       </template>
     </StateBlock>
     <el-dialog v-model="wdlg" :title="$t('dash.widget')" width="760px">
       <el-form v-if="w" label-width="170px">
         <el-form-item :label="$t('common.name')"><el-input v-model="w.title_ru" /></el-form-item>
         <el-form-item :label="$t('common.type')">
-          <el-select v-model="w.type"><el-option v-for="t in ['kpi', 'line', 'bar', 'table', 'text', 'special']" :key="t" :label="$t('dash.w_' + t)" :value="t" /></el-select>
+          <el-select v-model="w.type" @change="onType"><el-option v-for="t in ['view', 'kpi', 'line', 'bar', 'table', 'text', 'special']" :key="t" :label="$t('dash.w_' + t)" :value="t" /></el-select>
         </el-form-item>
+        <el-form-item :label="$t('wv.subtitle_ru')"><el-input v-model="w.subtitle_ru" /></el-form-item>
+        <el-form-item :label="$t('wv.subtitle_kk')"><el-input v-model="w.subtitle_kk" /></el-form-item>
         <el-form-item v-if="b.tabs?.length" :label="$t('dash.tab')"><el-select v-model="w.tab"><el-option v-for="t in b.tabs" :key="t.code" :label="t.title_ru" :value="t.code" /></el-select></el-form-item>
-        <template v-if="w.type === 'text'"><el-form-item label="Текст"><el-input v-model="w.options.text" type="textarea" :rows="5" /></el-form-item></template>
+        <el-form-item v-if="sectionsOf(w.tab).length" :label="$t('wv.section')">
+          <el-select v-model="w.section"><el-option v-for="s in sectionsOf(w.tab)" :key="s.code" :label="s.title_ru" :value="s.code" /></el-select>
+        </el-form-item>
+        <template v-if="w.type === 'view'">
+          <el-form-item :label="$t('wv.view')">
+            <el-select v-model="w.source.view" filterable style="width:360px"><el-option v-for="(v, k) in VIEWS" :key="k" :label="v.ru" :value="k" /></el-select>
+          </el-form-item>
+          <el-form-item v-if="['cpue', 'type_compare'].includes(w.source.view)" :label="$t('dash.gear_kind')">
+            <el-radio-group v-model="w.options.gear_kind"><el-radio value="net">{{ $t('dash.gk_net') }}</el-radio><el-radio value="seine">{{ $t('dash.gk_seine') }}</el-radio></el-radio-group>
+          </el-form-item>
+          <el-form-item :label="$t('dash.catch_type')">
+            <el-radio-group v-model="w.options.catch_type"><el-radio value="scientific">{{ $t('dash.ct_scientific') }}</el-radio><el-radio value="commercial">{{ $t('dash.ct_commercial') }}</el-radio><el-radio value="all">{{ $t('dash.ct_all') }}</el-radio></el-radio-group>
+          </el-form-item>
+        </template>
+        <template v-else-if="w.type === 'text'"><el-form-item label="Текст"><el-input v-model="w.options.text" type="textarea" :rows="5" /></el-form-item></template>
         <template v-else>
           <el-form-item :label="$t('dash.source')">
             <el-radio-group v-model="w.source.kind">
@@ -96,6 +112,7 @@ import { useAuth } from '../store/auth'
 import StateBlock from '../components/StateBlock.vue'
 import WaterBodySelect from '../components/WaterBodySelect.vue'
 import DashboardBoard from '../widgets/DashboardBoard.vue'
+import { VIEWS } from '../widgets/views'
 const SPECIALS = { data_summary: 'Сводка данных', seine_curves: 'Уловистость невода', net_curves: 'Уловистость сети', bayes_band: 'Численность (модель)',
   pdu_summary: 'ПДУ по видам', pdu_breakdown: 'Раскладка ПДУ', forecast_scenarios: 'Прогноз по сценариям' }
 const auth = useAuth()
@@ -145,6 +162,16 @@ function editW(x) {
   w.value.options ||= {}
   filterText.value = w.value.options.filter ? JSON.stringify(w.value.options.filter) : ''
   wdlg.value = true
+}
+const sectionsOf = (tabCode) => (b.value?.tabs || []).find((t) => t.code === tabCode)?.sections || []
+function onType(tp) {
+  if (tp === 'view') {
+    w.value.source = { kind: 'insight', view: w.value.source?.view || 'cpue' }
+    w.value.options = { gear_kind: 'net', catch_type: 'scientific' }
+  } else if (w.value.source?.kind === 'insight') {
+    w.value.source = { kind: 'dataset', dataset_type: 'npc_pdu' }
+    w.value.options = { x: 'year', y: '$species', agg: 'sum' }
+  }
 }
 function applyW() {
   try { w.value.options.filter = filterText.value ? JSON.parse(filterText.value) : undefined } catch (e) { ElMessage.error('Фильтр — неверный JSON'); return }

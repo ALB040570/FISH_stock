@@ -28,7 +28,7 @@
           <router-link :to="'/runs/' + runInfo.run.id">{{ runInfo.run.calculation_title }}</router-link>
           <span class="muted"> · {{ new Date(runInfo.run.finished_at).toLocaleString('ru-RU') }}</span>
         </el-alert>
-        <DashboardBoard :board="board" :filters="filters" :species="spNames" />
+        <DashboardBoard :board="board" :filters="filters" :species="spNames" :wb-name="wbRec ? tr(wbRec, 'name') : ''" />
       </template>
       <div v-else-if="!wb" class="card state">{{ $t('monitoring.choose') }}</div>
     </StateBlock>

@@ -174,3 +174,48 @@ def test_catch_types_migration(data_stack):
     da.post(f"/datasets/{ds}/restore/2", headers=H())
     rows = da.get(f"/datasets/{ds}/data", headers=H()).json()["table"]["rows"]
     assert {r["catch_type"] for r in rows} == {"scientific", "commercial"}
+
+
+def test_area_only_for_seine(data_stack):
+    """Площадь облова: у невода (активное орудие) обязательна и больше нуля, у сети не указывается."""
+    dm, da, mod = data_stack
+    wb = load_workbook(SAMPLES / "catches.xlsx"); ws = wb["Данные"]
+    head = [c.value for c in ws[1]]
+    ig, ia = head.index("Орудие лова *") + 1, head.index("Обловленная площадь, га") + 1
+    seine = next(r for r in range(2, ws.max_row + 1) if ws.cell(r, ig).value == "невод")
+    nets = [r for r in range(2, ws.max_row + 1) if ws.cell(r, ig).value == "сеть"][:2]
+    ws.cell(seine, ia).value = None
+    ws.cell(nets[0], ia).value = 3.5
+    buf = io.BytesIO(); wb.save(buf)
+    j = up(da, "catches", buf.getvalue(), dry_run="true").json()
+    assert not j["ok"] and any(e["row"] == seine and "для невода" in e["message"] for e in j["errors"])
+    ws.cell(seine, ia).value = 2.0
+    buf = io.BytesIO(); wb.save(buf)
+    j = up(da, "catches", buf.getvalue()).json()
+    assert j["ok"] and any("для сети" in w["message"] and "строк: 1" in w["message"] for w in j["warnings"])
+    rows = da.get(f"/datasets/{j['dataset']['id']}/data", headers=H()).json()["table"]["rows"]
+    assert all(r["area_ha"] is None for r in rows if r["gear"] == "net")
+    assert all(r["area_ha"] and r["area_ha"] > 0 for r in rows if r["gear"] == "seine")
+    kind = next(f for f in dm.get("/entities/gears", headers=H()).json()["fields"] if f["code"] == "kind")
+    assert "активное" in next(e["title_ru"] for e in kind["enum"] if e["value"] == "seine")
+
+
+def test_net_area_migration(data_stack):
+    import json as _json
+    from fishcommon.storage import dumps
+    dm, da, mod = data_stack
+    j = up(da, "catches", (SAMPLES / "catches.xlsx").read_bytes()).json()
+    ds = j["dataset"]["id"]
+    tab = da.get(f"/datasets/{ds}/data", headers=H()).json()["table"]
+    for r in tab["rows"]:
+        if r["gear"] == "net":
+            r["area_ha"] = 0
+    mod.datasets.add_version(ds, {"data.json": dumps(tab).encode()}, {"comment": "как до 21.10"}, "test")
+    before = mod.datasets.get(ds)["updated_at"]
+    mod._migrate_net_area()
+    d = mod.datasets.get(ds)
+    new = _json.loads(mod.datasets.read_version_file(ds, d["current_version"], "data.json"))
+    assert all(r["area_ha"] is None for r in new["rows"] if r["gear"] == "net") and d["updated_at"] == before
+    n = d["current_version"]
+    mod._migrate_net_area()
+    assert mod.datasets.get(ds)["current_version"] == n

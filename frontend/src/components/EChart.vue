@@ -5,6 +5,7 @@ import * as echarts from 'echarts'
 import { ECHARTS_THEME } from '../theme'
 echarts.registerTheme('fishstocke', ECHARTS_THEME)
 const p = defineProps({ option: Object, height: { type: String, default: '320px' } })
+const emit = defineEmits(['pick'])
 const el = ref(null)
 let chart = null
 let ro = null
@@ -12,9 +13,13 @@ function render() { if (chart && p.option) chart.setOption(p.option, true) }
 onMounted(() => {
   chart = echarts.init(el.value, 'fishstocke', { renderer: 'canvas' })
   render()
+  chart.on('click', (e) => emit('pick', e))
   ro = new ResizeObserver(() => chart && chart.resize())
   ro.observe(el.value)
 })
 watch(() => p.option, render, { deep: true })
+// снимок графика для выгрузки PNG/PDF
+function image() { return chart ? chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' }) : null }
+defineExpose({ image })
 onBeforeUnmount(() => { ro && ro.disconnect(); chart && chart.dispose() })
 </script>

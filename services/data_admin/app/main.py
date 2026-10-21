@@ -95,6 +95,30 @@ def _migrate_catch_types() -> None:
 _migrate_catch_types()
 
 
+def _migrate_net_area() -> None:
+    """Наборы уловов до 21.10.2026: у сетей площадь облова записана как 0 → пусто (для сети не указывается).
+    Системное орудие «сеть» — код net (свои орудия пользователей проверяются при следующей загрузке или правке)."""
+    for d in datasets.list():
+        if d.get("deleted") or d.get("dataset_type") != "catches" or not d.get("current_version"):
+            continue
+        table = json.loads(datasets.read_version_file(d["id"], d["current_version"], "data.json"))
+        rows = [r for r in table.get("rows") or [] if r.get("gear") == "net" and r.get("area_ha") is not None]
+        if not rows:
+            continue
+        nonzero = sum(1 for r in rows if r["area_ha"] != 0)
+        for r in rows:
+            r["area_ha"] = None
+        info = datasets.version_info(d["id"], d["current_version"]) or {}
+        note = f"; ненулевых значений у сети: {nonzero}" if nonzero else ""
+        datasets.add_version(d["id"], {"data.json": dumps(table).encode("utf-8")},
+                             {"comment": f"площадь облова у сетей: 0 → пусто (для сети не указывается){note}",
+                              "origin": "migration", "type_version": info.get("type_version"),
+                              "summary": d.get("summary")}, "system", technical=True)
+
+
+_migrate_net_area()
+
+
 def audit(user, action, oid, details=None):
     app.state.audit.log(user, action, "dataset", oid, details)
 
@@ -119,6 +143,10 @@ def _place_maps(dtype, water_body):
                     m.setdefault(tables.place_key(cand), r["name_ru"])
         out[c["code"]] = m
     return out
+
+
+def _gear_kinds():
+    return {r.get("code"): r.get("kind") for r in DICT.records("gears")}
 
 
 def _ref_names(dtype, lang="ru"):
@@ -311,7 +339,7 @@ def _ingest(d, content: bytes, mode: str, dry_run: bool, comment: str, user, fil
     if not raw:
         return _report(False, [{"row": 2, "column": None, "message": "В файле нет строк с данными"}], [])
     rows, errors, warnings = tables.validate_rows(dt, sp_codes, species, raw, _ref_maps(dt),
-                                                  _place_maps(dt, d["water_body"]))
+                                                  _place_maps(dt, d["water_body"]), _gear_kinds())
     if errors:
         if not dry_run:
             audit(user, "data.upload", d["id"], {"file": filename, "ok": False, "errors": len(errors)})
@@ -350,7 +378,7 @@ async def upload_new(water_body: str = Form(...), dataset_type: str = Form(...),
             except tables.ParseError as e:
                 return _report(False, e.errors, [])
             rows, errors, warnings = tables.validate_rows(dt, sp_codes, DICT.records("species"), raw, _ref_maps(dt),
-                                                          _place_maps(dt, water_body))
+                                                          _place_maps(dt, water_body), _gear_kinds())
             table = tables.merge_rows(dt, None, rows, sp_codes, "replace")
             return _report(not errors, errors, warnings, None if errors else tables.summarize(dt, table))
         d = _create(DatasetIn(water_body=water_body, dataset_type=dataset_type), user)
@@ -381,7 +409,7 @@ def edit(ds_id: str, body: EditIn, user: User = Depends(require("data.edit"))):
         raise AppError("dataset.species", f"Виды не найдены в справочнике: {', '.join(bad)}", 422)
     raw = [(i + 1, r) for i, r in enumerate(body.rows)]
     rows, errors, warnings = tables.validate_rows(dt, sp_codes, species, raw, _ref_maps(dt),
-                                                  _place_maps(dt, d["water_body"]))
+                                                  _place_maps(dt, d["water_body"]), _gear_kinds())
     if errors:
         for e in errors:
             e["row"] = e["row"]  # номер строки в таблице редактора (с 1)

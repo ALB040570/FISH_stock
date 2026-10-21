@@ -118,15 +118,27 @@
   ]
  },
  {
-  "id": "pdu-reading",
+  "id": "monitoring-data",
   "section": "ichthyologist",
   "order": 41,
   "routes": []
  },
  {
-  "id": "export",
+  "id": "cpue",
   "section": "ichthyologist",
   "order": 42,
+  "routes": []
+ },
+ {
+  "id": "pdu-reading",
+  "section": "ichthyologist",
+  "order": 43,
+  "routes": []
+ },
+ {
+  "id": "export",
+  "section": "ichthyologist",
+  "order": 44,
   "routes": []
  },
  {
@@ -175,7 +187,7 @@
  {
   "id": "verification",
   "section": "methodology",
-  "order": 12,
+  "order": 13,
   "routes": []
  },
  {
@@ -197,9 +209,17 @@
   ]
  },
  {
-  "id": "compare",
+  "id": "signal-rules",
   "section": "dashboards",
   "order": 12,
+  "routes": [
+   "/design/signal-rules"
+  ]
+ },
+ {
+  "id": "compare",
+  "section": "dashboards",
+  "order": 13,
   "routes": []
  },
  {
@@ -303,45 +323,51 @@
   "routes": []
  },
  {
-  "id": "method-stock",
+  "id": "method-catch-age",
   "section": "methodology",
   "order": 5,
   "routes": []
  },
  {
-  "id": "method-pdu-age",
+  "id": "method-stock",
   "section": "methodology",
   "order": 6,
   "routes": []
  },
  {
-  "id": "method-bayes",
+  "id": "method-pdu-age",
   "section": "methodology",
   "order": 7,
   "routes": []
  },
  {
-  "id": "method-priors",
+  "id": "method-bayes",
   "section": "methodology",
   "order": 8,
   "routes": []
  },
  {
-  "id": "method-diagnostics",
+  "id": "method-priors",
   "section": "methodology",
   "order": 9,
   "routes": []
  },
  {
-  "id": "method-forecast",
+  "id": "method-diagnostics",
   "section": "methodology",
   "order": 10,
   "routes": []
  },
  {
-  "id": "method-example",
+  "id": "method-forecast",
   "section": "methodology",
   "order": 11,
+  "routes": []
+ },
+ {
+  "id": "method-example",
+  "section": "methodology",
+  "order": 12,
   "routes": []
  }
 ]

@@ -2,7 +2,10 @@
   <div class="page">
     <div class="page-head">
       <div><h1>{{ design ? $t('dash.design_title') : $t('dash.title') }}</h1><div class="sub">{{ design ? 'Создание и правка дашбордов и шаблонов. Шаблон можно скопировать и настроить.' : 'Представления исходных данных и результатов расчётов.' }}</div></div>
-      <el-button v-if="design && auth.can('dashboard.edit')" type="primary" @click="create"><el-icon><Plus /></el-icon>&nbsp;{{ $t('dash.new') }}</el-button>
+      <div v-if="design && auth.can('dashboard.edit')" class="row">
+        <el-button @click="$router.push('/design/signal-rules')"><el-icon><Bell /></el-icon>&nbsp;{{ $t('wv.rules') }}</el-button>
+        <el-button type="primary" @click="create"><el-icon><Plus /></el-icon>&nbsp;{{ $t('dash.new') }}</el-button>
+      </div>
     </div>
     <StateBlock :loading="loading" :error="error">
       <div class="cards">

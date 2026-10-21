@@ -14,8 +14,8 @@ def test_catalog_and_profiles(calc_stack):
     dm, da, aa, mod = calc_stack
     cat = aa.get("/catalog", headers=H("viewer")).json()
     assert [a["code"] for a in cat] == ["seine_catchability", "stock_by_catch", "pdu_by_age", "bayes_cohort", "forecast_pdu"]
-    assert all(a["latest"] == "1.0.1" for a in cat)
-    files = aa.get("/catalog/bayes_cohort/versions/1.0.1/files", headers=H("viewer")).json()
+    assert all(a["latest"] == "1.0.2" for a in cat)
+    files = aa.get("/catalog/bayes_cohort/versions/1.0.2/files", headers=H("viewer")).json()
     assert any(f["path"] == "fishcore/bayes/dynamics.py" for f in files)
     p = aa.get("/profiles/bayes_cohort/zhaysan", headers=H("viewer")).json()
     assert set(p["profile"]["values"]["species_profiles"]) == {"lesh", "sudak", "okun", "plotva", "shuka", "sazan", "karas", "yaz"}
@@ -26,11 +26,11 @@ def test_catalog_and_profiles(calc_stack):
     r = aa.put("/profiles/bayes_cohort/balkhash", headers=H("mathematician"), json={"values": vals})
     assert r.status_code == 422 and "β" in str(r.json())
     # отключение версии — только математик/админ
-    assert aa.post("/catalog/forecast_pdu/versions/1.0.1/disable", headers=H("ichthyologist")).status_code == 403
-    assert aa.post("/catalog/forecast_pdu/versions/1.0.1/disable", headers=H("mathematician")).status_code == 200
+    assert aa.post("/catalog/forecast_pdu/versions/1.0.2/disable", headers=H("ichthyologist")).status_code == 403
+    assert aa.post("/catalog/forecast_pdu/versions/1.0.2/disable", headers=H("mathematician")).status_code == 200
     c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan"})
     assert c.status_code == 422 and "нет включённых версий" in str(c.json())
-    aa.post("/catalog/forecast_pdu/versions/1.0.1/enable", headers=H("admin"))
+    aa.post("/catalog/forecast_pdu/versions/1.0.2/enable", headers=H("admin"))
 
 
 def test_run_stock_chain(calc_stack):

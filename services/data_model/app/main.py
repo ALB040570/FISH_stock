@@ -135,7 +135,7 @@ def _migrate_regions() -> None:
 
 
 def _sig(f: dict) -> tuple:
-    return f.get("type"), f.get("ref_entity"), f.get("places_entity")
+    return f.get("type"), f.get("ref_entity"), f.get("places_entity"), f.get("only_for_gear_kind")
 
 
 def _upgrade_fields(old: list[dict], seed: list[dict]) -> tuple[list[dict], list[str]]:
@@ -150,7 +150,12 @@ def _upgrade_fields(old: list[dict], seed: list[dict]) -> tuple[list[dict], list
             notes.append(f"+{sf['code']}")
         elif _sig(of) != _sig(sf):
             out.append(copy.deepcopy(sf))
-            notes.append(f"{sf['code']}: {of.get('type')} → {sf.get('type')}")
+            notes.append(f"{sf['code']}: {of.get('type')} → {sf.get('type')}" if of.get("type") != sf.get("type")
+                         else f"{sf['code']}: правила проверки")
+        elif sf.get("type") == "enum" and {e["value"] for e in of.get("enum") or []} == {e["value"] for e in sf["enum"]} \
+                and of.get("enum") != sf["enum"]:
+            out.append({**of, "enum": copy.deepcopy(sf["enum"])})
+            notes.append(f"{sf['code']}: подписи значений")
         else:
             out.append(of)
     seed_codes = {f["code"] for f in seed}

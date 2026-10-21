@@ -1,5 +1,5 @@
 // Общий вид графиков: палитра темы (src/theme.js), читаемые оси, числа с пробелами.
-import { CHART, CHART_PALETTE } from '../theme'
+import { CHART, CHART_PALETTE, HEAT } from '../theme'
 
 export const PALETTE = CHART_PALETTE
 
@@ -58,4 +58,148 @@ export function band({ x, q, name = 'медиана', obs = [], yName = '', colo
     yAxis: { type: 'value', name: yName, axisLabel: { formatter: compact }, splitLine: { lineStyle: { color: CHART.grid } } },
     series,
   }
+}
+
+// ------------------------------------------------------------------ представления исходных данных
+
+const axisY = (name, extra = {}) => ({ type: 'value', name, nameTextStyle: { align: 'left' }, axisLabel: { formatter: compact },
+  splitLine: { lineStyle: { color: CHART.grid } }, ...extra })
+const hiLabel = (hl) => (v) => (hl != null && String(v) === String(hl) ? `{hl|${v}}` : String(v))
+const hlRich = { hl: { fontWeight: 'bold', color: CHART.highlight } }
+
+// Ряды: line | bar | stack | stack100; полоса lo–hi (95 % интервал) у линий; подсветка года
+export function seriesChart(spec, ctype, { highlight = null } = {}) {
+  const x = (spec.x || []).map(String)
+  let series = spec.series || []
+  if (ctype === 'stack100') {
+    const tot = x.map((_, i) => series.reduce((a, s) => a + (s.values[i] || 0), 0))
+    series = series.map((s) => ({ ...s, values: s.values.map((v, i) => (v == null || !tot[i] ? null : (v / tot[i]) * 100)) }))
+  }
+  const type = ctype === 'line' ? 'line' : 'bar'
+  const stack = ctype === 'stack' || ctype === 'stack100'
+  const out = []
+  series.forEach((s, k) => {
+    const color = PALETTE[k % PALETTE.length]
+    if (type === 'line' && s.lo && s.hi) {
+      out.push({ type: 'line', name: `${s.name}: 95 %`, data: s.lo, stack: 'band' + k, symbol: 'none', lineStyle: { opacity: 0 },
+        tooltip: { show: false }, silent: true })
+      out.push({ type: 'line', name: `${s.name}: 95 %`, data: s.hi.map((v, i) => (v == null || s.lo[i] == null ? null : v - s.lo[i])),
+        stack: 'band' + k, symbol: 'none', lineStyle: { opacity: 0 }, areaStyle: { color, opacity: 0.16 }, tooltip: { show: false }, silent: true })
+    }
+    out.push({ type, name: s.name ?? '', data: s.values, stack: stack ? 'a' : undefined, barMaxWidth: 26,
+      showSymbol: type === 'line' && x.length < 30, connectNulls: false, itemStyle: { color },
+      lineStyle: { width: 2.2, color },
+      ...(spec.signed ? { itemStyle: { color: (p) => (p.value < 0 ? CHART.limit : CHART.main) } } : {}) })
+  })
+  if (spec.extra_line) {
+    out.push({ type: 'line', name: spec.extra_line.name, data: spec.extra_line.values, yAxisIndex: spec.extra_line.same_axis || ctype === 'stack100' ? 0 : 0,
+      lineStyle: { type: 'dashed', width: 2, color: CHART.highlight }, itemStyle: { color: CHART.highlight }, symbolSize: 5, z: 5 })
+  }
+  if (highlight != null && spec.x_is_year && x.includes(String(highlight)) && out.length) {
+    out[out.length - 1].markLine = { silent: true, symbol: 'none', label: { show: false },
+      lineStyle: { color: CHART.highlight, width: 2, type: 'solid' }, data: [{ xAxis: String(highlight) }] }
+  }
+  const legend = out.filter((s) => !String(s.name).endsWith(': 95 %')).length > 1
+  return {
+    color: PALETTE,
+    grid: { left: 62, right: 16, top: legend ? 58 : 32, bottom: spec.x_title ? 42 : 30 },
+    tooltip: { trigger: 'axis', valueFormatter: (v) => fmt(v, 'auto') },
+    legend: legend ? { top: 0, type: 'scroll', icon: 'roundRect', itemWidth: 12, itemHeight: 8,
+      data: out.filter((s) => !String(s.name).endsWith(': 95 %')).map((s) => s.name) } : undefined,
+    xAxis: { type: 'category', data: x, name: spec.x_title || '', nameLocation: 'middle', nameGap: 26,
+      axisLabel: { formatter: spec.x_is_year ? hiLabel(highlight) : undefined, rich: hlRich, interval: x.length > 30 ? 'auto' : 0,
+        rotate: !spec.x_is_year && x.length > 8 ? 30 : 0 }, axisTick: { alignWithLabel: true } },
+    yAxis: axisY(ctype === 'stack100' ? '%' : spec.y_title || '', ctype === 'stack100' ? { max: 100 } : {}),
+    series: out,
+  }
+}
+
+// Тепловая карта: cells [[x, y, значение]]; fmt int | pct | dev (расходящаяся шкала вокруг нуля)
+export function heatmapChart(spec, { highlight = null } = {}) {
+  const vals = (spec.cells || []).map((c) => c[2]).filter((v) => v != null)
+  const dev = spec.fmt === 'dev'
+  // шкала отклонений: по 90-му процентилю модуля, чтобы один выброс не «съедал» цвета остальных клеток
+  const abs = vals.map((v) => Math.abs(v)).sort((a, b) => a - b)
+  const m = dev ? Math.max(10, Math.min(abs[abs.length - 1] || 1, (abs[Math.floor(abs.length * 0.9)] || 1) * 1.2)) : Math.max(1, ...abs)
+  const ylen = (spec.y || []).length
+  const lab = (v) => (v == null ? '' : dev ? (v > 0 ? '+' : '') + fmt(v, 0) : spec.fmt === 'pct' ? fmt(v, v >= 10 ? 0 : 1) : fmt(v, 0))
+  const longY = Math.max(0, ...(spec.y || []).map((s) => String(s).length))
+  return {
+    grid: { left: Math.min(200, 16 + longY * 6.6), right: 16, top: 8, bottom: 62 },
+    tooltip: { formatter: (p) => `${spec.x_title}: <b>${spec.x[p.value[0]]}</b><br>${spec.y_title}: <b>${spec.y[p.value[1]]}</b><br>${spec.value_title}: <b>${lab(p.value[2])}</b>` },
+    xAxis: { type: 'category', data: spec.x.map(String), name: spec.x_title, nameLocation: 'middle', nameGap: 24, splitArea: { show: true },
+      axisLabel: { formatter: spec.x_is_year ? hiLabel(highlight) : undefined, rich: hlRich } },
+    yAxis: { type: 'category', data: spec.y.map(String), inverse: !spec.y_is_year && ylen > 0, splitArea: { show: true },
+      axisLabel: { interval: 0, formatter: spec.y_is_year ? hiLabel(highlight) : (v) => (v.length > 32 ? v.slice(0, 31) + '…' : v), rich: hlRich } },
+    visualMap: { min: dev ? -m : 0, max: dev ? m : Math.max(1, ...vals), calculable: false, orient: 'horizontal', left: 'center', bottom: 0,
+      itemHeight: 160, itemWidth: 10, inRange: { color: dev ? HEAT.div : HEAT.seq }, text: [lab(dev ? m : Math.max(1, ...vals)), lab(dev ? -m : 0)],
+      textStyle: { fontSize: 10 } },
+    series: [{ type: 'heatmap', data: spec.cells, label: { show: spec.cells.length <= 400, fontSize: 9.5, formatter: (p) => lab(p.value[2]) },
+      emphasis: { itemStyle: { borderColor: CHART.highlight, borderWidth: 2 } } }],
+  }
+}
+
+// Диаграмма размаха по годам
+export function boxChart(spec, { highlight = null } = {}) {
+  const x = spec.x.map(String)
+  return {
+    grid: { left: 62, right: 16, top: 32, bottom: 30 },
+    tooltip: { trigger: 'item', formatter: (p) => (p.seriesType === 'boxplot'
+      ? `${x[p.dataIndex]}<br>мин. ${fmt(p.value[1], 0)} · 25 % ${fmt(p.value[2], 1)}<br>медиана <b>${fmt(p.value[3], 1)}</b><br>75 % ${fmt(p.value[4], 1)} · макс. ${fmt(p.value[5], 0)}`
+      : `${x[p.value[0]]}: выброс ${fmt(p.value[1], 0)}`) },
+    xAxis: { type: 'category', data: x, axisLabel: { formatter: hiLabel(highlight), rich: hlRich } },
+    yAxis: axisY(spec.y_title || ''),
+    series: [
+      { type: 'boxplot', data: spec.boxes.map((b) => b || [null, null, null, null, null]), itemStyle: { color: CSS_SOFT(), borderColor: CHART.main } },
+      { type: 'scatter', data: spec.outliers, symbolSize: 6, itemStyle: { color: CHART.highlight } },
+    ],
+  }
+}
+function CSS_SOFT() { return CHART.background }
+
+// Жизненный цикл: молодь 0–m0, половозрелые m0–m1, отметка m2
+export function lifecycleChart(spec) {
+  const L = spec.labels
+  return {
+    grid: { left: 110, right: 24, top: 30, bottom: 36 },
+    legend: { top: 0, data: [L.young, L.adult, L.m2] },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' },
+      formatter: (ps) => { const i = ps[0].dataIndex; return `<b>${spec.species[i]}</b>${spec.predator[i] ? ' · хищник' : ''}<br>m0 = ${spec.m0[i]}, m1 = ${spec.m1[i]}, m2 = ${spec.m2[i]}` } },
+    xAxis: { type: 'value', name: L.axis, nameLocation: 'middle', nameGap: 22, min: 0, splitLine: { lineStyle: { color: CHART.grid } } },
+    yAxis: { type: 'category', data: spec.species },
+    series: [
+      { type: 'bar', name: L.young, stack: 'l', data: spec.m0, itemStyle: { color: CHART.background }, barMaxWidth: 18 },
+      { type: 'bar', name: L.adult, stack: 'l', data: spec.m1.map((v, i) => v - spec.m0[i]), itemStyle: { color: CHART.main }, barMaxWidth: 18 },
+      { type: 'scatter', name: L.m2, data: spec.m2.map((v, i) => [v, i]), symbol: 'diamond', symbolSize: 12, itemStyle: { color: CHART.highlight }, z: 5 },
+    ],
+  }
+}
+
+// Две оси: слева и справа разные единицы
+export function dualChart(spec, { highlight = null } = {}) {
+  const x = spec.x.map(String)
+  const mk = (s, i) => ({ type: s.type || 'line', name: s.name, data: s.values, yAxisIndex: i, barMaxWidth: 26,
+    itemStyle: { color: i ? CHART.highlight : CHART.main }, lineStyle: { width: 2.2, color: i ? CHART.highlight : CHART.main } })
+  const series = [mk(spec.left, 0), mk(spec.right, 1)]
+  if (highlight != null && x.includes(String(highlight))) {
+    series[0].markLine = { silent: true, symbol: 'none', label: { show: false }, lineStyle: { color: CHART.highlight, width: 2, type: 'solid' }, data: [{ xAxis: String(highlight) }] }
+  }
+  return {
+    grid: { left: 62, right: 62, top: 44, bottom: 30 },
+    tooltip: { trigger: 'axis', valueFormatter: (v) => fmt(v, 'auto') },
+    legend: { top: 0 },
+    xAxis: { type: 'category', data: x, axisLabel: { formatter: hiLabel(highlight), rich: hlRich } },
+    yAxis: [axisY(''), axisY('', { splitLine: { show: false } })],
+    series,
+  }
+}
+
+export function buildChart(spec, ctype, opts) {
+  if (!spec) return null
+  if (spec.kind === 'series') return seriesChart(spec, ctype || spec.default || 'line', opts)
+  if (spec.kind === 'heatmap') return heatmapChart(spec, opts)
+  if (spec.kind === 'box') return boxChart(spec, opts)
+  if (spec.kind === 'lifecycle') return lifecycleChart(spec)
+  if (spec.kind === 'dual') return dualChart(spec, opts)
+  return null
 }

@@ -369,3 +369,55 @@ def bayes_excel(per_species: dict[str, tuple[dict, dict]]) -> bytes:
             pd.DataFrame(prow).to_excel(xw, sheet_name=f"{species} — параметры"[:31], index=False)
         autowidth(xw)
     return buf.getvalue()
+
+
+def catch_by_age_tables(res) -> list[tuple[str, str, list[dict], list[dict], str]]:
+    """Улов по ловам и возрастам Y_ijd = Y_id · q_ij(t_d) (формула (20)) и доли возрастной пробы q_ij(t).
+    Только чтение уже рассчитанного массива: формулы и результаты этапа не меняются."""
+    ages = [int(a) for a in res.ages]
+    age_cols = [{"code": f"a{a}", "title": f"j = {a}", "unit": "шт", "type": "number"} for a in ages]
+    rows = []
+    for g in GEARS:
+        hc = res.catches[g]
+        if not len(hc.meta):
+            continue
+        tot = hc.totals()
+        m = hc.meta.reset_index(drop=True)
+        for d in range(len(m)):
+            for si, fish in enumerate(hc.species):
+                if np.isnan(tot[d, si]):
+                    continue
+                r = {"haul": int(m.at[d, "Id"]), "gear": g, "year": int(m.at[d, "Year"]), "date": str(m.at[d, "Date"])[:10],
+                     "place": None if pd.isna(m.at[d, "Place"]) else str(m.at[d, "Place"]),
+                     "catch_type": None if pd.isna(m.at[d, "CatchType"]) else str(m.at[d, "CatchType"]),
+                     "species": fish, "total": num(tot[d, si])}
+                for ai, a in enumerate(ages):
+                    v = hc.values[d, si, ai]
+                    r[f"a{a}"] = None if np.isnan(v) else round(float(v), 4)
+                rows.append(r)
+    t1 = ("catch_by_age", "Улов по ловам и возрастам, шт",
+          [{"code": "haul", "title": "Лов №", "type": "integer"}, {"code": "gear", "title": "Орудие"},
+           {"code": "year", "title": "Год", "type": "integer"}, {"code": "date", "title": "Дата"},
+           {"code": "place", "title": "Место лова"}, {"code": "catch_type", "title": "Тип лова"},
+           {"code": "species", "title": "Вид"}, {"code": "total", "title": "Улов вида в лове", "unit": "шт", "type": "number"},
+           *age_cols], rows,
+          "Y_ijd = Y_id · q_ij(t_d): улов вида в лове, разложенный по возрастным группам по долям возрастной пробы "
+          "года лова (формула (20)).")
+    hc = res.catches[GEARS[0]]
+    srows = []
+    for yi, y in enumerate(hc.years):
+        for si, fish in enumerate(hc.species):
+            if not hc.sample_raw[yi, si].any() and not hc.shares[yi, si].any():
+                continue
+            r = {"year": int(y), "species": fish, "n_sample": num(hc.sample_raw[yi, si].sum())}
+            for ai, a in enumerate(ages):
+                r[f"q{a}"] = round(float(hc.shares[yi, si, ai]), 6)
+                r[f"n{a}"] = num(hc.sample_raw[yi, si, ai])
+            srows.append(r)
+    t2 = ("age_shares", "Доли возрастной пробы q_ij(t)",
+          [{"code": "year", "title": "Год", "type": "integer"}, {"code": "species", "title": "Вид"},
+           {"code": "n_sample", "title": "Рыб в пробе", "unit": "шт", "type": "number"},
+           *[{"code": f"q{a}", "title": f"q, j = {a}", "type": "number"} for a in ages],
+           *[{"code": f"n{a}", "title": f"проба, j = {a}", "unit": "шт", "type": "number"} for a in ages]], srows,
+          "q_ij(t) — доля возрастной группы j в пробе года t; к пробе прибавляется 1 для групп j ≤ m1 (формула (20)).")
+    return [t1, t2]
