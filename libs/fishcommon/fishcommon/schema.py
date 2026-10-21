@@ -14,11 +14,11 @@ import math
 import re
 from datetime import date, datetime
 
-TYPES = ("string", "text", "integer", "number", "boolean", "date", "enum", "ref", "geo_point", "geo_shape")
+TYPES = ("string", "text", "integer", "number", "boolean", "date", "enum", "ref", "ref_list", "geo_point", "geo_shape")
 
 TYPE_TITLES = {
     "string": "Строка", "text": "Текст", "integer": "Целое число", "number": "Число",
-    "boolean": "Да/нет", "date": "Дата", "enum": "Список значений", "ref": "Ссылка на справочник",
+    "boolean": "Да/нет", "date": "Дата", "enum": "Список значений", "ref": "Ссылка на справочник", "ref_list": "Несколько ссылок на справочник",
     "geo_point": "Точка на карте", "geo_shape": "Контур на карте",
 }
 
@@ -31,6 +31,8 @@ def is_missing(v) -> bool:
     if isinstance(v, float) and math.isnan(v):
         return True
     if isinstance(v, str) and v.strip() == "":
+        return True
+    if isinstance(v, (list, tuple)) and not [x for x in v if not is_missing(x)]:
         return True
     return False
 
@@ -114,6 +116,24 @@ def coerce(field: dict, v, ref_values: dict | None = None):
                 ent = field.get("ref_entity")
                 return None, f"«{title}»: «{v}» нет в справочнике «{ent}»"
             out = key
+        elif t == "ref_list":
+            items = v if isinstance(v, (list, tuple)) else re.split(r"[,;\n]+", str(v))
+            refs = ref_values or {}
+            out, bad = [], []
+            for it in items:
+                s_ = str(it).strip()
+                if not s_:
+                    continue
+                key = refs.get(s_.lower())
+                if key is None:
+                    bad.append(s_)
+                elif key not in out:
+                    out.append(key)
+            if bad:
+                return None, f"«{title}»: {', '.join('«' + b + '»' for b in bad)} нет в справочнике «{field.get('ref_entity')}»"
+            if not out and field.get("required"):
+                return None, f"«{title}»: обязательное поле не заполнено"
+            out = out or None
         elif t == "geo_point":
             if isinstance(v, (list, tuple)) and len(v) == 2:
                 lat, lon = float(v[0]), float(v[1])
@@ -152,7 +172,7 @@ def validate_field_def(f: dict) -> list[str]:
         errs.append(f"Поле «{code}»: нужно название на русском")
     if f.get("type") == "enum" and not f.get("enum"):
         errs.append(f"Поле «{code}»: для списка значений нужны значения")
-    if f.get("type") == "ref" and not f.get("ref_entity"):
+    if f.get("type") in ("ref", "ref_list") and not f.get("ref_entity"):
         errs.append(f"Поле «{code}»: укажите справочник для ссылки")
     lo, hi = f.get("min"), f.get("max")
     if lo is not None and hi is not None and lo > hi:

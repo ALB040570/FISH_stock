@@ -22,6 +22,16 @@ WATER_BODY_TYPES = [
 
 ENTITIES = [
     {
+        "code": "regions", "title_ru": "Области", "title_kk": "Облыстар", "system": True,
+        "description": "Административное деление Казахстана (с 2022 г.): области и города республиканского значения.",
+        "display_field": "name_ru",
+        "fields": [
+            F("code", "Код", "Код", required=True, unique=True),
+            F("name_ru", "Название (рус.)", "Атауы (орыс.)", required=True, unique=True),
+            F("name_kk", "Название (каз.)", "Атауы (қаз.)"),
+        ],
+    },
+    {
         "code": "water_bodies", "title_ru": "Водоёмы", "title_kk": "Су айдындары", "system": True,
         "description": "Рыбохозяйственные водоёмы. Точка обязательна, контур — по желанию.",
         "display_field": "name_ru",
@@ -31,7 +41,8 @@ ENTITIES = [
             F("name_ru", "Название (рус.)", "Атауы (орыс.)", required=True),
             F("name_kk", "Название (каз.)", "Атауы (қаз.)"),
             F("type", "Тип", "Түрі", "enum", required=True, enum=WATER_BODY_TYPES),
-            F("region", "Область", "Облыс"),
+            F("regions", "Области", "Облыстар", "ref_list", ref_entity="regions",
+              hint="одна или несколько областей; водоём находится по фильтру любой из них"),
             F("basin", "Бассейн", "Алап"),
             F("area_km2", "Площадь, км²", "Ауданы, км²", "number", unit="км²", min=0),
             F("point", "Точка на карте", "Картадағы нүкте", "geo_point", required=True),
@@ -88,6 +99,53 @@ SPECIES = [
     ("zmeegolov", "змееголов", "жыланбас", "Channa argus", True),
     ("b_amur", "белый амур", "ақ амур", "Ctenopharyngodon idella", False),
 ]
+
+# Области и города республиканского значения (деление с 2022 г.)
+REGIONS = [
+    ("abai", "область Абай", "Абай облысы"),
+    ("akmola", "Акмолинская область", "Ақмола облысы"),
+    ("aktobe", "Актюбинская область", "Ақтөбе облысы"),
+    ("almaty_region", "Алматинская область", "Алматы облысы"),
+    ("atyrau", "Атырауская область", "Атырау облысы"),
+    ("west_kz", "Западно-Казахстанская область", "Батыс Қазақстан облысы"),
+    ("zhambyl", "Жамбылская область", "Жамбыл облысы"),
+    ("zhetysu", "область Жетісу", "Жетісу облысы"),
+    ("karaganda", "Карагандинская область", "Қарағанды облысы"),
+    ("kostanay", "Костанайская область", "Қостанай облысы"),
+    ("kyzylorda", "Кызылординская область", "Қызылорда облысы"),
+    ("mangystau", "Мангистауская область", "Маңғыстау облысы"),
+    ("pavlodar", "Павлодарская область", "Павлодар облысы"),
+    ("north_kz", "Северо-Казахстанская область", "Солтүстік Қазақстан облысы"),
+    ("turkistan", "Туркестанская область", "Түркістан облысы"),
+    ("ulytau", "область Ұлытау", "Ұлытау облысы"),
+    ("east_kz", "Восточно-Казахстанская область", "Шығыс Қазақстан облысы"),
+    ("astana", "г. Астана", "Астана қаласы"),
+    ("almaty", "г. Алматы", "Алматы қаласы"),
+    ("shymkent", "г. Шымкент", "Шымкент қаласы"),
+]
+REGION_BY_NAME = {ru: code for code, ru, _ in REGIONS}
+# прежние названия (до 2022 г. и в данных) → код области
+REGION_BY_NAME.update({"Алматинская область": "almaty_region", "Восточно-Казахстанская область": "east_kz",
+                       "Карагандинская область": "karaganda", "Туркестанская область": "turkistan"})
+# Водоёмы, лежащие в нескольких областях, и водоёмы, отошедшие к новым областям в 2022 г.
+# (по сведениям заказчика и административным границам; координаты и области — «проверьте»)
+WATER_BODY_REGIONS = {
+    "balkhash": ["karaganda", "almaty_region", "zhambyl"],
+    "alakol": ["zhetysu", "abai"],
+    "sasykkol": ["zhetysu"],
+    "koshkarkol": ["zhetysu"],
+    "tengiz": ["akmola", "karaganda"],
+    "shulba": ["abai", "east_kz"],
+    "north_caspian": ["atyrau", "mangystau"],
+}
+
+
+def regions_for(code: str, old_region: str | None) -> list[str]:
+    if code in WATER_BODY_REGIONS:
+        return list(WATER_BODY_REGIONS[code])
+    c = REGION_BY_NAME.get((old_region or "").strip())
+    return [c] if c else []
+
 
 # написания видов в исходных файлах заказчика → код вида
 SPECIES_ALIASES = {"т_лоб": "tolstolobik", "толстолоб": "tolstolobik", "б_амур": "b_amur", "беламур": "b_amur"}

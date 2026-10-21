@@ -6,7 +6,8 @@
         <el-select v-if="f.type === 'enum'" v-model="v[f.code]" clearable style="width:100%">
           <el-option v-for="e in f.enum" :key="e.value" :label="tr(e, 'title') || e.value" :value="e.value" />
         </el-select>
-        <el-select v-else-if="f.type === 'ref'" v-model="v[f.code]" clearable filterable style="width:100%">
+        <el-select v-else-if="f.type === 'ref' || f.type === 'ref_list'" v-model="v[f.code]" clearable filterable
+                   :multiple="f.type === 'ref_list'" style="width:100%">
           <el-option v-for="r in refs[f.ref_entity] || []" :key="r.key" :label="r.label" :value="r.key" />
         </el-select>
         <el-switch v-else-if="f.type === 'boolean'" v-model="v[f.code]" />
@@ -27,11 +28,13 @@
 </template>
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import { tr } from '../i18n'
 import GeoEditor from './GeoEditor.vue'
 const p = defineProps({ fields: Array, v: Object, errs: { type: Object, default: () => ({}) }, isNew: Boolean, locked: Boolean })
 const refs = ref({})
+const { locale } = useI18n()
 const pointField = computed(() => p.fields.find((f) => f.type === 'geo_point'))
 const shapeField = computed(() => p.fields.find((f) => f.type === 'geo_shape'))
 const pointText = computed(() => { const pt = p.v[pointField.value?.code]; return pt ? `${pt[0]}, ${pt[1]}` : '' })
@@ -40,9 +43,9 @@ function setPoint(s) {
   p.v[pointField.value.code] = m.length === 2 && m.every((x) => !Number.isNaN(x)) ? m : s
 }
 onMounted(async () => {
-  for (const f of p.fields.filter((x) => x.type === 'ref')) {
+  for (const f of p.fields.filter((x) => x.type === 'ref' || x.type === 'ref_list')) {
     const rs = await api.get('data-model', `/entities/${f.ref_entity}/records`)
-    refs.value[f.ref_entity] = rs.map((r) => ({ key: r.values.code || r.id, label: r.values.name_ru || r.values.name || r.values.code || r.id }))
+    refs.value[f.ref_entity] = rs.map((r) => ({ key: r.values.code || r.id, label: (locale.value === 'kk' && r.values.name_kk) || r.values.name_ru || r.values.name || r.values.code || r.id }))
   }
 })
 </script>

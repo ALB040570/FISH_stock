@@ -58,6 +58,12 @@ def _seed() -> None:
     def have(entity):
         return {r["values"].get("code") for r in records(entity).list()}
 
+    rg = have("regions")
+    for code, ru, kk in seed_defs.REGIONS:
+        if code not in rg:
+            _create_record("regions", {"code": code, "name_ru": ru, "name_kk": kk}, "system")
+    _migrate_regions()
+
     sp = have("species")
     for code, ru, kk, latin, pred in seed_defs.SPECIES:
         if code not in sp:
@@ -73,10 +79,41 @@ def _seed() -> None:
         p = f["properties"]
         if p.get("code") in wbs:
             continue
-        vals = {k: p.get(k) for k in ("code", "name_ru", "name_kk", "type", "region", "area_km2", "point", "note")}
+        vals = {k: p.get(k) for k in ("code", "name_ru", "name_kk", "type", "area_km2", "point", "note")}
+        vals["regions"] = seed_defs.regions_for(p.get("code"), p.get("region"))
         vals["shape"] = f.get("geometry")
         vals["basin"] = None
         _create_record("water_bodies", vals, "system", source=p.get("source"))
+
+
+def _migrate_regions() -> None:
+    """Установки до 21.10.2026: поле «Область» (строка) → «Области» (несколько ссылок на справочник областей)."""
+    e = entities.get("water_bodies")
+    if not e or any(f["code"] == "regions" for f in e["fields"]):
+        return
+    new_field = next(f for d in seed_defs.ENTITIES if d["code"] == "water_bodies" for f in d["fields"]
+                     if f["code"] == "regions")
+    fields, placed = [], False
+    for f in e["fields"]:
+        if f["code"] == "region":
+            fields.append(copy.deepcopy(new_field))
+            placed = True
+        else:
+            fields.append(f)
+    if not placed:
+        fields.append(copy.deepcopy(new_field))
+    d = {**e, "fields": fields}
+    entities.update("water_bodies", {"fields": fields}, actor="system")
+    entities.add_version("water_bodies", {"schema.json": dumps(d).encode()},
+                         {"comment": "области: несколько значений из справочника «Области» (деление 2022 г.)"}, "system")
+    col = records("water_bodies")
+    for r in col.list():
+        v = dict(r.get("values", {}))
+        old = v.pop("region", None)
+        v["regions"] = seed_defs.regions_for(v.get("code"), old) or None
+        col.update(r["id"], {"values": v}, actor="system")
+        col.add_version(r["id"], {"record.json": dumps(v).encode()},
+                        {"comment": f"области: «{old or '—'}» → {', '.join(v['regions'] or []) or '—'}"}, "system")
 
 
 # ------------------------------------------------------------------ сущности
@@ -110,7 +147,7 @@ def _check_entity_def(body: dict, old: dict | None) -> None:
         errs.append("Нужно хотя бы одно поле")
     for f in body["fields"]:
         errs += validate_field_def(f)
-        if f.get("type") == "ref" and f.get("ref_entity") and not entities.exists(f["ref_entity"]) \
+        if f.get("type") in ("ref", "ref_list") and f.get("ref_entity") and not entities.exists(f["ref_entity"]) \
                 and f["ref_entity"] != body["code"]:
             errs.append(f"Поле «{f.get('code')}»: справочник «{f['ref_entity']}» не найден")
     if old:
@@ -205,7 +242,7 @@ def _ref_maps(fields: list[dict]) -> dict[str, dict]:
     out = {}
     for f in fields:
         ent = f.get("ref_entity")
-        if f.get("type") == "ref" and ent and ent not in out:
+        if f.get("type") in ("ref", "ref_list") and ent and ent not in out:
             out[ent] = lookup_map(ent)
     return out
 
@@ -337,7 +374,8 @@ def water_bodies_geojson(user: User = Depends(require("dict.view"))):
         v = r["values"]
         pt = v.get("point")
         geom = v.get("shape") or ({"type": "Point", "coordinates": [pt[1], pt[0]]} if pt else None)
-        props = {k: v.get(k) for k in ("code", "name_ru", "name_kk", "type", "region", "basin", "area_km2", "point")}
+        props = {k: v.get(k) for k in ("code", "name_ru", "name_kk", "type", "regions", "basin", "area_km2", "point")}
+        props["regions"] = props.get("regions") or []
         props["id"] = r["id"]
         feats.append({"type": "Feature", "id": r["id"], "geometry": geom, "properties": props})
     return {"type": "FeatureCollection", "features": feats,
@@ -452,7 +490,7 @@ def _check_dtype(d: dict, old: dict | None) -> None:
         errs += validate_field_def(c)
         if c.get("type") in ("geo_shape",):
             errs.append(f"Столбец «{c.get('code')}»: контур нельзя хранить в таблице")
-        if c.get("type") == "ref" and not entities.exists(c.get("ref_entity") or ""):
+        if c.get("type") in ("ref", "ref_list") and not entities.exists(c.get("ref_entity") or ""):
             errs.append(f"Столбец «{c.get('code')}»: справочник «{c.get('ref_entity')}» не найден")
     sc = d.get("species_columns") or {}
     if sc.get("enabled") and sc.get("value_type") not in ("integer", "number"):

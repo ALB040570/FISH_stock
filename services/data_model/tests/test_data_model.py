@@ -54,3 +54,49 @@ def test_dtypes_and_geo(svc):
     r = c.post("/geo/parse", headers=H("ichthyologist"), files={"file": ("a.kml", kml)})
     assert r.status_code == 200 and r.json()["shape"]["type"] == "Polygon"
     assert c.post("/geo/parse", headers=H("ichthyologist"), files={"file": ("a.json", b"{oops")}).status_code == 422
+
+
+def test_regions_multi(svc):
+    """Водоём в нескольких областях: справочник «Области», поле «Области» (несколько ссылок), фильтр."""
+    c = svc("data_model")
+    regs = c.get("/entities/regions/records", headers=H("viewer")).json()
+    assert len(regs) == 20 and any(r["values"]["code"] == "ulytau" for r in regs)
+    wb = next(r for r in c.get("/entities/water_bodies/records", headers=H()).json() if r["values"]["code"] == "balkhash")
+    assert wb["values"]["regions"] == ["karaganda", "almaty_region", "zhambyl"]
+    v = dict(wb["values"], regions="Карагандинская область; Жетісу облысы")      # названия, разделитель
+    r = c.put(f"/entities/water_bodies/records/{wb['id']}", headers=H("ichthyologist"), json={"values": v})
+    assert r.status_code == 200 and r.json()["values"]["regions"] == ["karaganda", "zhetysu"]
+    v["regions"] = ["karaganda", "Луна"]
+    r = c.put(f"/entities/water_bodies/records/{wb['id']}", headers=H("ichthyologist"), json={"values": v})
+    assert r.status_code == 422 and "Луна" in str(r.json())
+    gj = c.get("/water-bodies.geojson", headers=H()).json()
+    f = next(x for x in gj["features"] if x["properties"]["code"] == "balkhash")
+    assert f["properties"]["regions"] == ["karaganda", "zhetysu"]
+
+
+def test_regions_migration(tmp_path, monkeypatch):
+    """Установка до 21.10: строковое поле «Область» переводится в «Области»."""
+    import json as _json
+    from conftest import load_service
+    mod = load_service("data_model", tmp_path, monkeypatch)
+    # имитация старой схемы: поле region вместо regions, значение — строка
+    e = mod.entities.get("water_bodies")
+    old_fields = [dict(f, code="region", title_ru="Область", type="string", ref_entity=None) if f["code"] == "regions"
+                  else f for f in e["fields"]]
+    mod.entities.update("water_bodies", {"fields": old_fields}, actor="test")
+    col = mod.records("water_bodies")
+    for r in col.list():
+        v = dict(r["values"])
+        v.pop("regions", None)
+        v["region"] = "Алматинская область" if v["code"] == "kapshagay" else "Жамбылская область"
+        col.update(r["id"], {"values": v}, actor="test")
+    mod._migrate_regions()
+    fields = [f["code"] for f in mod.entities.get("water_bodies")["fields"]]
+    assert "regions" in fields and "region" not in fields
+    vals = {r["values"]["code"]: r["values"] for r in col.list()}
+    assert vals["balkhash"]["regions"] == ["karaganda", "almaty_region", "zhambyl"]
+    assert vals["kapshagay"]["regions"] == ["almaty_region"] and "region" not in vals["kapshagay"]
+    assert _json.loads(col.read_version_file(next(r["id"] for r in col.list() if r["values"]["code"] == "alakol"),
+                                             col.get(next(r["id"] for r in col.list()
+                                                          if r["values"]["code"] == "alakol"))["current_version"],
+                                             "record.json"))["regions"] == ["zhetysu", "abai"]

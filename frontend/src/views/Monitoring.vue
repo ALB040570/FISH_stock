@@ -3,7 +3,7 @@
     <div class="page-head">
       <div>
         <h1>{{ $t('monitoring.title') }}<template v-if="wbRec">: {{ tr(wbRec, 'name') }}</template></h1>
-        <div class="sub">{{ wbRec ? (wbRec.region || '') : $t('monitoring.choose') }}</div>
+        <div class="sub">{{ wbRec ? regionNames(wbRec.regions) : $t('monitoring.choose') }}</div>
       </div>
       <div class="row">
         <el-select v-model="wb" filterable :placeholder="$t('monitoring.choose')" style="width:260px" @change="go">
@@ -35,6 +35,8 @@
   </div>
 </template>
 <script setup>
+import { loadRegions, regionNames } from '../regions'
+loadRegions()
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'

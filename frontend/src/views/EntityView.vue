@@ -59,6 +59,8 @@
   </div>
 </template>
 <script setup>
+import { loadRegions, regionNames } from '../regions'
+loadRegions()
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -94,6 +96,8 @@ function cell(v, f) {
   if (f.type === 'boolean') return v ? 'да' : 'нет'
   if (f.type === 'geo_point') return `${v[0]}, ${v[1]}`
   if (f.type === 'enum') { const e = (f.enum || []).find((x) => x.value === v); return e ? tr(e, 'title') : v }
+  if (f.type === 'ref_list' && Array.isArray(v)) return f.ref_entity === 'regions' ? regionNames(v) : v.join(', ')
+  if (f.type === 'geo_shape') return v.type
   return v
 }
 async function load() {

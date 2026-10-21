@@ -19,7 +19,7 @@
             <el-input-number v-model="row.min" size="small" :controls="false" :placeholder="$t('dict.min')" style="width:80px" />
             <el-input-number v-model="row.max" size="small" :controls="false" :placeholder="$t('dict.max')" style="width:80px" />
           </div>
-          <el-select v-else-if="row.type === 'ref'" v-model="row.ref_entity" size="small" :placeholder="$t('dict.ref_entity')">
+          <el-select v-else-if="row.type === 'ref' || row.type === 'ref_list'" v-model="row.ref_entity" size="small" :placeholder="$t('dict.ref_entity')">
             <el-option v-for="e in entities" :key="e.code" :label="e.title_ru" :value="e.code" />
           </el-select>
           <el-input v-else-if="row.type === 'enum'" type="textarea" :rows="2" size="small" :model-value="enumText(row)"
