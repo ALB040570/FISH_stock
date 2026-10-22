@@ -32,7 +32,7 @@ export const VIEWS = {
 // Табличный вид любого виджета: представление — его таблица; ряды — год × ряд; таблица — как есть
 export function tableOf(widget, data, spName = (c) => c) {
   if (!data || data.empty) return { columns: [], rows: [] }
-  if (data.columns && data.rows) return { columns: data.columns.filter((c) => !String(c.code).startsWith('_') || c.title), rows: data.rows }
+  if (data.columns && data.rows) return { columns: data.columns.filter((c) => c.type !== 'spark' && (!String(c.code).startsWith('_') || c.title)), rows: data.rows }
   if (data.series && data.x) {
     const cols = [{ code: '_x', title: widget.options?.x || 'x', type: 'string' },
       ...data.series.map((s, i) => ({ code: 's' + i, title: s.name == null ? data.y_title : spName(s.name), type: 'number' }))]

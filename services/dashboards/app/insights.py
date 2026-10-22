@@ -1100,7 +1100,7 @@ def signals(D, rules: dict) -> list[dict]:
                 if en and prev:
                     avg = sum(prev) / len(prev)
                     if avg and sign * (v1 / avg - 1) * 100 > p["pct"]:
-                        out.append({"level": "warning" if sign < 0 else "info", "rule": code, "section": "catches",
+                        out.append({"level": "warning" if sign < 0 else "info", "rule": code, "section": "catches", "species": s,
                                     "text": f"{D.sp_name(s).capitalize()}: улов на усилие (сеть, научный лов) в {y1} году "
                                             f"{'ниже' if sign < 0 else 'выше'} среднего за {len(prev)} предыдущих лет "
                                             f"на {abs((v1 / avg - 1) * 100):.0f} %"})
@@ -1108,10 +1108,10 @@ def signals(D, rules: dict) -> list[dict]:
             if en and len(pts) >= 3:
                 vals = [v for _, v in pts]
                 if v1 == min(vals):
-                    out.append({"level": "warning", "rule": "cpue_extreme", "section": "catches",
+                    out.append({"level": "warning", "rule": "cpue_extreme", "section": "catches", "species": s,
                                 "text": f"{D.sp_name(s).capitalize()}: улов на усилие в {y1} году — самый низкий за {len(pts)} лет"})
                 elif v1 == max(vals):
-                    out.append({"level": "info", "rule": "cpue_extreme", "section": "catches",
+                    out.append({"level": "info", "rule": "cpue_extreme", "section": "catches", "species": s,
                                 "text": f"{D.sp_name(s).capitalize()}: улов на усилие в {y1} году — самый высокий за {len(pts)} лет"})
         sci = [r for r in rows if r.get("catch_type") == "scientific"]
         years = _years(sci)
@@ -1145,7 +1145,7 @@ def signals(D, rules: dict) -> list[dict]:
                     v = [r.get(s) for r in yr if r.get(s) is not None]
                     tot = sum(v)
                     if len(v) >= p["min_hauls"] and tot and max(v) / tot * 100 > p["pct"]:
-                        out.append({"level": "info", "rule": "outlier_haul", "section": "catches",
+                        out.append({"level": "info", "rule": "outlier_haul", "section": "catches", "species": s,
                                     "text": f"{D.sp_name(s).capitalize()}, {y}: один лов дал {max(v) / tot * 100:.0f} % "
                                             f"годового научного улова ({max(v):g} из {tot:g} шт)"})
     en, p = on("small_sample")
@@ -1153,13 +1153,14 @@ def signals(D, rules: dict) -> list[dict]:
         r_a, m_a = D.table("age_samples")
         if r_a:
             y1 = _years(r_a)[-1]
-            small = []
+            small, small_codes = [], []
             for s in m_a["species"]:
                 v = [r.get(s) for r in r_a if r["year"] == y1 and r.get(s) is not None]
                 if v and 0 < sum(v) < p["min_fish"]:
                     small.append(f"{D.sp_name(s)} — {sum(v):g}")
+                    small_codes.append(s)
             if small:
-                out.append({"level": "warning", "rule": "small_sample", "section": "ages",
+                out.append({"level": "warning", "rule": "small_sample", "section": "ages", "species_list": small_codes,
                             "text": f"Возрастные пробы {y1} года меньше {p['min_fish']} рыб: " + ", ".join(small)})
     en, p = on("weight_dev")
     if en:
@@ -1177,7 +1178,7 @@ def signals(D, rules: dict) -> list[dict]:
                         if abs(d) > p["pct"]:
                             devs.append(f"j={a}: {d:+.0f} %")
                 if devs:
-                    out.append({"level": "info", "rule": "weight_dev", "section": "weights",
+                    out.append({"level": "info", "rule": "weight_dev", "section": "weights", "species": s,
                                 "text": f"{D.sp_name(s).capitalize()}: средний вес в {y1} году отличается от многолетнего: " + ", ".join(devs[:4])})
     en, p = on("quota_change")
     if en:
@@ -1190,7 +1191,7 @@ def signals(D, rules: dict) -> list[dict]:
             for s in spc:
                 x0, x1 = by[a].get(s), by[b].get(s)
                 if x0 and x1 is not None and abs((x1 / x0 - 1) * 100) > p["pct"]:
-                    out.append({"level": "info", "rule": "quota_change", "section": "quota",
+                    out.append({"level": "info", "rule": "quota_change", "section": "quota", "species": s,
                                 "text": f"{D.sp_name(s).capitalize()}: ПДУ НПЦ {b} года к {a} — {(x1 / x0 - 1) * 100:+.0f} % ({x0:g} → {x1:g} т)"})
     en, _ = on("conditions_change")
     if en:
@@ -1216,6 +1217,9 @@ def signals(D, rules: dict) -> list[dict]:
 
 def v_signals(D, opt, rules=None):
     sig = signals(D, rules or {})
+    sp = opt.get("species")
+    if sp:          # паспорт вида: только замечания этого вида
+        sig = [x for x in sig if x.get("species") == sp or sp in (x.get("species_list") or [])]
     lang = D.lang
     return {"columns": [col("level", "Уровень" if lang != "kk" else "Деңгей"), col("text", "Замечание" if lang != "kk" else "Ескерту")],
             "rows": [{"level": s["level"], "text": s["text"]} for s in sig], "signals": sig, "chart": None,
@@ -1362,8 +1366,128 @@ def explain_haul(D, where: dict, opt: dict) -> dict:
 
 
 
+# ------------------------------------------------------------------ светофор видов и журнал ловов
+def v_traffic(D, opt, rules=None):
+    """Светофор видов: строка — вид; улов на усилие (сеть, научный лов) за годы, последний год к среднему,
+    доля в улове, доля половозрелых, вес к норме, квота к прошлому году, замечания."""
+    rules = rules or {}
+    rows, meta = need(D, "catches")
+    sci = [r for r in rows if r.get("catch_type") == "scientific"] or rows
+    tot = Counter()
+    for r in sci:
+        for c in meta["species"]:
+            tot[c] += r.get(c) or 0
+    spc = [c for c, v in tot.most_common() if v > 0]
+    if opt.get("species"):
+        spc = [c for c in spc if c == opt["species"]] or [opt["species"]]
+    _, p_low = rule_params(rules, "cpue_low")
+    _, p_high = rule_params(rules, "cpue_high")
+    _, p_w = rule_params(rules, "weight_dev")
+    _, p_q = rule_params(rules, "quota_change")
+    years_all = _years(sci)
+    y_last = years_all[-1] if years_all else None
+    tot_last = sum(sum(r.get(c) or 0 for c in meta["species"]) for r in sci if r["year"] == y_last)
+    sig = signals(D, rules)
+    try:
+        qy, qsp, qby = _year_species_table(D, "npc_pdu")
+    except NoData:
+        qy, qsp, qby = [], [], {}
+    rw, mw = D.table("mean_weights")
+    lang = D.lang
+    out = []
+    for c in spc:
+        row = {"_code": c, "species": D.sp_name(c), "_levels": {}}
+        try:
+            cp = v_cpue(D, {"species": c, "gear_kind": "net", "catch_type": "scientific"})
+            pts = [(r["year"], r["mean"]) for r in cp["rows"] if r["mean"] is not None]
+        except NoData:
+            pts = []
+        row["spark"] = [v for _, v in pts]
+        row["_spark_years"] = [y for y, _ in pts]
+        if len(pts) >= 2:
+            prev = [v for _, v in pts[:-1]][-int(p_low["years"]):]
+            avg = sum(prev) / len(prev)
+            ch = _r((pts[-1][1] / avg - 1) * 100, 0) if avg else None
+            row["cpue_change"] = ch
+            if ch is not None:
+                row["_levels"]["cpue_change"] = "down" if ch < -p_low["pct"] else "up" if ch > p_high["pct"] else None
+        row["share"] = _r(sum(r.get(c) or 0 for r in sci if r["year"] == y_last) / tot_last * 100, 1) if tot_last else None
+        try:
+            ms = v_mature_share(D, {"species": c})
+            vals = [r["share"] for r in ms["rows"] if r["share"] is not None]
+            row["mature"] = vals[-1] if vals else None
+        except NoData:
+            row["mature"] = None
+        if rw:
+            yw = _years(rw)
+            if yw:
+                devs = []
+                for a in sorted({r["age"] for r in rw}):
+                    cur = next((r.get(c) for r in rw if r["year"] == yw[-1] and r["age"] == a), None)
+                    oth = [r.get(c) for r in rw if r["year"] != yw[-1] and r["age"] == a and r.get(c)]
+                    if cur and oth:
+                        devs.append((cur / (sum(oth) / len(oth)) - 1) * 100)
+                if devs:
+                    row["weight"] = _r(sum(devs) / len(devs), 1)
+                    row["_levels"]["weight"] = "down" if row["weight"] < -p_w["pct"] else "up" if row["weight"] > p_w["pct"] else None
+        if len(qy) >= 2 and c in qsp:
+            a, b = qby[qy[-2]].get(c), qby[qy[-1]].get(c)
+            if a and b is not None:
+                row["quota"] = _r((b / a - 1) * 100, 0)
+                row["_levels"]["quota"] = "down" if row["quota"] < -p_q["pct"] else "up" if row["quota"] > p_q["pct"] else None
+        row["signals"] = sum(1 for x in sig if x.get("species") == c or c in (x.get("species_list") or []))
+        out.append(row)
+    L = lambda ru, kk: kk if lang == "kk" else ru  # noqa: E731
+    cols = [col("species", tt("species", lang)),
+            col("spark", L("Улов на усилие (сеть) по годам", "Күшке шаққандағы ауланым (ау) жылдар бойынша"), "spark"),
+            col("cpue_change", L(f"{y_last or ''} к среднему, %", f"{y_last or ''} орташаға, %"), "number"),
+            col("share", L(f"Доля в улове {y_last or ''}, %", f"{y_last or ''} ауланымдағы үлесі, %"), "number"),
+            col("mature", L("Половозрелые, %", "Жыныстық жетілгендер, %"), "number"),
+            col("weight", L("Вес к норме, %", "Салмақ нормаға, %"), "number"),
+            col("quota", L("Квота к прошлому году, %", "Квота өткен жылға, %"), "number"),
+            col("signals", L("Замечания", "Ескертулер"), "integer")]
+    return {"columns": cols, "rows": out, "chart": None, "default_view": "traffic",
+            "notes": [L("Улов на усилие — научный лов, сеть. Цвет: отклонение больше порогов «Правил замечаний»; "
+                        "щелчок по строке открывает паспорт вида",
+                        "Күшке шаққандағы ауланым — ғылыми аулау, ау. Түс: «Ескерту ережелері» шектерінен үлкен ауытқу; "
+                        "жолды басу түрдің паспортын ашады")],
+            "sources": _sources(D, "catches", "age_samples", "mean_weights", "npc_pdu")}
+
+
+def v_journal(D, opt):
+    """Журнал ловов: все ловы набора с подписями, для фильтров и итогов в интерфейсе."""
+    rows, meta = need(D, "catches")
+    lang = D.lang
+    L = lambda ru, kk: kk if lang == "kk" else ru  # noqa: E731
+    kinds = D.gear_kind
+    spc = [c for c in meta["species"] if any(r.get(c) is not None for r in rows)]
+    sp = opt.get("species")
+    if sp in spc:
+        spc = [sp] + [c for c in spc if c != sp]
+    out = []
+    for i, r in enumerate(rows):
+        d = r.get("date") or ""
+        k = kinds.get(r.get("gear"))
+        out.append({"_i": i, "year": r.get("year"), "date": _ru_date(d) if d else None, "_iso": d, "month": int(d[5:7]) if d else None,
+                    "place": D.place(r.get("place")), "gear": D.gear_name(r.get("gear")), "_gear_kind": k,
+                    "length": r.get("gear_size_m"), "area": r.get("area_ha") if k != "net" else None,
+                    "catch_type": D.catch_type_name(r.get("catch_type")), "_catch_type": r.get("catch_type"),
+                    **{c: r.get(c) for c in spc}})
+    cols = [col("year", tt("year", lang), "integer"), col("date", L("Дата", "Күні"), "date"),
+            col("place", tt("place", lang)), col("gear", L("Орудие", "Құрал")),
+            col("length", L("Длина сети / невода, м", "Ау / сүзекі ұзындығы, м"), "number"),
+            col("area", L("Площадь облова, га", "Ауланған аудан, га"), "number"),
+            col("catch_type", L("Тип лова", "Аулау түрі"))] + \
+        [{**col(c, D.sp_name(c), "number", L("шт", "дана")), "species": True, "selected": c == sp} for c in spc]
+    filt = {"years": _years(rows), "places": sorted({x["place"] for x in out if x["place"]}),
+            "gears": sorted({x["gear"] for x in out if x["gear"]}), "types": sorted({x["catch_type"] for x in out if x["catch_type"]}),
+            "months": sorted({x["month"] for x in out if x["month"]})}
+    return {"columns": cols, "rows": out, "journal": filt, "chart": None, "default_view": "journal",
+            "sources": _sources(D, "catches")}
+
+
 VIEWS = OrderedDict([
-    ("overview", v_overview), ("signals", v_signals),
+    ("overview", v_overview), ("signals", v_signals), ("traffic", v_traffic), ("journal", v_journal),
     ("cpue", v_cpue), ("composition", v_composition), ("coverage_places", v_coverage_places),
     ("coverage_months", v_coverage_months), ("haul_box", v_haul_box), ("type_compare", v_type_compare),
     ("hauls_count", v_hauls_count), ("age_catch_year", v_age_catch_year), ("age_catch_hauls", v_age_catch_hauls),
@@ -1375,7 +1499,7 @@ VIEWS = OrderedDict([
     ("quota", v_quota), ("quota_change", v_quota_change), ("quota_vs_stock", v_quota_vs_stock),
     ("completeness", v_completeness), ("quality", v_quality),
 ])
-NEEDS_RULES = {"overview", "signals", "quality"}
+NEEDS_RULES = {"overview", "signals", "quality", "traffic"}
 
 
 # ------------------------------------------------------------------ сравнение двух лет

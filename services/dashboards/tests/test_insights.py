@@ -190,3 +190,55 @@ def test_kazakh_texts(dash):
     j = c.post("/widgets/data", headers=H(), json={"source": {"kind": "insight", "view": "cpue"},
                                                    "filters": {"water_body": "balkhash", "lang": "kk"}, "options": {}}).json()
     assert j["empty"] and j["message"].startswith("Бұл су айдыны")
+
+
+def test_traffic_journal_explain(dash):
+    c, _, _ = dash
+    t = view(c, "traffic")
+    codes = [r["_code"] for r in t["rows"]]
+    assert codes[0] in ("lesh", "plotva") and len(codes) >= 8
+    lesh = next(r for r in t["rows"] if r["_code"] == "lesh")
+    cp = view(c, "cpue", "lesh", gear_kind="net")
+    assert lesh["spark"] == [r["mean"] for r in cp["rows"] if r["mean"] is not None]
+    assert set(lesh["_levels"]) >= {"cpue_change"} and lesh["share"] > 0
+    one = view(c, "traffic", "sudak")
+    assert [r["_code"] for r in one["rows"]] == ["sudak"]
+    j = view(c, "journal", "sudak")
+    assert len(j["rows"]) == 690 and j["journal"]["years"][0] == 2015 and "м. Тополев" in j["journal"]["places"]
+    sp_cols = [col for col in j["columns"] if col.get("species")]
+    assert sp_cols[0]["code"] == "sudak" and sp_cols[0]["selected"]
+    assert all(r["area"] is None for r in j["rows"] if r["_gear_kind"] == "net")
+    assert j["columns"][0]["title"] == "Год" and j["rows"][0]["date"].count(".") == 2
+    # пояснения
+    e = view(c, "cpue", "lesh", gear_kind="net")["explain"]
+    assert len(e["how"]) >= 3 and e["now"][0].startswith("Лещ: в 2024 г.") and e["next"][0]["widget"] == "c_places"
+    for name in ("composition", "coverage_places", "haul_box", "age_heatmap", "growth", "weight_dev", "quota", "quality", "traffic"):
+        r = view(c, name, "lesh")
+        assert r["explain"]["how"] and r["explain"]["now"], name
+    o = view(c, "overview")["explain"]["now"]
+    assert any("Замечаний к данным" in x for x in o)
+    assert view(c, "overview", _f={"lang": "kk"})["explain"]["now"]
+    k = view(c, "cpue", "lesh", gear_kind="net", _f={"lang": "kk"})["explain"]
+    assert "жылы" in k["now"][0] and "Сызық" in k["how"][0]
+    # замечания паспорта вида — только этого вида
+    s = view(c, "signals", "okun")
+    assert s["signals"] and all("Окунь" in x["text"] or "окунь" in x["text"] for x in s["signals"])
+
+
+def test_comments(dash):
+    c, _, _ = dash
+    key = {"board": "monitoring", "widget": "c_cpue_net", "water_body": "zhaysan", "species": "lesh"}
+    assert c.post("/comments", headers=H("viewer"), json={**key, "text": "x"}).status_code == 403
+    assert c.post("/comments", headers=H("ichthyologist"), json={**key, "text": "  "}).status_code == 422
+    a = c.post("/comments", headers=H("ichthyologist", uid="u2", login="ira"), json={**key, "text": "Рост 2024 — новые места", "year": 2024})
+    assert a.status_code == 201
+    c.post("/comments", headers=H("mathematician", uid="u3"), json={**key, "text": "Проверить пробу"})
+    c.post("/comments", headers=H("mathematician", uid="u3"), json={**key, "species": "sudak", "text": "другой вид"})
+    cnt = c.get("/comments/counts", headers=H("viewer"), params={"board": "monitoring", "water_body": "zhaysan", "species": "lesh"}).json()
+    assert cnt == {"c_cpue_net": 2}
+    lst = c.get("/comments", headers=H("viewer"), params=key).json()
+    assert [x["text"] for x in lst] == ["Проверить пробу", "Рост 2024 — новые места"] and not lst[0]["can_delete"]
+    cid = a.json()["id"]
+    assert c.delete(f"/comments/{cid}", headers=H("mathematician", uid="u3")).status_code == 403
+    assert c.delete(f"/comments/{cid}", headers=H("ichthyologist", uid="u2")).status_code == 200
+    assert c.get("/comments/counts", headers=H(), params={"board": "monitoring", "water_body": "zhaysan", "species": "lesh"}).json() == {"c_cpue_net": 1}

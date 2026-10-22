@@ -77,3 +77,44 @@ def test_viewer_and_language(browser):
     assert page.locator("text=Пользователи").count() == 0
     page.get_by_text("ҚАЗ", exact=True).first.click()
     page.wait_for_selector("text=Бастапқы деректер")
+
+
+def test_monitoring_slides(browser):
+    """Мониторинг: слайды по умолчанию, стрелки, режим вида, журнал ловов, комментарии, лента."""
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("try{localStorage.removeItem('fishstock.monitoring.view')}catch(e){}")
+    login(page)
+    page.goto(URL + "/monitoring/zhaysan")
+    page.wait_for_selector(".slide .widget")
+    assert page.locator(".dots .dot").count() >= 2
+    page.wait_for_selector(".slide-side .now")                     # «Что видно сейчас»
+    page.keyboard.press("ArrowRight")
+    page.wait_for_function("location.search.includes('w=')")
+    assert page.locator(".dot.on .dn").inner_text() == "2"
+    # режим вида: чип вида → заголовок с названием вида, адрес помнит вид
+    page.locator(".chips .chip").nth(1).click()
+    page.wait_for_function("location.search.includes('sp=')")
+    page.locator(".chips .chip").first.click()
+    # журнал ловов в разделе «Уловы»: русские заголовки, фильтр по году
+    page.locator(".secs label").filter(has_text="Уловы").click()
+    page.locator(".dots .dot").filter(has_text="Журнал ловов").click()
+    page.wait_for_selector(".jr .el-table")
+    heads = page.locator(".jr .el-table__header th").all_inner_texts()
+    assert any("Дата" in h for h in heads) and not any("date" == h.strip() for h in heads)
+    # комментарий: написать и увидеть счётчик
+    text = "e2e " + uuid.uuid4().hex[:6]
+    page.locator(".slide-side textarea").fill(text)
+    page.locator(".slide-side button").filter(has_text="Отправить").click()
+    page.wait_for_selector(f"text={text}")
+    page.wait_for_selector(".dot.on .dc")
+    page.locator(".slide-side .cm-i").filter(has_text=text).locator(".del").click()
+    page.locator(".el-message-box button.el-button--primary").click()
+    page.wait_for_timeout(800)
+    assert page.locator(f"text={text}").count() == 0
+    # лента
+    page.locator(".secline .el-radio-button").filter(has_text="Лента").click()
+    page.wait_for_selector(".grid12 > .widget")
+    assert page.locator(".slide").count() == 0
+    assert not errors, errors

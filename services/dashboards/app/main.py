@@ -21,7 +21,7 @@ from fishcommon.auth import User, require
 from fishcommon.errors import AppError, not_found
 from fishcommon.storage import Collection, dumps
 
-from . import export, insights, kk, templates
+from . import explain, export, insights, kk, templates
 
 app = create_app("dashboards", "Администрирование дашбордов",
                  "Шаблоны мониторинга, конструктор дашбордов, данные виджетов, доступ.")
@@ -444,6 +444,9 @@ def _insight(src, flt, opt, wb):
         return {"empty": True, "message": kk.tr(e.message) if lang == "kk" else e.message}
     if lang == "kk":
         res = kk.translate(res)
+    sp = o.get("species") or res.get("species_shown")
+    res["explain"] = explain.explain(view, res, lang, o, D.sp_name(sp) if sp else None,
+                                     _rules() if view in ("sample_size",) else None)
     cmp = flt.get("compare") or []
     if len(cmp) == 2 and all(cmp):
         res = insights.compare_years(res, int(cmp[0]), int(cmp[1]))
@@ -576,3 +579,67 @@ def put_signal_rules(body: RulesIn, user: User = Depends(require("dashboard.edit
 @app.get("/signal-rules/versions", tags=["правила замечаний"])
 def signal_rules_versions(user: User = Depends(require("dashboard.view"))):
     return list(reversed(settings.list_versions("signal_rules"))) if settings.exists("signal_rules") else []
+
+
+# ================================================================ комментарии к виджетам
+comments = Collection(ROOT, "comments")
+
+
+def _ckey(c):
+    return c.get("board"), c.get("widget"), c.get("water_body"), c.get("species") or None
+
+
+@app.get("/comments/counts", tags=["комментарии"])
+def comment_counts(board: str, water_body: str | None = None, species: str | None = None,
+                   user: User = Depends(require("dashboard.view"))):
+    """Число комментариев к каждому виджету дашборда для водоёма и вида."""
+    out: dict[str, int] = {}
+    for c in comments.list():
+        if c.get("deleted") or c.get("board") != board or c.get("water_body") != water_body or (c.get("species") or None) != (species or None):
+            continue
+        out[c["widget"]] = out.get(c["widget"], 0) + 1
+    return out
+
+
+@app.get("/comments", tags=["комментарии"])
+def list_comments(board: str, widget: str, water_body: str | None = None, species: str | None = None,
+                  user: User = Depends(require("dashboard.view"))):
+    key = (board, widget, water_body, species or None)
+    out = [{**c, "can_delete": c.get("author_id") == user.id or user.role == "admin"}
+           for c in comments.list() if not c.get("deleted") and _ckey(c) == key]
+    return sorted(out, key=lambda c: (c.get("created_at") or "", c.get("id") or ""), reverse=True)
+
+
+class CommentIn(BaseModel):
+    board: str
+    widget: str
+    water_body: str | None = None
+    species: str | None = None
+    year: int | None = None
+    text: str
+
+
+@app.post("/comments", tags=["комментарии"], status_code=201)
+def add_comment(body: CommentIn, user: User = Depends(require("dashboard.edit"))):
+    text = body.text.strip()
+    if not text:
+        raise AppError("comment.empty", "Напишите текст комментария", 422)
+    if len(text) > 2000:
+        raise AppError("comment.long", "Комментарий — не длиннее 2000 символов", 422)
+    _get(body.board, user)
+    c = comments.create({**body.model_dump(), "text": text, "species": body.species or None,
+                         "author_id": user.id, "author_name": user.name}, actor=user.id)
+    audit(user, "dashboard.comment", body.board, {"widget": body.widget, "water_body": body.water_body})
+    return {**c, "can_delete": True}
+
+
+@app.delete("/comments/{cid}", tags=["комментарии"])
+def delete_comment(cid: str, user: User = Depends(require("dashboard.view"))):
+    c = comments.get(cid)
+    if not c or c.get("deleted"):
+        raise not_found("Комментарий")
+    if c.get("author_id") != user.id and user.role != "admin":
+        raise AppError("auth.forbidden", "Удалить комментарий может автор или администратор", 403)
+    comments.delete(cid)
+    audit(user, "dashboard.comment_delete", c.get("board"), {"comment": cid})
+    return {"ok": True}

@@ -2,7 +2,7 @@
   <div class="widget card" :style="{ gridColumn: 'span ' + (widget.w || 6) }">
     <div class="wh">
       <div class="wtt">
-        <div class="wt">{{ tr(widget, 'title') }}</div>
+        <div class="wt"><span v-if="spTitle" class="spt">{{ spTitle }} · </span>{{ tr(widget, 'title') }}</div>
         <div v-if="subtitle" class="ws">{{ subtitle }}</div>
       </div>
       <div class="tools">
@@ -21,6 +21,11 @@
             <el-dropdown-item v-for="c in ctypes" :key="c" :command="c" :class="{ on: c === curCtype }">{{ $t('wv.ct_' + c) }}</el-dropdown-item>
           </el-dropdown-menu></template>
         </el-dropdown>
+        <template v-if="!big && board?.boardId">
+          <el-button v-if="data?.explain" size="small" text :title="$t('mon.explain')" @click="openSide('explain')"><el-icon><InfoFilled /></el-icon></el-button>
+          <el-button size="small" text :title="$t('mon.comments')" class="cmb" @click="openSide('comments')">
+            <el-icon><ChatDotRound /></el-icon><span v-if="ccount" class="cmn">{{ ccount }}</span></el-button>
+        </template>
         <el-button size="small" text :title="$t('wv.fullscreen')" @click="full = true"><el-icon><FullScreen /></el-icon></el-button>
         <el-dropdown v-if="canExport" trigger="click" @command="exportAs">
           <el-button size="small" text :title="$t('wv.download')"><el-icon><Download /></el-icon></el-button>
@@ -36,7 +41,7 @@
     <StateBlock :loading="loading" :error="error" :empty="!!data?.empty" :empty-text="emptyText" :retry="load">
       <template v-if="data">
         <WidgetBody ref="body" :widget="widget" :data="data" :mode="mode" :ctype="curCtype" :height="height" :filters="filters"
-                    :species="species" @pick="onPick" @section="goSection" @row="onRow" />
+                    :species="species" :title="fullTitle" @pick="onPick" @section="goSection" @row="onRow" @species="(c) => board?.setSpecies(c)" />
         <div class="foot">
           <div v-if="sel" class="selbar">
             <span>{{ $t('wv.selected') }}: <b>{{ selLabel }}</b></span>
@@ -59,7 +64,7 @@
         </div>
       </template>
     </StateBlock>
-    <el-dialog v-model="full" fullscreen :title="tr(widget, 'title')" append-to-body destroy-on-close>
+    <el-dialog v-model="full" fullscreen :title="fullTitle" append-to-body destroy-on-close>
       <div v-if="subtitle" class="ws" style="margin:-10px 0 10px">{{ subtitle }}</div>
       <div class="row" style="gap:8px; margin-bottom:10px">
         <el-radio-group v-if="modes.length > 1" v-model="mode" size="small">
@@ -70,12 +75,19 @@
         </el-radio-group>
       </div>
       <WidgetBody v-if="data && !data.empty" :widget="widget" :data="data" :mode="mode" :ctype="curCtype" :height="fullHeight" :filters="filters"
-                  :species="species" @pick="onPick" @section="(s) => { full = false; goSection(s) }" @row="onRow" />
+                  :species="species" :title="fullTitle" @pick="onPick" @section="(s) => { full = false; goSection(s) }" @row="onRow"
+                  @species="(c) => { full = false; board?.setSpecies(c) }" />
       <div v-if="sel" class="selbar" style="margin-top:8px">
         <span>{{ $t('wv.selected') }}: <b>{{ selLabel }}</b></span>
         <el-button v-if="canDrill" size="small" type="primary" link @click="drill">{{ $t('wv.show_rows') }}</el-button>
       </div>
     </el-dialog>
+    <el-drawer v-model="sideOpen" :title="fullTitle" size="440px" append-to-body>
+      <ExplainPanel v-if="data?.explain" :what="subtitle" :explain="data.explain" @go="(w) => { sideOpen = false; board?.goWidget(w) }" />
+      <div ref="cmAnchor" />
+      <CommentsPanel :board-id="board?.boardId" :widget-id="widget.id" :water-body="filters?.water_body" :species="cmSpecies"
+                     :years="board?.yearList?.value || []" @changed="board?.reloadCounts()" />
+    </el-drawer>
     <el-drawer v-model="drillOpen" :title="drillTitle" size="70%" append-to-body>
       <StateBlock :loading="drillLoading" :error="drillErr">
         <template v-if="drillData">
@@ -105,10 +117,12 @@ import i18n, { tr } from '../i18n'
 import StateBlock from '../components/StateBlock.vue'
 import { fmt } from '../components/charts'
 import WidgetBody from './WidgetBody.vue'
+import ExplainPanel from './ExplainPanel.vue'
+import CommentsPanel from './CommentsPanel.vue'
 import { tableOf } from './views'
 
-const MODE_ICON = { chart: 'TrendCharts', table: 'Grid', tiles: 'Menu', cards: 'Postcard', signals: 'Bell' }
-const p = defineProps({ widget: Object, filters: Object, species: Object })
+const MODE_ICON = { chart: 'TrendCharts', table: 'Grid', tiles: 'Menu', cards: 'Postcard', signals: 'Bell', traffic: 'Odometer', journal: 'Notebook' }
+const p = defineProps({ widget: Object, filters: Object, species: Object, big: Boolean })
 const board = inject('board', null)
 const { t, te } = useI18n()
 const data = ref(null)
@@ -119,7 +133,19 @@ const sel = ref(null)
 const yearSel = ref(null)
 const full = ref(false)
 const fullHeight = computed(() => Math.max(380, window.innerHeight - 220) + 'px')
-const height = computed(() => (p.widget.h || 4) * 62 + 'px')
+const height = computed(() => (p.big && board?.slideHeight ? board.slideHeight.value : (p.widget.h || 4) * 62 + 'px'))
+// вид в названии: в паспорте вида у видовых виджетов
+const spTitle = computed(() => (p.filters?.species && ['species', 'both'].includes(p.widget.scope || '')
+  ? (p.species?.[p.filters.species] || p.filters.species) : ''))
+const fullTitle = computed(() => (spTitle.value ? spTitle.value + ' · ' : '') + tr(p.widget, 'title'))
+const cmSpecies = computed(() => (['species', 'both'].includes(p.widget.scope || '') ? p.filters?.species || null : null))
+const ccount = computed(() => board?.counts?.value?.[p.widget.id] || 0)
+const sideOpen = ref(false)
+const cmAnchor = ref(null)
+function openSide(what) {
+  sideOpen.value = true
+  if (what === 'comments') setTimeout(() => cmAnchor.value?.scrollIntoView({ behavior: 'smooth' }), 350)
+}
 const subtitle = computed(() => tr(p.widget, 'subtitle'))
 const emptyText = computed(() => (data.value?.reason && te('w.reason_' + data.value.reason) ? t('w.reason_' + data.value.reason) : data.value?.message))
 
@@ -134,6 +160,7 @@ async function load() {
     if (board && data.value?.chart?.x_is_year) board.addYears(data.value.chart.x)
     if (board && data.value?.chart?.y_is_year) board.addYears(data.value.chart.y)
     if (board && data.value?.years) board.addYears(data.value.years)
+    if (board?.setData) board.setData(p.widget.id, data.value)
   } catch (e) { error.value = e } finally { loading.value = false }
 }
 watch(() => [p.filters, p.widget, i18n.global.locale.value, yearSel.value], load, { deep: true, immediate: true })
@@ -145,6 +172,8 @@ const modes = computed(() => {
   const d = data.value
   if (!d || d.empty) return []
   const m = []
+  if (d.default_view === 'traffic') m.push('traffic')
+  if (d.journal) m.push('journal')
   if (d.signals) m.push('signals')
   if (hasChart.value && p.widget.type !== 'table') m.push('chart')
   if (d.cards) m.push('cards')
@@ -208,7 +237,14 @@ async function runDrill(where, dtype, title) {
     if (drillData.value?.title) drillTitle.value = drillData.value.title
   } catch (e) { drillErr.value = e } finally { drillLoading.value = false }
 }
-function drill() { runDrill(whereOf(sel.value), drillSpec.value.dataset_type, `${tr(p.widget, 'title')}: ${selLabel.value}`) }
+function drill() {
+  const w = whereOf(sel.value)
+  if (drillSpec.value.dataset_type === 'catches' && board?.openJournal) {
+    board.openJournal({ ...w, catch_type: w.catch_type || p.widget.options?.catch_type })
+    return
+  }
+  runDrill(w, drillSpec.value.dataset_type, `${fullTitle.value}: ${selLabel.value}`)
+}
 function onRow(row) { if (row.where) runDrill({ ...row.where, _all_types: true }, row.dataset_type, `${row.issue} · ${row.year}`) }
 function dcell(v, c) {
   if (typeof v === 'boolean') return v ? '+1' : '—'
@@ -228,8 +264,9 @@ function context() {
 }
 async function snapshot() {
   const tb = tableOf(p.widget, data.value, (c) => p.species?.[c] || c)
-  return { title: tr(p.widget, 'title'), subtitle: subtitle.value || '', context: context(), columns: tb.columns,
-    rows: tb.rows, sources: data.value?.sources || [], notes: data.value?.notes || [], filter_label: data.value?.filter_label || '',
+  return { title: fullTitle.value, subtitle: subtitle.value || '', context: context(), columns: tb.columns,
+    rows: tb.rows, sources: data.value?.sources || [], notes: [...(data.value?.explain?.now || []), ...(data.value?.notes || [])],
+    filter_label: data.value?.filter_label || '',
     image: mode.value === 'chart' ? body.value?.image() || null : null }
 }
 async function exportAs(kind) {
@@ -249,6 +286,9 @@ onBeforeUnmount(() => unreg && unreg())
 .wh { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; gap: 8px; }
 .wtt { min-width: 0; }
 .wt { font-weight: 600; }
+.spt { color: var(--fs-primary-2); }
+.cmb { position: relative; }
+.cmn { margin-left: 3px; font-size: 11.5px; font-weight: 600; color: var(--fs-primary); }
 .ws { font-size: 12.5px; color: var(--fs-muted); line-height: 1.35; margin-top: 2px; }
 .tools { display: flex; align-items: center; gap: 2px; flex: none; }
 .tools :deep(.el-radio-button__inner) { padding: 5px 8px; }

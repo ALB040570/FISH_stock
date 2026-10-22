@@ -31,6 +31,10 @@
       </div>
       <div v-if="!data.signals?.length" class="state muted small">{{ $t('wv.no_signals') }}</div>
     </div>
+    <!-- светофор видов -->
+    <TrafficTable v-else-if="mode === 'traffic'" :data="data" :height="height" @species="(c) => $emit('species', c)" />
+    <!-- журнал ловов -->
+    <JournalTable v-else-if="mode === 'journal'" :data="data" :height="height" :title="title" />
     <!-- таблица -->
     <div v-else-if="mode === 'table'">
       <el-table :data="table.rows" size="small" :max-height="height" border :row-class-name="rowCls" @row-click="onRow">
@@ -51,9 +55,11 @@ import EChart from '../components/EChart.vue'
 import { base, buildChart, fmt } from '../components/charts'
 import specials from './specials'
 import { tableOf } from './views'
+import TrafficTable from './TrafficTable.vue'
+import JournalTable from './JournalTable.vue'
 
-const p = defineProps({ widget: Object, data: Object, mode: String, ctype: String, height: String, filters: Object, species: Object })
-const emit = defineEmits(['pick', 'section', 'row'])
+const p = defineProps({ widget: Object, data: Object, mode: String, ctype: String, height: String, filters: Object, species: Object, title: String })
+const emit = defineEmits(['pick', 'section', 'row', 'species'])
 const { t } = useI18n()
 const board = inject('board', null)
 const ec = ref(null)
