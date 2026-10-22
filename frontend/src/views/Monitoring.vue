@@ -39,7 +39,7 @@
           </el-dropdown-menu></template>
         </el-dropdown>
       </div>
-      <!-- два режима: «Все виды» (водоём целиком) и паспорт одного вида -->
+      <!-- два режима: «Все виды» (водоём целиком) и «Все данные по виду» -->
       <div v-if="wb && board" class="chips">
         <button class="chip" :class="{ on: !sp }" @click="sp = null">{{ $t('mon.all_species') }}</button>
         <button v-for="s in chips" :key="s.code" class="chip" :class="{ on: sp === s.code }" :title="s.down ? $t('mon.down') : ''"

@@ -220,7 +220,7 @@ def test_traffic_journal_explain(dash):
     assert view(c, "overview", _f={"lang": "kk"})["explain"]["now"]
     k = view(c, "cpue", "lesh", gear_kind="net", _f={"lang": "kk"})["explain"]
     assert "жылы" in k["now"][0] and "Сызық" in k["how"][0]
-    # замечания паспорта вида — только этого вида
+    # замечания режима «Все данные по виду» — только этого вида
     s = view(c, "signals", "okun")
     assert s["signals"] and all("Окунь" in x["text"] or "окунь" in x["text"] for x in s["signals"])
 

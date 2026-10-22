@@ -134,7 +134,7 @@ const yearSel = ref(null)
 const full = ref(false)
 const fullHeight = computed(() => Math.max(380, window.innerHeight - 220) + 'px')
 const height = computed(() => (p.big && board?.slideHeight ? board.slideHeight.value : (p.widget.h || 4) * 62 + 'px'))
-// вид в названии: в паспорте вида у видовых виджетов
+// вид в названии: в режиме «Все данные по виду» у видовых виджетов
 const spTitle = computed(() => (p.filters?.species && ['species', 'both'].includes(p.widget.scope || '')
   ? (p.species?.[p.filters.species] || p.filters.species) : ''))
 const fullTitle = computed(() => (spTitle.value ? spTitle.value + ' · ' : '') + tr(p.widget, 'title'))

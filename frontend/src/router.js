@@ -6,7 +6,7 @@ const L = (n) => () => import(`./views/${n}.vue`)
 const routes = [
   { path: '/login', component: L('Login'), meta: { public: true } },
   { path: '/', component: L('MapHome') },
-  { path: '/monitoring/:wb?', component: L('Monitoring') },
+  { path: '/monitoring/:wb?', component: L('Monitoring'), meta: { queryState: true } },  // вид/раздел/слайд в адресе — без перезагрузки страницы
   { path: '/data', component: L('Datasets') },
   { path: '/data/:id', component: L('DatasetView') },
   { path: '/dictionaries', component: L('Dictionaries') },

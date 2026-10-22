@@ -104,7 +104,7 @@ watch(tab, (v) => emit('update:modelValue', v))
 watch(tabs, (tt) => { if (!tt.find((x) => x.code === tab.value)) tab.value = tt[0]?.code })
 const curTab = computed(() => tabs.value.find((x) => x.code === tab.value) || tabs.value[0])
 
-// режим: «Все виды» — водоём целиком; выбран вид — паспорт вида (у виджета scope: wb | species | both)
+// режим: «Все виды» — водоём целиком; выбран вид — «Все данные по виду» (у виджета scope: wb | species | both)
 const spMode = computed(() => !!p.filters?.species)
 const inMode = (w) => { const s = w.scope || 'both'; return s === 'both' || (spMode.value ? s === 'species' : s === 'wb') }
 const tabWidgets = computed(() => (p.board?.widgets || []).filter((w) => (w.tab || tabs.value[0].code) === tab.value && (p.editing || inMode(w))))
@@ -187,13 +187,14 @@ function goWidget(id) {
     if (!slidesOn.value) nextTick(() => document.getElementById('w-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   })
 }
-// «паспорт вида»: выбрать вид и перейти к первому видовому виджету вкладки (обычно — улов на усилие)
-function openPassport(c) {
+function openSpeciesAll(c) {
   if (!c) return
   emit('species', c)
+  // «Все данные по виду» открываются на первом разделе вкладки (Обзор), первым слайдом
   const go = () => {
-    const first = (p.board?.widgets || []).find((w) => (w.tab || tabs.value[0].code) === tab.value && w.scope === 'species')
-    if (first) goWidget(first.id)
+    const first = sections.value[0]
+    if (first) section.value = first.code
+    nextTick(() => { idx.value = 0; if (!slidesOn.value) document.querySelector('.main')?.scrollTo({ top: 0, behavior: 'smooth' }) })
   }
   if (p.filters?.species === c) { go(); return }
   const stop = watch(() => p.filters?.species, (v) => { if (v === c) { stop(); nextTick(go) } })
@@ -208,7 +209,7 @@ provide('board', {
   wbName: computed(() => p.wbName || ''),
   setHighlight: (y) => { highlight.value = y == null || highlight.value === y ? null : y },
   setSection: (s) => { const tb = tabs.value.find((x) => (x.sections || []).some((q) => q.code === s)); if (tb) { tab.value = tb.code; section.value = s } },
-  setSpecies: openPassport,
+  setSpecies: openSpeciesAll,
   setData: (id, d) => { dataById[id] = d },
   reloadCounts,
   goWidget,
@@ -221,12 +222,21 @@ function onMore(c) {
   if (c === 'compare') cmpOpen.value = true
   if (c === 'report') report()
 }
+let wasView = null
 async function report() {
   reporting.value = true
   try {
     // отчёт строится по ленте: в режиме слайдов виджеты раздела загружаются по одному — переключаемся на время отчёта
     const was = viewMode.value
-    if (slidesOn.value) { viewMode.value = 'feed'; await new Promise((r) => setTimeout(r, 4500)) }
+    wasView = was
+    if (slidesOn.value) {
+      viewMode.value = 'feed'
+      // ждём, пока все виджеты раздела загрузятся (не дольше 30 с), и даём графикам дорисоваться
+      const need = visible.value.filter((w) => w.type !== 'text').map((w) => w.id)
+      const t0 = Date.now()
+      while (Date.now() - t0 < 30000 && !need.every((id) => reg.has(id) && reg.get(id).ready())) await new Promise((r) => setTimeout(r, 250))
+      await new Promise((r) => setTimeout(r, 1200))
+    }
     const ids = visible.value.map((w) => w.id).filter((id) => reg.has(id) && reg.get(id).ready())
     const widgets = await Promise.all(ids.map((id) => reg.get(id).fn()))
     viewMode.value = was
@@ -236,7 +246,7 @@ async function report() {
       compare.value ? `${t('wv.compare')}: ${compare.value[0]} ${t('wv.and')} ${compare.value[1]}` : null].filter(Boolean).join(' · ')
     await downloadPost('dashboards', '/reports/section.pdf', { title, context: ctx, widgets },
       `${(p.wbName || 'FishStock').replace(/[^\p{L}\p{N}]+/gu, '_')}_${(sec?.code || tab.value)}.pdf`)
-  } catch (e) { ElMessage.error(e.message || String(e)) } finally { reporting.value = false }
+  } catch (e) { ElMessage.error(e.message || String(e)) } finally { reporting.value = false; if (wasView) viewMode.value = wasView }
 }
 </script>
 <style scoped>

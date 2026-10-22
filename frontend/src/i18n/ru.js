@@ -41,7 +41,7 @@ export default {
     compare: 'Сравнить годы…', compare_title: 'Сравнить два года', compare_on: 'Сравнение', apply: 'Применить', reset: 'Сбросить',
     of: 'из', prev: 'Предыдущий', next: 'Следующий', what: 'Что показывает', how: 'Как читать', now: 'Что видно сейчас',
     check: 'Что проверить дальше', comments: 'Комментарии', no_comments: 'Комментариев пока нет — будьте первым',
-    write: 'Написать комментарий…', send: 'Отправить', year_tag: 'К году', explain: 'Пояснение', species_passport: 'Паспорт вида',
+    write: 'Написать комментарий…', send: 'Отправить', year_tag: 'К году', explain: 'Пояснение', species_passport: 'Все данные по виду',
     down: 'снижение', up: 'рост', j_years: 'Годы', j_months: 'Месяцы', j_gear: 'Орудие', j_type: 'Тип лова', j_places: 'Места лова',
     j_search: 'Поиск', j_total: 'Итого', j_hauls: 'ловов', j_reset: 'Сбросить фильтры', j_export: 'Excel (отфильтрованное)',
     j_shown: 'Показано ловов: {n} из {m}', keys_hint: 'Листайте стрелками ← →',

@@ -1218,7 +1218,7 @@ def signals(D, rules: dict) -> list[dict]:
 def v_signals(D, opt, rules=None):
     sig = signals(D, rules or {})
     sp = opt.get("species")
-    if sp:          # паспорт вида: только замечания этого вида
+    if sp:          # «Все данные по виду»: только замечания этого вида
         sig = [x for x in sig if x.get("species") == sp or sp in (x.get("species_list") or [])]
     lang = D.lang
     return {"columns": [col("level", "Уровень" if lang != "kk" else "Деңгей"), col("text", "Замечание" if lang != "kk" else "Ескерту")],
@@ -1448,9 +1448,9 @@ def v_traffic(D, opt, rules=None):
             col("signals", L("Замечания", "Ескертулер"), "integer")]
     return {"columns": cols, "rows": out, "chart": None, "default_view": "traffic",
             "notes": [L("Улов на усилие — научный лов, сеть. Цвет: отклонение больше порогов «Правил замечаний»; "
-                        "щелчок по строке открывает паспорт вида",
+                        "щелчок по строке открывает «Все данные по виду»",
                         "Күшке шаққандағы ауланым — ғылыми аулау, ау. Түс: «Ескерту ережелері» шектерінен үлкен ауытқу; "
-                        "жолды басу түрдің паспортын ашады")],
+                        "жолды басу «Түр бойынша барлық деректерді» ашады")],
             "sources": _sources(D, "catches", "age_samples", "mean_weights", "npc_pdu")}
 
 
