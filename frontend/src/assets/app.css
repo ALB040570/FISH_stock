@@ -1,45 +1,46 @@
-/* Тема «Глубокая вода» (утверждена 20.10.2026). Описание и правила — docs/ui_theme.md.
-   Цвета --fs-* продублированы в src/theme.js для графиков и карты; совпадение проверяет theme.test.js.
+/* Тема «Степь и небо» (утверждена 22.10.2026): светлая схема — :root, тёмная — html.dark. Описание — docs/ui_theme.md.
+   Цвета --fs-* продублированы в src/theme.js (графики, карта); совпадение и контраст проверяет theme.test.js.
    Цвета в компонентах прописывать нельзя — только через эти переменные. */
 :root {
-  --fs-primary: #0E5E6F;
-  --fs-primary-hover: #0B4B59;
-  --fs-primary-2: #14919B;
-  --fs-primary-soft: #A9D3D6;
-  --fs-selected: #E7EFF1;
-  --fs-hover: #F0F5F6;
-  --fs-accent: #F2A541;
-  --fs-accent-text: #9A5B0A;
-  --fs-nav: #0E5E6F;
-  --fs-nav-active: #0B4B59;
-  --fs-nav-text: #E4F1F2;
-  --fs-nav-muted: #B7DCE0;
-  --fs-bg: #F4F7F8;
+  --fs-primary: #16324F;
+  --fs-primary-hover: #0F2540;
+  --fs-primary-2: #00A3C4;
+  --fs-primary-soft: #B9D9E6;
+  --fs-on-primary: #FFFFFF;
+  --fs-selected: #E6EEF6;
+  --fs-hover: #F0F4F8;
+  --fs-accent: #E8B40C;
+  --fs-accent-text: #8A6A00;
+  --fs-nav: #16324F;
+  --fs-nav-active: #0F2540;
+  --fs-nav-text: #E3EAF2;
+  --fs-nav-muted: #A9BCD0;
+  --fs-bg: #F6F7F9;
   --fs-card: #FFFFFF;
-  --fs-card-soft: #F9FBFB;
-  --fs-line: #DCE5E8;
-  --fs-line-soft: #EBF0F2;
-  --fs-text: #1C2B33;
-  --fs-muted: #5B6F78;
-  --fs-faint: #74858D;
-  --fs-code: #F2F6F7;
+  --fs-card-soft: #FAFBFC;
+  --fs-line: #DDE2EA;
+  --fs-line-soft: #ECEFF3;
+  --fs-text: #1A2230;
+  --fs-muted: #566275;
+  --fs-faint: #737F8F;
+  --fs-code: #F2F4F7;
   --fs-success: #1B7A4B;
   --fs-warning: #A9650F;
   --fs-danger: #C0392B;
-  --fs-info: #6B7C85;
+  --fs-info: #66717F;
   --fs-success-bg: #E8F2ED;
   --fs-danger-bg: #F9EBEA;
   --fs-radius: 8px;
-  --fs-shadow-pop: 0 6px 24px rgba(28, 43, 51, .14);
+  --fs-shadow-pop: 0 6px 24px rgba(26, 34, 48, .14);
 
   /* Element Plus: шкалы оттенков (light-N = смешение с белым на N×10 %, dark-2 = с чёрным на 20 %) */
-  --el-color-primary: #0E5E6F;
-  --el-color-primary-light-3: #568E9A;
-  --el-color-primary-light-5: #86AEB7;
-  --el-color-primary-light-7: #B7CFD4;
-  --el-color-primary-light-8: #CFDFE2;
-  --el-color-primary-light-9: #E7EFF1;
-  --el-color-primary-dark-2: #0B4B59;
+  --el-color-primary: #16324F;
+  --el-color-primary-light-3: #5C7084;
+  --el-color-primary-light-5: #8A98A7;
+  --el-color-primary-light-7: #B9C2CA;
+  --el-color-primary-light-8: #D0D6DC;
+  --el-color-primary-light-9: #E8EAED;
+  --el-color-primary-dark-2: #12283F;
   --el-color-success: #1B7A4B;
   --el-color-success-light-3: #5FA281;
   --el-color-success-light-5: #8DBCA5;
@@ -61,27 +62,121 @@
   --el-color-danger-light-8: #F2D7D5;
   --el-color-danger-light-9: #F9EBEA;
   --el-color-danger-dark-2: #9A2E22;
-  --el-color-info: #6B7C85;
-  --el-color-info-light-3: #97A3AA;
-  --el-color-info-light-5: #B5BEC2;
-  --el-color-info-light-7: #D3D8DA;
-  --el-color-info-light-8: #E1E5E7;
-  --el-color-info-light-9: #F0F2F3;
-  --el-color-info-dark-2: #56636A;
+  --el-color-info: #66717F;
+  --el-color-info-light-3: #949CA5;
+  --el-color-info-light-5: #B2B8BF;
+  --el-color-info-light-7: #D1D4D9;
+  --el-color-info-light-8: #E0E3E5;
+  --el-color-info-light-9: #F0F1F2;
+  --el-color-info-dark-2: #525A66;
   --el-text-color-primary: var(--fs-text);
-  --el-text-color-regular: #33454E;
+  --el-text-color-regular: #2E3A4B;
   --el-text-color-secondary: var(--fs-muted);
-  --el-text-color-placeholder: #8C9BA2;
-  --el-border-color: #CFDADE;
+  --el-text-color-placeholder: #8A95A5;
+  --el-border-color: #CED5DF;
   --el-border-color-light: var(--fs-line);
   --el-border-color-lighter: var(--fs-line-soft);
-  --el-border-color-extra-light: #F2F6F7;
+  --el-border-color-extra-light: #F2F4F7;
   --el-fill-color-light: var(--fs-hover);
   --el-fill-color-lighter: var(--fs-card-soft);
   --el-bg-color-page: var(--fs-bg);
   --el-border-radius-base: 6px;
   --el-border-radius-small: 4px;
   --el-font-family: Inter, "Segoe UI", "Helvetica Neue", Roboto, Arial, "Noto Sans", sans-serif;
+}
+
+/* Тёмная схема: без чистого чёрного и чистого белого; текст на цветных заливках — тёмный (--el-color-white) */
+html.dark {
+  --fs-primary: #5BBCD8;
+  --fs-primary-hover: #7CCBE2;
+  --fs-primary-2: #7CCBE2;
+  --fs-primary-soft: #2E4A63;
+  --fs-on-primary: #0B1620;
+  --fs-selected: #233649;
+  --fs-hover: #1F2C3A;
+  --fs-accent: #F0C548;
+  --fs-accent-text: #F0C548;
+  --fs-nav: #0D141C;
+  --fs-nav-active: #1D2C3C;
+  --fs-nav-text: #D8E0E9;
+  --fs-nav-muted: #93A3B5;
+  --fs-bg: #121A24;
+  --fs-card: #18222E;
+  --fs-card-soft: #1D2834;
+  --fs-line: #2C3A49;
+  --fs-line-soft: #243140;
+  --fs-text: #DDE4EC;
+  --fs-muted: #A3AFBD;
+  --fs-faint: #8693A2;
+  --fs-code: #1D2834;
+  --fs-success: #55C893;
+  --fs-warning: #E5A94A;
+  --fs-danger: #F08174;
+  --fs-info: #9AA6B2;
+  --fs-success-bg: #1C3328;
+  --fs-danger-bg: #3A2224;
+  --fs-shadow-pop: 0 6px 24px rgba(0, 0, 0, .5);
+
+  /* Element Plus (тёмная схема): light-N = смешение с фоном страницы, dark-2 = с белым на 20 % */
+  --el-color-primary: #5BBCD8;
+  --el-color-primary-light-3: #458BA2;
+  --el-color-primary-light-5: #366B7E;
+  --el-color-primary-light-7: #284B5A;
+  --el-color-primary-light-8: #213A48;
+  --el-color-primary-light-9: #192A36;
+  --el-color-primary-dark-2: #7CC9E0;
+  --el-color-success: #55C893;
+  --el-color-success-light-3: #419472;
+  --el-color-success-light-5: #34715C;
+  --el-color-success-light-7: #264E45;
+  --el-color-success-light-8: #1F3D3A;
+  --el-color-success-light-9: #192B2F;
+  --el-color-success-dark-2: #77D3A9;
+  --el-color-warning: #E5A94A;
+  --el-color-warning-light-3: #A67E3F;
+  --el-color-warning-light-5: #7C6237;
+  --el-color-warning-light-7: #51452F;
+  --el-color-warning-light-8: #3C372C;
+  --el-color-warning-light-9: #272828;
+  --el-color-warning-dark-2: #EABA6E;
+  --el-color-danger: #F08174;
+  --el-color-danger-light-3: #AD625C;
+  --el-color-danger-light-5: #814E4C;
+  --el-color-danger-light-7: #55393C;
+  --el-color-danger-light-8: #3E2F34;
+  --el-color-danger-light-9: #28242C;
+  --el-color-danger-dark-2: #F39A90;
+  --el-color-info: #9AA6B2;
+  --el-color-info-light-3: #717C87;
+  --el-color-info-light-5: #56606B;
+  --el-color-info-light-7: #3B444F;
+  --el-color-info-light-8: #2D3640;
+  --el-color-info-light-9: #202832;
+  --el-color-info-dark-2: #AEB8C1;
+  --el-color-white: #0B1620;
+  --el-bg-color: var(--fs-card);
+  --el-bg-color-page: var(--fs-bg);
+  --el-bg-color-overlay: var(--fs-card-soft);
+  --el-text-color-primary: var(--fs-text);
+  --el-text-color-regular: #C9D2DC;
+  --el-text-color-secondary: var(--fs-muted);
+  --el-text-color-placeholder: var(--fs-faint);
+  --el-text-color-disabled: #5E6B7A;
+  --el-border-color: #3A4A5C;
+  --el-border-color-light: var(--fs-line);
+  --el-border-color-lighter: var(--fs-line-soft);
+  --el-border-color-extra-light: #1F2B38;
+  --el-border-color-dark: #4A5B6E;
+  --el-border-color-darker: #5A6C80;
+  --el-fill-color: #223040;
+  --el-fill-color-light: var(--fs-hover);
+  --el-fill-color-lighter: var(--fs-card-soft);
+  --el-fill-color-extra-light: #1B2531;
+  --el-fill-color-dark: #2A394B;
+  --el-fill-color-darker: #314358;
+  --el-fill-color-blank: var(--fs-card);
+  --el-mask-color: rgba(8, 12, 18, .7);
+  --el-box-shadow-light: 0 2px 12px rgba(0, 0, 0, .45);
 }
 * { box-sizing: border-box; }
 html, body, #app { height: 100%; margin: 0; }
@@ -118,7 +213,7 @@ h3 { font-size: 15px; margin: 12px 0 8px; font-weight: 600; }
 @media (max-width: 900px) { .grid12 { grid-template-columns: 1fr; } .grid12 > * { grid-column: 1 / -1 !important; } .page { padding: 14px; } }
 
 /* Общие элементы темы */
-.badge-num { width: 22px; height: 22px; border-radius: 50%; background: var(--fs-primary); color: #fff; display: grid;
+.badge-num { width: 22px; height: 22px; border-radius: 50%; background: var(--fs-primary); color: var(--fs-on-primary); display: grid;
   place-items: center; font-size: 12px; font-weight: 600; flex: none; font-variant-numeric: tabular-nums; }
 .list-item:hover { background: var(--fs-hover); }
 .list-item.sel { background: var(--fs-selected); }
@@ -130,8 +225,27 @@ h3 { font-size: 15px; margin: 12px 0 8px; font-weight: 600; }
 .el-alert__title { font-weight: 500; }
 
 /* Всплывающие подпункты свёрнутого меню */
-.fs-nav-popup { --el-menu-bg-color: var(--fs-nav); --el-menu-text-color: var(--fs-nav-text); --el-menu-active-color: #fff;
+.fs-nav-popup { --el-menu-bg-color: var(--fs-nav); --el-menu-text-color: var(--fs-nav-text); --el-menu-active-color: var(--fs-nav-text);
   --el-menu-hover-bg-color: rgba(255, 255, 255, .08); --el-menu-item-height: 36px; }
 .fs-nav-popup .el-menu { padding: 4px; border-radius: 8px; }
 .fs-nav-popup .el-menu-item { border-radius: 6px; }
 .fs-nav-popup .el-menu-item.is-active { background: var(--fs-nav-active); box-shadow: inset 3px 0 0 var(--fs-accent); }
+
+/* Тёмная схема: то, что не задаётся переменными */
+html.dark { color-scheme: dark; }
+html.dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.82) contrast(.88) saturate(.55); } /* подложка без засветки */
+html.dark .leaflet-container { background: var(--fs-bg); }
+html.dark .leaflet-tooltip { background: var(--fs-card-soft); color: var(--fs-text); border-color: var(--fs-line); box-shadow: var(--fs-shadow-pop); }
+html.dark .leaflet-tooltip-top:before { border-top-color: var(--fs-card-soft); }
+html.dark .leaflet-tooltip-bottom:before { border-bottom-color: var(--fs-card-soft); }
+html.dark .leaflet-tooltip-left:before { border-left-color: var(--fs-card-soft); }
+html.dark .leaflet-tooltip-right:before { border-right-color: var(--fs-card-soft); }
+html.dark .leaflet-bar a, html.dark .leaflet-bar a:hover { background: var(--fs-card); color: var(--fs-text); border-bottom-color: var(--fs-line); }
+html.dark .leaflet-bar a.leaflet-disabled { background: var(--fs-card-soft); color: var(--fs-faint); }
+html.dark .leaflet-control-attribution { background: rgba(18, 26, 36, .8) !important; color: var(--fs-muted); }
+html.dark .leaflet-control-attribution a { color: var(--fs-primary); }
+html.dark ::-webkit-scrollbar { width: 10px; height: 10px; }
+html.dark ::-webkit-scrollbar-track { background: var(--fs-bg); }
+html.dark ::-webkit-scrollbar-thumb { background: #34455A; border-radius: 6px; border: 2px solid var(--fs-bg); }
+html.dark .katex { color: var(--fs-text); }
+html.dark img.help-img, html.dark .help-md img { background: #F6F7F9; border-radius: 4px; } /* схемы методики нарисованы на светлом */

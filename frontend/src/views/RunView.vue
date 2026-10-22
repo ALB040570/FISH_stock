@@ -156,7 +156,7 @@ onBeforeUnmount(() => clearInterval(timer))
 .st.sel { border-color: var(--fs-primary); box-shadow: 0 0 0 1px var(--fs-primary) inset; }
 .st.done, .st.reused { background: var(--fs-success-bg); }
 .st.failed { background: var(--fs-danger-bg); }
-.num-badge { width: 22px; height: 22px; border-radius: 50%; background: var(--fs-primary); color: #fff; display: grid; place-items: center; font-size: 12px; }
+.num-badge { width: 22px; height: 22px; border-radius: 50%; background: var(--fs-primary); color: var(--fs-on-primary); display: grid; place-items: center; font-size: 12px; }
 .method-link { float: right; font-size: 13px; margin-top: 10px; position: relative; z-index: 1; }
 .method-link a { color: var(--fs-primary); text-decoration: none; display: inline-flex; gap: 4px; align-items: center; }
 </style>

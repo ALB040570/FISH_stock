@@ -1,7 +1,9 @@
 // Общий вид графиков: палитра темы (src/theme.js), читаемые оси, числа с пробелами.
 import { CHART, CHART_PALETTE, HEAT } from '../theme'
 
+// PALETTE — реактивный массив текущей схемы; в параметры графика передаётся копия pal()
 export const PALETTE = CHART_PALETTE
+export const pal = () => [...CHART_PALETTE]
 
 export function fmt(v, d = 0) {
   if (v === null || v === undefined || Number.isNaN(v)) return '—'
@@ -24,7 +26,7 @@ export function compact(v) {
 
 export function base({ x, series, yName = '', type = 'line', stack = false, legend = true, xName = '' }) {
   return {
-    color: PALETTE,
+    color: pal(),
     grid: { left: 64, right: 18, top: legend ? 36 : 16, bottom: 34, containLabel: false },
     tooltip: { trigger: 'axis', valueFormatter: (v) => fmt(v, 'auto') },
     legend: legend ? { top: 0, type: 'scroll', icon: 'roundRect', itemWidth: 12, itemHeight: 8 } : undefined,
@@ -65,7 +67,7 @@ export function band({ x, q, name = 'медиана', obs = [], yName = '', colo
 const axisY = (name, extra = {}) => ({ type: 'value', name, nameTextStyle: { align: 'left' }, axisLabel: { formatter: compact },
   splitLine: { lineStyle: { color: CHART.grid } }, ...extra })
 const hiLabel = (hl) => (v) => (hl != null && String(v) === String(hl) ? `{hl|${v}}` : String(v))
-const hlRich = { hl: { fontWeight: 'bold', color: CHART.highlight } }
+const hlRich = () => ({ hl: { fontWeight: 'bold', color: CHART.highlight } })
 
 // Ряды: line | bar | stack | stack100; полоса lo–hi (95 % интервал) у линий; подсветка года
 export function seriesChart(spec, ctype, { highlight = null } = {}) {
@@ -101,13 +103,13 @@ export function seriesChart(spec, ctype, { highlight = null } = {}) {
   }
   const legend = out.filter((s) => !String(s.name).endsWith(': 95 %')).length > 1
   return {
-    color: PALETTE,
+    color: pal(),
     grid: { left: 62, right: 16, top: legend ? 58 : 32, bottom: spec.x_title ? 42 : 30 },
     tooltip: { trigger: 'axis', valueFormatter: (v) => fmt(v, 'auto') },
     legend: legend ? { top: 0, type: 'scroll', icon: 'roundRect', itemWidth: 12, itemHeight: 8,
       data: out.filter((s) => !String(s.name).endsWith(': 95 %')).map((s) => s.name) } : undefined,
     xAxis: { type: 'category', data: x, name: spec.x_title || '', nameLocation: 'middle', nameGap: 26,
-      axisLabel: { formatter: spec.x_is_year ? hiLabel(highlight) : undefined, rich: hlRich, interval: x.length > 30 ? 'auto' : 0,
+      axisLabel: { formatter: spec.x_is_year ? hiLabel(highlight) : undefined, rich: hlRich(), interval: x.length > 30 ? 'auto' : 0,
         rotate: !spec.x_is_year && x.length > 8 ? 30 : 0 }, axisTick: { alignWithLabel: true } },
     yAxis: axisY(ctype === 'stack100' ? '%' : spec.y_title || '', ctype === 'stack100' ? { max: 100 } : {}),
     series: out,
@@ -128,13 +130,14 @@ export function heatmapChart(spec, { highlight = null } = {}) {
     grid: { left: Math.min(200, 16 + longY * 6.6), right: 16, top: 8, bottom: 62 },
     tooltip: { formatter: (p) => `${spec.x_title}: <b>${spec.x[p.value[0]]}</b><br>${spec.y_title}: <b>${spec.y[p.value[1]]}</b><br>${spec.value_title}: <b>${lab(p.value[2])}</b>` },
     xAxis: { type: 'category', data: spec.x.map(String), name: spec.x_title, nameLocation: 'middle', nameGap: 24, splitArea: { show: true },
-      axisLabel: { formatter: spec.x_is_year ? hiLabel(highlight) : undefined, rich: hlRich } },
+      axisLabel: { formatter: spec.x_is_year ? hiLabel(highlight) : undefined, rich: hlRich() } },
     yAxis: { type: 'category', data: spec.y.map(String), inverse: !spec.y_is_year && ylen > 0, splitArea: { show: true },
-      axisLabel: { interval: 0, formatter: spec.y_is_year ? hiLabel(highlight) : (v) => (v.length > 32 ? v.slice(0, 31) + '…' : v), rich: hlRich } },
+      axisLabel: { interval: 0, formatter: spec.y_is_year ? hiLabel(highlight) : (v) => (v.length > 32 ? v.slice(0, 31) + '…' : v), rich: hlRich() } },
     visualMap: { min: dev ? -m : 0, max: dev ? m : Math.max(1, ...vals), calculable: false, orient: 'horizontal', left: 'center', bottom: 0,
-      itemHeight: 160, itemWidth: 10, inRange: { color: dev ? HEAT.div : HEAT.seq }, text: [lab(dev ? m : Math.max(1, ...vals)), lab(dev ? -m : 0)],
+      itemHeight: 160, itemWidth: 10, inRange: { color: dev ? [...HEAT.div] : [...HEAT.seq] }, text: [lab(dev ? m : Math.max(1, ...vals)), lab(dev ? -m : 0)],
       textStyle: { fontSize: 10 } },
-    series: [{ type: 'heatmap', data: spec.cells, label: { show: spec.cells.length <= 400, fontSize: 9.5, formatter: (p) => lab(p.value[2]) },
+    series: [{ type: 'heatmap', data: spec.cells, label: { show: spec.cells.length <= 400, fontSize: 9.5, color: HEAT.label, textBorderColor: HEAT.outline, textBorderWidth: 2,
+        formatter: (p) => lab(p.value[2]) },
       emphasis: { itemStyle: { borderColor: CHART.highlight, borderWidth: 2 } } }],
   }
 }
@@ -147,7 +150,7 @@ export function boxChart(spec, { highlight = null } = {}) {
     tooltip: { trigger: 'item', formatter: (p) => (p.seriesType === 'boxplot'
       ? `${x[p.dataIndex]}<br>мин. ${fmt(p.value[1], 0)} · 25 % ${fmt(p.value[2], 1)}<br>медиана <b>${fmt(p.value[3], 1)}</b><br>75 % ${fmt(p.value[4], 1)} · макс. ${fmt(p.value[5], 0)}`
       : `${x[p.value[0]]}: выброс ${fmt(p.value[1], 0)}`) },
-    xAxis: { type: 'category', data: x, axisLabel: { formatter: hiLabel(highlight), rich: hlRich } },
+    xAxis: { type: 'category', data: x, axisLabel: { formatter: hiLabel(highlight), rich: hlRich() } },
     yAxis: axisY(spec.y_title || ''),
     series: [
       { type: 'boxplot', data: spec.boxes.map((b) => b || [null, null, null, null, null]), itemStyle: { color: CSS_SOFT(), borderColor: CHART.main } },
@@ -188,7 +191,7 @@ export function dualChart(spec, { highlight = null } = {}) {
     grid: { left: 62, right: 62, top: 44, bottom: 30 },
     tooltip: { trigger: 'axis', valueFormatter: (v) => fmt(v, 'auto') },
     legend: { top: 0 },
-    xAxis: { type: 'category', data: x, axisLabel: { formatter: hiLabel(highlight), rich: hlRich } },
+    xAxis: { type: 'category', data: x, axisLabel: { formatter: hiLabel(highlight), rich: hlRich() } },
     yAxis: [axisY(''), axisY('', { splitLine: { show: false } })],
     series,
   }

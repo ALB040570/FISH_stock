@@ -18,7 +18,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import EChart from '../components/EChart.vue'
 import { CHART } from '../theme'
-import { compact, fmt, PALETTE } from '../components/charts'
+import { compact, fmt, pal } from '../components/charts'
 import { useSpecies } from './useSpecies'
 const p = defineProps({ data: Object, filters: Object, options: Object })
 const { t } = useI18n()
@@ -36,7 +36,7 @@ const opt = computed(() => {
   const lo = net.value ? p.data.payload.net.c_lower : p.data.payload.c_lower
   const hi = net.value ? p.data.payload.net.c_upper : p.data.payload.c_upper
   return {
-    color: PALETTE,
+    color: pal(),
     grid: { left: 60, right: 52, top: 56, bottom: 34 },
     tooltip: { trigger: 'axis', valueFormatter: (v) => fmt(v, 'auto') },
     legend: { top: 0 },

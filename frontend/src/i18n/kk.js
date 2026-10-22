@@ -2,6 +2,7 @@
 export default {
   app: { name: 'FishStock', subtitle: 'Қазақстан су айдындарында балық аулаудың шекті рұқсат етілген көлемі' },
   common: {
+    theme_dark: 'Қараңғы тақырып', theme_light: 'Ашық тақырып',
     save: 'Сақтау', cancel: 'Болдырмау', close: 'Жабу', delete: 'Жою', edit: 'Өзгерту', add: 'Қосу',
     create: 'Құру', search: 'Іздеу', refresh: 'Жаңарту', download: 'Жүктеп алу', upload: 'Жүктеп салу', back: 'Артқа',
     yes: 'иә', no: 'жоқ', loading: 'Жүктелуде…', empty: 'Деректер жоқ', error: 'Қате', retry: 'Қайталау',

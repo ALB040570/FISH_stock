@@ -103,7 +103,7 @@ import { api } from '../api'
 import { tr } from '../i18n'
 import { useAuth } from '../store/auth'
 import { fmt } from '../components/charts'
-import { MAP, MAP_STATE } from '../theme'
+import { MAP, MAP_STATE, themeMode } from '../theme'
 import StateBlock from '../components/StateBlock.vue'
 
 const auth = useAuth()
@@ -133,6 +133,8 @@ function savedBasemap() { try { return localStorage.getItem(BASEMAP_KEY) || 'osm
 const basemap = ref(savedBasemap())
 let tiles = null
 let land = null
+let maskLayer = null
+let borderLayer = null
 function applyBasemap() {
   try { localStorage.setItem(BASEMAP_KEY, basemap.value) } catch (e) { /* приватный режим */ }
   if (!map) return
@@ -247,8 +249,8 @@ onMounted(async () => {
     const rLand = L.svg({ pane: 'land', padding: 1 })
     const rMask = L.svg({ pane: 'mask', padding: 1 })
     land = L.geoJSON(kz, { pane: 'land', renderer: rLand, style: { stroke: false, fillColor: MAP.land, fillOpacity: 1 }, interactive: false })
-    L.polygon(maskLatLngs(kz), { pane: 'mask', renderer: rMask, stroke: false, fillColor: MAP.mask, fillOpacity: 1, interactive: false }).addTo(map)
-    const border = L.geoJSON(kz, { pane: 'mask', renderer: rMask, style: { color: MAP.border, weight: 1.6, fill: false }, interactive: false }).addTo(map)
+    maskLayer = L.polygon(maskLatLngs(kz), { pane: 'mask', renderer: rMask, stroke: false, fillColor: MAP.mask, fillOpacity: 1, interactive: false }).addTo(map)
+    const border = borderLayer = L.geoJSON(kz, { pane: 'mask', renderer: rMask, style: { color: MAP.border, weight: 1.6, fill: false }, interactive: false }).addTo(map)
     const b = border.getBounds()
     map.fitBounds(b, { padding: [12, 12] })
     map.setMinZoom(Math.floor(map.getZoom() * 4) / 4 - 0.25)
@@ -257,6 +259,14 @@ onMounted(async () => {
   } catch (e) { /* граница не обязательна: без неё — обычная карта */ }
   if (basemap.value === 'osm' || !land) tiles.addTo(map); else land.addTo(map)
   await load()
+})
+// смена схемы (светлая/тёмная): перекрасить маску, страну, границу и водоёмы
+watch(themeMode, () => {
+  if (!map) return
+  maskLayer && maskLayer.setStyle({ fillColor: MAP.mask })
+  land && land.setStyle({ fillColor: MAP.land })
+  borderLayer && borderLayer.setStyle({ color: MAP.border })
+  draw()
 })
 onBeforeUnmount(() => map && map.remove())
 watch(filtered, () => {})

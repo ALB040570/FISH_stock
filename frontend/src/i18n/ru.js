@@ -1,6 +1,7 @@
 export default {
   app: { name: 'FishStock', subtitle: 'Предельно допустимый улов рыб в водоёмах Казахстана' },
   common: {
+    theme_dark: 'Тёмная тема', theme_light: 'Светлая тема',
     save: 'Сохранить', cancel: 'Отмена', close: 'Закрыть', delete: 'Удалить', edit: 'Изменить', add: 'Добавить',
     create: 'Создать', search: 'Поиск', refresh: 'Обновить', download: 'Скачать', upload: 'Загрузить', back: 'Назад',
     yes: 'да', no: 'нет', loading: 'Загрузка…', empty: 'Нет данных', error: 'Ошибка', retry: 'Повторить',

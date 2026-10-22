@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
+import 'element-plus/theme-chalk/dark/css-vars.css'
 import 'leaflet/dist/leaflet.css'
 import * as Icons from '@element-plus/icons-vue'
 import App from './App.vue'
@@ -11,6 +12,9 @@ import '@fontsource/inter/400.css'
 import '@fontsource/inter/500.css'
 import '@fontsource/inter/600.css'
 import './assets/app.css'
+import { initTheme } from './theme'
+
+initTheme()
 
 const app = createApp(App)
 for (const [k, c] of Object.entries(Icons)) app.component(k, c)

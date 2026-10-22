@@ -26,6 +26,7 @@
         <el-tooltip :content="$t('help.context')" placement="bottom">
           <el-button circle size="small" @click="openContext"><el-icon><QuestionFilled /></el-icon></el-button>
         </el-tooltip>
+        <ThemeToggle />
         <el-radio-group v-model="lang" size="small" @change="setLang">
           <el-radio-button value="ru">РУС</el-radio-button>
           <el-radio-button value="kk">ҚАЗ</el-radio-button>
@@ -60,6 +61,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuth } from '../store/auth'
 import { setLang, tr } from '../i18n'
+import ThemeToggle from './ThemeToggle.vue'
 import PasswordDialog from './PasswordDialog.vue'
 import HelpMarkdown from './HelpMarkdown.vue'
 import { api } from '../api'
@@ -139,16 +141,16 @@ function onCmd(c) {
 <style scoped>
 .layout { height: 100vh; }
 .aside { background: var(--fs-nav); transition: width .2s; overflow-x: hidden; overflow-y: auto; }
-.brand { display: flex; gap: 10px; align-items: center; padding: 14px 16px 10px; cursor: pointer; color: #fff; }
+.brand { display: flex; gap: 10px; align-items: center; padding: 14px 16px 10px; cursor: pointer; color: var(--fs-nav-text); }
 .logo-body { fill: var(--fs-accent); }
 .logo-eye { fill: var(--fs-nav); }
 .b1 { font-weight: 600; font-size: 16px; letter-spacing: .01em; }
 .b2 { font-size: 11px; color: var(--fs-nav-muted); line-height: 1.25; margin-top: 2px; }
 .aside :deep(.el-menu) { border-right: none; --el-menu-bg-color: var(--fs-nav); --el-menu-text-color: var(--fs-nav-text);
-  --el-menu-active-color: #fff; --el-menu-hover-bg-color: rgba(255, 255, 255, .08); --el-menu-item-height: 44px; }
-.aside :deep(.el-sub-menu__title) { height: 42px; margin: 2px 6px; border-radius: 6px; padding-left: 10px !important; font-weight: 600; color: #fff; }
+  --el-menu-active-color: var(--fs-nav-text); --el-menu-hover-bg-color: rgba(255, 255, 255, .08); --el-menu-item-height: 44px; }
+.aside :deep(.el-sub-menu__title) { height: 42px; margin: 2px 6px; border-radius: 6px; padding-left: 10px !important; font-weight: 600; color: var(--fs-nav-text); }
 .aside :deep(.el-sub-menu__title:hover) { background: rgba(255, 255, 255, .08); }
-.aside :deep(.el-sub-menu.is-active > .el-sub-menu__title) { color: #fff; }
+.aside :deep(.el-sub-menu.is-active > .el-sub-menu__title) { color: var(--fs-nav-text); }
 .aside :deep(.el-sub-menu .el-menu-item) { border-radius: 6px; margin: 1px 6px 1px 6px; padding-left: 40px !important; padding-right: 8px;
   height: 34px; line-height: 34px; color: var(--fs-nav-text); }
 .aside :deep(.el-sub-menu .el-menu-item.nav-dash) { color: var(--fs-nav-muted); }
@@ -161,7 +163,7 @@ function onCmd(c) {
 .aside :deep(.el-menu--collapse .el-sub-menu__title) { margin: 2px 8px; padding: 0 !important; justify-content: center; }
 .aside :deep(.el-menu--collapse .el-sub-menu__title .el-icon) { margin-right: 0; }
 .aside :deep(.el-menu--collapse .el-sub-menu__icon-arrow) { display: none; }
-.aside :deep(.el-menu-item.is-active) { color: #fff; background: var(--fs-nav-active) !important; box-shadow: inset 3px 0 0 var(--fs-accent); font-weight: 500; }
+.aside :deep(.el-menu-item.is-active) { color: var(--fs-nav-text); background: var(--fs-nav-active) !important; box-shadow: inset 3px 0 0 var(--fs-accent); font-weight: 500; }
 .avatar { background: var(--fs-primary-2); font-weight: 600; }
 .header { display: flex; align-items: center; gap: 14px; background: var(--fs-card); border-bottom: 1px solid var(--fs-line); }
 .user { display: flex; align-items: center; gap: 8px; cursor: pointer; }

@@ -8,6 +8,7 @@
     </div>
     <div class="form">
       <div class="lang">
+        <ThemeToggle style="margin-right:8px" />
         <el-radio-group v-model="lang" size="small" @change="setLang">
           <el-radio-button value="ru">РУС</el-radio-button><el-radio-button value="kk">ҚАЗ</el-radio-button>
         </el-radio-group>
@@ -31,6 +32,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import { useAuth } from '../store/auth'
 import { setLang } from '../i18n'
+import ThemeToggle from '../components/ThemeToggle.vue'
 const auth = useAuth()
 const router = useRouter()
 const route = useRoute()
@@ -51,14 +53,14 @@ async function submit() {
 </script>
 <style scoped>
 .login-wrap { display: grid; grid-template-columns: 1.1fr 1fr; min-height: 100vh; }
-.side { background: linear-gradient(160deg, var(--fs-primary-hover) 0%, var(--fs-primary) 60%, var(--fs-primary-2) 100%); color: #fff; padding: 12vh 8vw; position: relative; overflow: hidden; }
+.side { background: linear-gradient(160deg, var(--fs-nav-active) 0%, var(--fs-nav) 65%, var(--fs-nav) 100%); color: var(--fs-nav-text); padding: 12vh 8vw; position: relative; overflow: hidden; }
 .side h1 { font-size: 34px; margin: 14px 0 6px; letter-spacing: -0.02em; }
 .logo-body { fill: var(--fs-accent); }
-.logo-eye { fill: var(--fs-primary-hover); }
+.logo-eye { fill: var(--fs-nav); }
 .side p { color: var(--fs-nav-text); font-size: 16px; max-width: 420px; line-height: 1.45; }
 .waves { position: absolute; left: -10%; right: -10%; bottom: -40px; height: 180px; border-radius: 50%; background: rgba(255,255,255,.06); box-shadow: 0 -40px 0 rgba(255,255,255,.04); }
 .form { padding: 12vh 8vw; background: var(--fs-card); position: relative; }
 .form h2 { font-size: 22px; margin-bottom: 18px; }
-.lang { position: absolute; top: 20px; right: 24px; }
+.lang { position: absolute; top: 20px; right: 24px; display: flex; align-items: center; }
 @media (max-width: 800px) { .login-wrap { grid-template-columns: 1fr; } .side { padding: 40px 24px; } .form { padding: 30px 24px; } }
 </style>

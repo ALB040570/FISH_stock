@@ -17,7 +17,7 @@ import L from 'leaflet'
 import '@geoman-io/leaflet-geoman-free'
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css'
 import { api } from '../api'
-import { MAP } from '../theme'
+import { MAP, themeMode } from '../theme'
 
 const p = defineProps({ point: Array, shape: Object })
 const emit = defineEmits(['update:point', 'update:shape'])
@@ -37,6 +37,7 @@ function drawPoint(pt) {
   marker = L.marker([pt[0], pt[1]], { draggable: true }).addTo(map)
   marker.on('dragend', () => { const ll = marker.getLatLng(); emit('update:point', [+ll.lat.toFixed(5), +ll.lng.toFixed(5)]) })
 }
+watch(themeMode, () => shapeLayer && shapeLayer.setStyle({ color: MAP.shape }))
 function clearShape() { emit('update:shape', null) }
 function toCentroid() {
   const c = shapeLayer.getBounds().getCenter()

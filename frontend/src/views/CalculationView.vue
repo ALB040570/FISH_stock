@@ -176,7 +176,7 @@ onMounted(load)
 </script>
 <style scoped>
 .stp { border: 1px solid var(--fs-line); border-radius: 8px; padding: 10px; margin-bottom: 8px; background: var(--fs-card-soft); }
-.num-badge { width: 24px; height: 24px; border-radius: 50%; background: var(--fs-primary); color: #fff; display: grid; place-items: center; font-size: 12px; }
+.num-badge { width: 24px; height: 24px; border-radius: 50%; background: var(--fs-primary); color: var(--fs-on-primary); display: grid; place-items: center; font-size: 12px; }
 .params { margin: 8px 0 0 32px; }
 .prm { display: flex; gap: 10px; align-items: flex-start; padding: 4px 0; border-top: 1px dashed var(--fs-line-soft); }
 </style>

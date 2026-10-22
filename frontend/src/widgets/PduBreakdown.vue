@@ -65,7 +65,7 @@ const opt = computed(() => {
 .flow { display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; }
 .step { flex: 1; min-width: 170px; display: flex; gap: 8px; border: 1px solid var(--fs-line); border-radius: 8px; padding: 8px 10px; background: var(--fs-card-soft); }
 .step.hi { background: var(--fs-selected); border-color: var(--fs-primary-soft); }
-.step .n { width: 22px; height: 22px; border-radius: 50%; background: var(--fs-primary); color: #fff; display: grid; place-items: center; font-size: 12px; flex: none; }
+.step .n { width: 22px; height: 22px; border-radius: 50%; background: var(--fs-primary); color: var(--fs-on-primary); display: grid; place-items: center; font-size: 12px; flex: none; }
 .step .v { font-weight: 650; font-size: 16px; font-variant-numeric: tabular-nums; }
 .step .l { color: var(--fs-muted); font-size: 12px; line-height: 1.3; }
 .arrow { align-self: center; color: var(--fs-muted); font-size: 18px; }
