@@ -14,9 +14,20 @@ from pathlib import Path
 
 from fishcommon.storage import Collection, atomic_write_json, dumps, locked, now_iso, read_json
 
-REPO_ALGOS = Path(os.environ.get("FISH_ALGORITHMS_DIR", Path(__file__).resolve().parents[3] / "algorithms"))
-if not REPO_ALGOS.exists():
-    REPO_ALGOS = Path("/srv/algorithms")
+def _algorithms_dir() -> Path:
+    """Каталог пакетов алгоритмов: FISH_ALGORITHMS_DIR; в образе Docker — /srv/algorithms (рядом с app/);
+    в копии репозитория — <репозиторий>/algorithms (services/<сервис>/app → на три уровня выше)."""
+    if os.environ.get("FISH_ALGORITHMS_DIR"):
+        return Path(os.environ["FISH_ALGORITHMS_DIR"])
+    here = Path(__file__).resolve()
+    candidates = [here.parents[1] / "algorithms"]
+    if len(here.parents) > 3:
+        candidates.append(here.parents[3] / "algorithms")
+    candidates.append(Path("/srv/algorithms"))
+    return next((c for c in candidates if (c / "build.py").exists()), candidates[-1])
+
+
+REPO_ALGOS = _algorithms_dir()
 sys.path.insert(0, str(REPO_ALGOS))
 import build  # noqa: E402
 import executor  # noqa: E402
