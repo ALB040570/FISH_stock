@@ -11,7 +11,7 @@ export function fmt(v, d = 0) {
 }
 
 const UNITS = { ru: [' млрд', ' млн', ' тыс'], kk: [' млрд', ' млн', ' мың'] }
-function lang() { try { return localStorage.getItem('fishstocke.lang') || 'ru' } catch (e) { return 'ru' } }
+function lang() { try { return localStorage.getItem('fishstock.lang') || 'ru' } catch (e) { return 'ru' } }
 export function compact(v) {
   if (v === null || v === undefined) return ''
   const a = Math.abs(v)

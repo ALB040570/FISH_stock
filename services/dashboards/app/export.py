@@ -50,7 +50,7 @@ def to_xlsx(w: dict) -> bytes:
     ws.freeze_panes = "A2"
     info = wb.create_sheet("Описание")
     for line in [w.get("title") or "", w.get("subtitle") or "", w.get("context") or "", _src_line(w),
-                 *(w.get("notes") or []), f"Выгружено из FishStocke: {datetime.now().strftime('%d.%m.%Y %H:%M')}"]:
+                 *(w.get("notes") or []), f"Выгружено из FishStock: {datetime.now().strftime('%d.%m.%Y %H:%M')}"]:
         if line:
             info.append([line])
     info.column_dimensions["A"].width = 120
@@ -139,7 +139,7 @@ def to_pdf(title: str, context: str, widgets: list[dict]) -> bytes:
     def footer(canvas, d):
         canvas.saveState()
         canvas.setFont("DejaVu", 7)
-        canvas.drawString(14 * mm, 7 * mm, f"FishStocke · {title} · {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+        canvas.drawString(14 * mm, 7 * mm, f"FishStock · {title} · {datetime.now().strftime('%d.%m.%Y %H:%M')}")
         canvas.drawRightString(page[0] - 14 * mm, 7 * mm, str(d.page))
         canvas.restoreState()
     story = [Paragraph(escape(title), S["h0"])]

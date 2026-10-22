@@ -3,7 +3,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import { ECHARTS_THEME } from '../theme'
-echarts.registerTheme('fishstocke', ECHARTS_THEME)
+echarts.registerTheme('fishstock', ECHARTS_THEME)
 const p = defineProps({ option: Object, height: { type: String, default: '320px' } })
 const emit = defineEmits(['pick'])
 const el = ref(null)
@@ -11,7 +11,7 @@ let chart = null
 let ro = null
 function render() { if (chart && p.option) chart.setOption(p.option, true) }
 onMounted(() => {
-  chart = echarts.init(el.value, 'fishstocke', { renderer: 'canvas' })
+  chart = echarts.init(el.value, 'fishstock', { renderer: 'canvas' })
   render()
   chart.on('click', (e) => emit('pick', e))
   ro = new ResizeObserver(() => chart && chart.resize())

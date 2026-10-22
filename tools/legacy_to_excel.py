@@ -1,5 +1,5 @@
 """
-Перенос исходных данных заказчика (legacy/data_catch/*.py) в Excel-файлы по шаблонам FishStocke.
+Перенос исходных данных заказчика (legacy/data_catch/*.py) в Excel-файлы по шаблонам FishStock.
 
     python tools/legacy_to_excel.py [--src legacy/data_catch] [--waterbody zhaysan] [--out samples/zhaysan]
 

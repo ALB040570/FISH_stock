@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Восстановление тома данных из архива: ./deploy/restore.sh backups/fishstocke_YYYYMMDD_HHMMSS.tar.gz
+# Восстановление тома данных из архива: ./deploy/restore.sh backups/fishstock_YYYYMMDD_HHMMSS.tar.gz
 # Сервисы останавливаются; текущие данные сохраняются в /data.before_restore_* внутри тома.
 set -e
 [ -f "$1" ] || { echo "Укажите архив"; exit 1; }

@@ -1,9 +1,9 @@
 """
-Резервное копирование и восстановление каталога данных FishStocke (запуск без Docker или внутри контейнера).
+Резервное копирование и восстановление каталога данных FishStock (запуск без Docker или внутри контейнера).
 
     python tools/backup.py create  --data ./data --out ./backups        # архив + список контрольных сумм
-    python tools/backup.py verify  ./backups/fishstocke_20261024_0300.tar.gz
-    python tools/backup.py restore ./backups/fishstocke_20261024_0300.tar.gz --data ./data
+    python tools/backup.py verify  ./backups/fishstock_20261024_0300.tar.gz
+    python tools/backup.py restore ./backups/fishstock_20261024_0300.tar.gz --data ./data
 
 Архив содержит MANIFEST.sha256 (контрольная сумма каждого файла); восстановление проверяет их и
 не перезаписывает непустой каталог без --force (текущие данные переносятся в <data>.before_restore_<время>).
@@ -37,7 +37,7 @@ def sha(path: Path) -> str:
 
 def create(data: Path, out: Path) -> Path:
     out.mkdir(parents=True, exist_ok=True)
-    name = out / f"fishstocke_{datetime.now().strftime('%Y%m%d_%H%M%S')}.tar.gz"
+    name = out / f"fishstock_{datetime.now().strftime('%Y%m%d_%H%M%S')}.tar.gz"
     files = sorted(p for p in data.rglob("*") if p.is_file() and not _skip(p.relative_to(data)))
     lines = []
     with tarfile.open(name, "w:gz") as tar:

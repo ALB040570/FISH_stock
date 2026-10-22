@@ -16,7 +16,7 @@ def create_app(service: str, title: str, description: str = "") -> FastAPI:
     if st.jwt_secret == settings_mod.DEV_SECRET or st.service_token == "dev-service-token":
         print(f"[{service}] ВНИМАНИЕ: используются ключи разработки — задайте FISH_JWT_SECRET и FISH_SERVICE_TOKEN",
               flush=True)
-    app = FastAPI(title=f"FishStocke — {title}", description=description, version=VERSION,
+    app = FastAPI(title=f"FishStock — {title}", description=description, version=VERSION,
                   root_path_in_servers=False)
     app.state.settings = st
     app.state.audit = AuditClient(st) if service != "users" else None

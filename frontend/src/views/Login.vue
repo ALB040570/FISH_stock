@@ -2,7 +2,7 @@
   <div class="login-wrap">
     <div class="side">
       <svg viewBox="0 0 64 64" width="54" height="54"><path class="logo-body" d="M6 32c10-14 30-16 42-6l10-8v28l-10-8c-12 10-32 8-42-6z"/><circle class="logo-eye" cx="20" cy="29" r="3"/></svg>
-      <h1>FishStocke</h1>
+      <h1>FishStock</h1>
       <p>{{ $t('app.subtitle') }}</p>
       <div class="waves" />
     </div>

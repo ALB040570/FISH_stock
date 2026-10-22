@@ -1,5 +1,5 @@
 export default {
-  app: { name: 'FishStocke', subtitle: 'Предельно допустимый улов рыб в водоёмах Казахстана' },
+  app: { name: 'FishStock', subtitle: 'Предельно допустимый улов рыб в водоёмах Казахстана' },
   common: {
     save: 'Сохранить', cancel: 'Отмена', close: 'Закрыть', delete: 'Удалить', edit: 'Изменить', add: 'Добавить',
     create: 'Создать', search: 'Поиск', refresh: 'Обновить', download: 'Скачать', upload: 'Загрузить', back: 'Назад',

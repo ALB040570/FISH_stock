@@ -5,7 +5,7 @@
     python tools/seed_samples.py --password <пароль> --water-body zhaysan --run stock
 
 Для каждого водоёма (папка samples/<код водоёма>) загружает 7 наборов данных (данные заказчика из
-legacy/data_catch в шаблонах FishStocke), создаёт расчёты по шаблонам и, по желанию, ставит расчёт в очередь.
+legacy/data_catch в шаблонах FishStock), создаёт расчёты по шаблонам и, по желанию, ставит расчёт в очередь.
 """
 from __future__ import annotations
 

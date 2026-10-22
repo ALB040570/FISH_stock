@@ -6,10 +6,10 @@
 
 ```bash
 ./deploy/backup.sh                                          # ./backups ішіндегі мұрағат, соңғы 30-ы сақталады
-./deploy/restore.sh backups/fishstocke_20261024_030000.tar.gz
+./deploy/restore.sh backups/fishstock_20261024_030000.tar.gz
 ```
 
-Сағат 3:00-де күнделікті көшірме (cron): `0 3 * * * cd /opt/fishstocke && ./deploy/backup.sh >> backups/backup.log 2>&1`
+Сағат 3:00-де күнделікті көшірме (cron): `0 3 * * * cd /opt/fishstock && ./deploy/backup.sh >> backups/backup.log 2>&1`
 
 ## Docker-сіз
 

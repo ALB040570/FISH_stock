@@ -1,6 +1,6 @@
 # Установка и сопровождение
 
-<!-- Файл создан из справки FishStocke (services/help/app/content). Правьте статьи справки, а не этот файл. -->
+<!-- Файл создан из справки FishStock (services/help/app/content). Правьте статьи справки, а не этот файл. -->
 
 ## Требования и способы установки
 
@@ -39,8 +39,8 @@
 2. Скачайте приложение:
 
    ```bash
-   git clone -b develop https://github.com/ALB040570/FISH_stocke.git
-   cd FISH_stocke
+   git clone -b develop https://github.com/ALB040570/FISH_stock.git
+   cd FISH_stock
    ```
 
 3. Создайте файл настроек:
@@ -91,8 +91,8 @@
 ### Установка
 
 ```bash
-git clone -b develop https://github.com/ALB040570/FISH_stocke.git
-cd FISH_stocke
+git clone -b develop https://github.com/ALB040570/FISH_stock.git
+cd FISH_stock
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
@@ -108,7 +108,7 @@ FISH_ADMIN_PASSWORD='пароль-администратора' python deploy/ru
 
 На Windows: `set FISH_ADMIN_PASSWORD=пароль-администратора` и затем `python deploy\run_local.py` (или `run_local.bat`).
 
-Когда появится строка `FishStocke: http://127.0.0.1:8080`, откройте этот адрес. Окно терминала не закрывайте — в нём работает приложение; остановить — **Ctrl+C**.
+Когда появится строка `FishStock: http://127.0.0.1:8080`, откройте этот адрес. Окно терминала не закрывайте — в нём работает приложение; остановить — **Ctrl+C**.
 
 - Данные — в папке `data` рядом с приложением (переменная `FISH_DATA_DIR` меняет место).
 - Ключи `FISH_JWT_SECRET` и `FISH_SERVICE_TOKEN`, если не заданы, создаются автоматически и хранятся в `data/.secrets.json`.
@@ -163,7 +163,7 @@ python3 tools/legacy_to_excel.py --src <папка с файлами> --waterbod
 ### С Docker
 
 ```bash
-cd FISH_stocke
+cd FISH_stock
 git pull
 docker compose up -d --build
 ```
@@ -196,10 +196,10 @@ python deploy/run_local.py
 
 ```bash
 ./deploy/backup.sh                                          # архив в ./backups, хранятся последние 30
-./deploy/restore.sh backups/fishstocke_20261024_030000.tar.gz
+./deploy/restore.sh backups/fishstock_20261024_030000.tar.gz
 ```
 
-Ежедневная копия в 3:00 (cron): `0 3 * * * cd /opt/fishstocke && ./deploy/backup.sh >> backups/backup.log 2>&1`
+Ежедневная копия в 3:00 (cron): `0 3 * * * cd /opt/fishstock && ./deploy/backup.sh >> backups/backup.log 2>&1`
 
 ### Без Docker
 

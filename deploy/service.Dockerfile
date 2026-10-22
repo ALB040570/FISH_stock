@@ -1,4 +1,4 @@
-# Образ одного сервиса FishStocke. Контекст сборки — корень репозитория.
+# Образ одного сервиса FishStock. Контекст сборки — корень репозитория.
 #   docker build -f deploy/service.Dockerfile --build-arg SERVICE=users .
 FROM python:3.12-slim
 

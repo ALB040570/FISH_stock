@@ -159,7 +159,7 @@ def compute_pdu(res: StockResult, props: FishProps,
                 variant: str = "with_ages", method: str = "on_stock", data_dir=None) -> PduResult:
     """ПДУ НПЦ в штуках по возрастам по окончательному запасу (сеть+невод) выбранного варианта.
 
-    FishStocke: добавлен data_dir (набор данных водоёма); без него — как в исходном проекте."""
+    FishStock: добавлен data_dir (набор данных водоёма); без него — как в исходном проекте."""
     _, pdu_df = load_npc(res.waterbody, data_dir)
     years, species, ages = res.years, res.species, res.ages
     nY, nS, nA = len(years), len(species), len(ages)

@@ -7,7 +7,7 @@ Linux (Ubuntu 22.04+), Docker 24+ с Compose. Ресурсы: 4 ядра / 8 Г�
 Доступ в интернет нужен для подложки карты (OpenStreetMap) и выпуска HTTPS-сертификата.
 
 ```bash
-git clone https://github.com/ALB040570/FISH_stocke.git /opt/fishstocke && cd /opt/fishstocke
+git clone https://github.com/ALB040570/FISH_stock.git /opt/fishstock && cd /opt/fishstock
 cp .env.example .env && nano .env        # FISH_JWT_SECRET, FISH_SERVICE_TOKEN, FISH_ADMIN_PASSWORD, FISH_WORKERS
 docker compose up -d --build
 docker compose ps                        # все сервисы healthy
@@ -31,10 +31,10 @@ python3 tools/seed_samples.py --password <пароль admin>
 
 ```bash
 ./deploy/backup.sh                                   # архив тома в ./backups, хранятся последние 30
-./deploy/restore.sh backups/fishstocke_20261024_030000.tar.gz
+./deploy/restore.sh backups/fishstock_20261024_030000.tar.gz
 ```
 
-Ежедневно по cron: `0 3 * * * cd /opt/fishstocke && ./deploy/backup.sh >> backups/backup.log 2>&1`.
+Ежедневно по cron: `0 3 * * * cd /opt/fishstock && ./deploy/backup.sh >> backups/backup.log 2>&1`.
 Архив содержит контрольные суммы всех файлов (`python3 tools/backup.py verify <архив>`); восстановление сохраняет
 предыдущее состояние тома в `/data/.before_restore`. Храните копии вне сервера. Без Docker:
 `python tools/backup.py create --data ./data --out ./backups` и `restore … --force`.

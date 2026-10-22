@@ -1,5 +1,5 @@
 """
-Сверка этапов 1–3 по водоёмам из данных заказчика от 20.10.2026 (Балхаш, Капчагай): ядро FishStocke на наборах
+Сверка этапов 1–3 по водоёмам из данных заказчика от 20.10.2026 (Балхаш, Капчагай): ядро FishStock на наборах
 данных из сервиса «Входные данные» = исходное ядро legacy/fish_stock_forecast/core на legacy/data_catch/*.py.
 
 Известное отличие данных (исправлено при переносе, docs/data_import_2026-10-20.md): в kapchagay_catch_2019.py
@@ -88,7 +88,7 @@ def test_stages_identical(data_stack, legacy_name, code):
     _close(np.asarray(po.pieces)[:, m_sp], np.asarray(pn.pieces)[:, m_sp], "ПДУ по возрастам")
     _close(np.asarray(po.pdu_t)[:, m_sp], np.asarray(pn.pdu_t)[:, m_sp], "ПДУ НПЦ, т")
     if legacy_name == "kapchagay":
-        # проба 2019 г. для белого амура и толстолобика учтена только в FishStocke
+        # проба 2019 г. для белого амура и толстолобика учтена только в FishStock
         yi = years.index(2019)
         for s in ("т_лоб", "б_амур"):
             si = species.index(s)

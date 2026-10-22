@@ -3,7 +3,7 @@
     <el-aside :width="collapsed ? '64px' : '260px'" class="aside">
       <div class="brand" @click="$router.push('/')">
         <svg viewBox="0 0 64 64" width="30" height="30"><path class="logo-body" d="M6 32c10-14 30-16 42-6l10-8v28l-10-8c-12 10-32 8-42-6z"/><circle class="logo-eye" cx="20" cy="29" r="3"/></svg>
-        <div v-if="!collapsed"><div class="b1">FishStocke</div><div class="b2">{{ $t('app.subtitle') }}</div></div>
+        <div v-if="!collapsed"><div class="b1">FishStock</div><div class="b2">{{ $t('app.subtitle') }}</div></div>
       </div>
       <el-menu ref="menuRef" :default-active="active" :default-openeds="openeds" router :collapse="collapsed" popper-class="fs-nav-popup">
         <template v-for="(sec, si) in sections" :key="sec.key">

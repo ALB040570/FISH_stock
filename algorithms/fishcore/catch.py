@@ -108,7 +108,7 @@ def build_haul_catch(
         metas.append(rows[[c for c in META_COLUMNS if c in rows.columns]].copy())
 
     if not metas:
-        # FishStocke: у водоёма нет ни одного лова этим орудием (например, только сети) — пустой набор;
+        # FishStock: у водоёма нет ни одного лова этим орудием (например, только сети) — пустой набор;
         # в окончательном запасе берётся оценка другого орудия (combine_gears). Формулы не меняются.
         metas = [pd.DataFrame({c: pd.Series(dtype=float if c in ("Year", "Area", "Instrument_size") else object)
                                for c in META_COLUMNS})]

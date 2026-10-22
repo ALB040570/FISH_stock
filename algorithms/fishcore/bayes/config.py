@@ -235,7 +235,7 @@ def _coerce(key: str, value):
     return str(value)
 
 
-# FishStocke: настройки задаются не файлом, а профилем водоёма и параметрами запуска (см. set_runtime)
+# FishStock: настройки задаются не файлом, а профилем водоёма и параметрами запуска (см. set_runtime)
 _RUNTIME: dict | None = None
 
 

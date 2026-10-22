@@ -88,7 +88,7 @@ async function report() {
     const ctx = [p.wbName, p.filters?.species ? p.species?.[p.filters.species] : null,
       compare.value ? `${t('wv.compare')}: ${compare.value[0]} ${t('wv.and')} ${compare.value[1]}` : null].filter(Boolean).join(' · ')
     await downloadPost('dashboards', '/reports/section.pdf', { title, context: ctx, widgets },
-      `${(p.wbName || 'FishStocke').replace(/[^\p{L}\p{N}]+/gu, '_')}_${(sec?.code || tab.value)}.pdf`)
+      `${(p.wbName || 'FishStock').replace(/[^\p{L}\p{N}]+/gu, '_')}_${(sec?.code || tab.value)}.pdf`)
   } catch (e) { ElMessage.error(e.message || String(e)) } finally { reporting.value = false }
 }
 </script>

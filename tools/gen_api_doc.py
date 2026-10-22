@@ -71,7 +71,7 @@ NAMES = {"users": "1. Администрирование пользовател�
          "data_model": "5. Моделирование данных (справочник)", "algo_model": "6. Моделирование алгоритмов расчёта",
          "help": "7. Справка"}
 
-out = ["# API сервисов FishStocke", "",
+out = ["# API сервисов FishStock", "",
        "Сервисы доступны через шлюз: `/api/<сервис>/<путь>`, сервис — users, data-model, data-admin, algo-model, algo-admin, dashboards, help.",
        "Авторизация — `Authorization: Bearer <access_token>` (`POST /api/users/auth/login`). Ошибки — `{\"error\": {\"code\", \"message\", \"details\"}}`.",
        "Интерактивная документация (Swagger) каждого сервиса — `http://<сервис>:8000/docs` внутри сети Docker или `http://127.0.0.1:800N/docs` при запуске без Docker.",

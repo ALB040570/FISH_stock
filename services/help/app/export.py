@@ -17,10 +17,10 @@ from mdit_py_plugins.dollarmath import dollarmath_plugin
 
 FONT_DIR = Path(__file__).parent / "fonts"
 T = {
-    "ru": {"guide": "Руководство пользователя", "app": "FishStocke — определение предельно допустимого улова рыб "
+    "ru": {"guide": "Руководство пользователя", "app": "FishStock — определение предельно допустимого улова рыб "
            "в водоёмах Казахстана", "toc": "Содержание", "date": "Дата выгрузки", "page": "стр.",
            "noimg": "рисунок не найден"},
-    "kk": {"guide": "Пайдаланушы нұсқаулығы", "app": "FishStocke — Қазақстан су айдындарында балық аулаудың шекті "
+    "kk": {"guide": "Пайдаланушы нұсқаулығы", "app": "FishStock — Қазақстан су айдындарында балық аулаудың шекті "
            "рұқсат етілген көлемін анықтау", "toc": "Мазмұны", "date": "Түсірілген күні", "page": "бет",
            "noimg": "сурет табылмады"},
 }
@@ -273,7 +273,7 @@ def to_docx(title: str, parts: list[dict], lang: str, image_path: Callable) -> b
     # титульный лист
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = p.add_run("FishStocke")
+    r = p.add_run("FishStock")
     r.bold, r.font.size = True, Pt(28)
     p = doc.add_paragraph(T[lang]["app"])
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -453,7 +453,7 @@ def to_pdf(title: str, parts: list[dict], lang: str, image_path: Callable) -> by
     class Doc(BaseDocTemplate):
         def __init__(self, buf):
             super().__init__(buf, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=18 * mm,
-                             bottomMargin=18 * mm, title=title, author="FishStocke")
+                             bottomMargin=18 * mm, title=title, author="FishStock")
             frame = Frame(self.leftMargin, self.bottomMargin, self.width, self.height, id="f")
             self.addPageTemplates([PageTemplate("p", [frame], onPage=self._footer)])
 
@@ -461,7 +461,7 @@ def to_pdf(title: str, parts: list[dict], lang: str, image_path: Callable) -> by
             canv.saveState()
             canv.setFont("DejaVu", 8)
             canv.setFillColor(colors.grey)
-            canv.drawString(20 * mm, 10 * mm, f"FishStocke — {title}")
+            canv.drawString(20 * mm, 10 * mm, f"FishStock — {title}")
             canv.drawRightString(A4[0] - 20 * mm, 10 * mm, f"{T[lang]['page']} {doc.page}")
             canv.restoreState()
 
@@ -471,7 +471,7 @@ def to_pdf(title: str, parts: list[dict], lang: str, image_path: Callable) -> by
                 self.notify("TOCEntry", (lvl, f.getPlainText(), self.page))
 
     story = [Spacer(1, 50 * mm),
-             Paragraph("FishStocke", ParagraphStyle("t1", parent=H[1], fontSize=30, leading=36, alignment=1)),
+             Paragraph("FishStock", ParagraphStyle("t1", parent=H[1], fontSize=30, leading=36, alignment=1)),
              Paragraph(escape(T[lang]["app"]), ParagraphStyle("t2", parent=base, fontSize=12, leading=16, alignment=1)),
              Spacer(1, 15 * mm),
              Paragraph(escape(title), ParagraphStyle("t3", parent=H[1], fontSize=20, leading=26, alignment=1)),
@@ -509,7 +509,7 @@ def to_pdf(title: str, parts: list[dict], lang: str, image_path: Callable) -> by
 # ------------------------------------------------------------------ Markdown одним файлом
 def to_markdown(title: str, parts: list[dict]) -> str:
     out = [f"# {title}", "",
-           "<!-- Файл создан из справки FishStocke (services/help/app/content). Правьте статьи справки, а не этот файл. -->",
+           "<!-- Файл создан из справки FishStock (services/help/app/content). Правьте статьи справки, а не этот файл. -->",
            ""]
     single = len(parts) == 1
     for part in parts:

@@ -128,7 +128,7 @@ let map = null
 let layer = null
 // Подложка: «карта» — OpenStreetMap только внутри Казахстана (снаружи — маска цветом фона);
 // «без подложки» — силуэт страны, работает без интернета. Выбор запоминается в браузере.
-const BASEMAP_KEY = 'fishstocke.basemap'
+const BASEMAP_KEY = 'fishstock.basemap'
 function savedBasemap() { try { return localStorage.getItem(BASEMAP_KEY) || 'osm' } catch (e) { return 'osm' } }
 const basemap = ref(savedBasemap())
 let tiles = null

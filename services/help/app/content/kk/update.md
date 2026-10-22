@@ -5,7 +5,7 @@
 ## Docker-мен
 
 ```bash
-cd FISH_stocke
+cd FISH_stock
 git pull
 docker compose up -d --build
 ```

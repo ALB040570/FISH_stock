@@ -1,4 +1,4 @@
-# FishStocke
+# FishStock
 
 Веб-приложение для определения **предельно допустимого улова (ПДУ)** рыб в водоёмах Казахстана.
 Для ихтиологов-аналитиков (данные, расчёты, мониторинг) и математиков (модели и алгоритмы).
@@ -74,7 +74,7 @@
 Нужны Docker и Docker Compose. Сервер: от 4 ядер и 8 ГБ памяти (байесовская модель — лучше 8 ядер / 16 ГБ).
 
 ```bash
-git clone https://github.com/ALB040570/FISH_stocke.git && cd FISH_stocke
+git clone https://github.com/ALB040570/FISH_stock.git && cd FISH_stock
 cp .env.example .env
 # в .env задайте FISH_JWT_SECRET, FISH_SERVICE_TOKEN (длинные случайные строки) и FISH_ADMIN_PASSWORD
 docker compose up -d --build
@@ -110,7 +110,7 @@ python deploy/run_local.py               # http://127.0.0.1:8080, данные �
 
 ```bash
 ./deploy/backup.sh                       # архив тома данных в ./backups (с контрольными суммами)
-./deploy/restore.sh backups/fishstocke_YYYYMMDD_HHMMSS.tar.gz
+./deploy/restore.sh backups/fishstock_YYYYMMDD_HHMMSS.tar.gz
 python tools/backup.py create --data ./data --out ./backups   # без Docker
 ```
 
@@ -133,7 +133,7 @@ services/<сервис>/   FastAPI-приложение сервиса (app/), �
 libs/fishcommon/     общая библиотека: хранилище с версиями, JWT и права, журнал, проверка значений
 algorithms/          fishcore (ядро методики), packages/ (5 эталонных алгоритмов), fishrunner, executor
 legacy/              исходные материалы заказчика без изменений
-samples/zhaysan/     данные Жайсана в Excel-шаблонах FishStocke (из legacy/data_catch)
+samples/zhaysan/     данные Жайсана в Excel-шаблонах FishStock (из legacy/data_catch)
 deploy/              Dockerfile, nginx, Caddy, запуск без Docker, резервное копирование
 tools/               перенос данных, загрузка, контрольный пример, генерация документации
 docs/                требования, план, решения, API, форматы, инструкции, прогресс, приёмка

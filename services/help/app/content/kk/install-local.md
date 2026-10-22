@@ -12,8 +12,8 @@ Windows, macOS және Linux үшін жарамды.
 ## Орнату
 
 ```bash
-git clone -b develop https://github.com/ALB040570/FISH_stocke.git
-cd FISH_stocke
+git clone -b develop https://github.com/ALB040570/FISH_stock.git
+cd FISH_stock
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
@@ -29,7 +29,7 @@ FISH_ADMIN_PASSWORD='әкімші-құпиясөзі' python deploy/run_local.py
 
 Windows-та: `set FISH_ADMIN_PASSWORD=әкімші-құпиясөзі`, содан кейін `python deploy\run_local.py` (немесе `run_local.bat`).
 
-`FishStocke: http://127.0.0.1:8080` жолы шыққанда осы мекенжайды ашыңыз. Терминал терезесін жаппаңыз — қосымша сонда жұмыс істейді; тоқтату — **Ctrl+C**.
+`FishStock: http://127.0.0.1:8080` жолы шыққанда осы мекенжайды ашыңыз. Терминал терезесін жаппаңыз — қосымша сонда жұмыс істейді; тоқтату — **Ctrl+C**.
 
 - Деректер — қосымшаның жанындағы `data` қалтасында (`FISH_DATA_DIR` айнымалысы орнын өзгертеді).
 - `FISH_JWT_SECRET` және `FISH_SERVICE_TOKEN` кілттері берілмесе, автоматты түрде жасалып, `data/.secrets.json` ішінде сақталады.

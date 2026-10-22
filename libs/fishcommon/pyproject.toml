@@ -1,7 +1,7 @@
 [project]
 name = "fishcommon"
 version = "1.0.0"
-description = "Общая библиотека сервисов FishStocke"
+description = "Общая библиотека сервисов FishStock"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.110",

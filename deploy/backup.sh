@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Резервная копия тома данных Docker Compose: ./deploy/backup.sh [каталог]  (по умолчанию ./backups)
-# Рекомендуется по cron ежедневно, например: 0 3 * * * cd /opt/fishstocke && ./deploy/backup.sh >> backups/backup.log 2>&1
+# Рекомендуется по cron ежедневно, например: 0 3 * * * cd /opt/fishstock && ./deploy/backup.sh >> backups/backup.log 2>&1
 set -e
 OUT="${1:-backups}"
 mkdir -p "$OUT"
@@ -11,4 +11,4 @@ docker compose cp "users:$F" "$OUT/"
 docker compose exec -T users rm -rf /tmp/fsbackup
 echo "Готово: $OUT/$(basename "$F")"
 # хранить последние 30 копий
-ls -t "$OUT"/fishstocke_*.tar.gz 2>/dev/null | tail -n +31 | xargs -r rm -f
+ls -t "$OUT"/fishstock*_*.tar.gz 2>/dev/null | tail -n +31 | xargs -r rm -f

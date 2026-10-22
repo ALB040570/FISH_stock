@@ -13,7 +13,7 @@ VERSION = "1.0.0"
 
 def create_app(service: str, title: str, description: str = "") -> FastAPI:
     st = settings_mod.load(service)
-    app = FastAPI(title=f"FishStocke — {title}", description=description, version=VERSION,
+    app = FastAPI(title=f"FishStock — {title}", description=description, version=VERSION,
                   root_path_in_servers=False)
     app.state.settings = st
     app.state.audit = AuditClient(st) if service != "users" else None

@@ -1,4 +1,4 @@
-# API сервисов FishStocke
+# API сервисов FishStock
 
 Сервисы доступны через шлюз: `/api/<сервис>/<путь>`, сервис — users, data-model, data-admin, algo-model, algo-admin, dashboards, help.
 Авторизация — `Authorization: Bearer <access_token>` (`POST /api/users/auth/login`). Ошибки — `{"error": {"code", "message", "details"}}`.

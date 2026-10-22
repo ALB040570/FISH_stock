@@ -468,7 +468,7 @@ def water_bodies_geojson(user: User = Depends(require("dict.view"))):
         props["id"] = r["id"]
         feats.append({"type": "Feature", "id": r["id"], "geometry": geom, "properties": props})
     return {"type": "FeatureCollection", "features": feats,
-            "attribution": "Контуры: Natural Earth (общественное достояние) и пользователи FishStocke"}
+            "attribution": "Контуры: Natural Earth (общественное достояние) и пользователи FishStock"}
 
 
 @app.get("/kazakhstan.geojson", tags=["водоёмы"])

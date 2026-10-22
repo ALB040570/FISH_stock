@@ -1,14 +1,14 @@
 """
 Настройки расчётного ядра (перенос core/config.py из fish_stock_forecast).
 
-FishStocke: исходные данные приходят набором данных (fishcore.bundle.Bundle) из сервиса
+FishStock: исходные данные приходят набором данных (fishcore.bundle.Bundle) из сервиса
 «Входные данные»; пути ниже нужны только для сверки с исходным проектом (legacy/).
 Числовые настройки методики — без изменений.
 """
 import os
 from pathlib import Path
 
-# Корень репозитория FishStocke: .../algorithms/fishcore/config.py → ../..
+# Корень репозитория FishStock: .../algorithms/fishcore/config.py → ../..
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Исходные данные заказчика (только для сверки и тестов)

@@ -4,7 +4,7 @@ import kkEl from 'element-plus/es/locale/lang/kk'
 import ru from './ru'
 import kk from './kk'
 
-const KEY = 'fishstocke.lang'
+const KEY = 'fishstock.lang'
 function saved() { try { return localStorage.getItem(KEY) } catch (e) { return null } }
 
 const i18n = createI18n({ legacy: false, locale: saved() || 'ru', fallbackLocale: 'ru', messages: { ru, kk } })

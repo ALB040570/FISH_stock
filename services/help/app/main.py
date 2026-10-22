@@ -559,7 +559,7 @@ def _collect(lang: str, section: str | None, article: str | None, ctx: dict | No
 
 
 def _filename(lang: str, section: str | None, article: str | None, ext: str) -> str:
-    return f"FishStocke_{article or section or 'guide'}_{lang}.{ext}"
+    return f"FishStock_{article or section or 'guide'}_{lang}.{ext}"
 
 
 @app.get("/export.docx", tags=["выгрузка"])

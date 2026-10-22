@@ -1,5 +1,5 @@
 """
-Запуск FishStocke без Docker (разработка, проверка, Windows/macOS/Linux).
+Запуск FishStock без Docker (разработка, проверка, Windows/macOS/Linux).
 
     python deploy/run_local.py            # все 6 сервисов + воркеры + шлюз на http://127.0.0.1:8080
     python deploy/run_local.py --port 9000 --workers 1
@@ -69,7 +69,7 @@ def main():
         spawn([sys.executable, "-m", "app.worker"], REPO / "services" / "algo_admin")
     spawn([sys.executable, "-m", "uvicorn", "devgateway:app", "--host", args.host, "--port", str(args.port)],
           REPO / "deploy")
-    print(f"\nFishStocke: http://{args.host}:{args.port}  (Ctrl+C — остановить)\n", flush=True)
+    print(f"\nFishStock: http://{args.host}:{args.port}  (Ctrl+C — остановить)\n", flush=True)
 
     def stop(*_):
         for p in procs:

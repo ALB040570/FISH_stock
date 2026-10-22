@@ -6,10 +6,10 @@
 
 ```bash
 ./deploy/backup.sh                                          # архив в ./backups, хранятся последние 30
-./deploy/restore.sh backups/fishstocke_20261024_030000.tar.gz
+./deploy/restore.sh backups/fishstock_20261024_030000.tar.gz
 ```
 
-Ежедневная копия в 3:00 (cron): `0 3 * * * cd /opt/fishstocke && ./deploy/backup.sh >> backups/backup.log 2>&1`
+Ежедневная копия в 3:00 (cron): `0 3 * * * cd /opt/fishstock && ./deploy/backup.sh >> backups/backup.log 2>&1`
 
 ## Без Docker
 

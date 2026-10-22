@@ -4,8 +4,8 @@
 2. Скачайте приложение:
 
    ```bash
-   git clone -b develop https://github.com/ALB040570/FISH_stocke.git
-   cd FISH_stocke
+   git clone -b develop https://github.com/ALB040570/FISH_stock.git
+   cd FISH_stock
    ```
 
 3. Создайте файл настроек:

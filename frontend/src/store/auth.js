@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 
-const KEY = 'fishstocke.session'
+const KEY = 'fishstock.session'
 function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {} } catch (e) { return {} } }
 
 const PERMS = {

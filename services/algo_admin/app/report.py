@@ -112,7 +112,7 @@ def docx_report(run: dict, results: dict, wb: dict) -> bytes:
     st.font.name = "Times New Roman"
     st.font.size = Pt(11)
     doc.add_heading(f"Обоснование ПДУ: {wb.get('name_ru', run['water_body'])}", 0)
-    doc.add_paragraph("Отчёт сформирован приложением FishStocke.")
+    doc.add_paragraph("Отчёт сформирован приложением FishStock.")
     for title, items in _sections(run, results, wb):
         doc.add_heading(title, 1)
         for it in items:
@@ -153,7 +153,7 @@ def pdf_report(run: dict, results: dict, wb: dict) -> bytes:
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=15 * mm, rightMargin=15 * mm,
                             topMargin=12 * mm, bottomMargin=12 * mm, title="Обоснование ПДУ")
     story = [Paragraph(f"Обоснование ПДУ: {wb.get('name_ru', run['water_body'])}", h0),
-             Paragraph("Отчёт сформирован приложением FishStocke.", body)]
+             Paragraph("Отчёт сформирован приложением FishStock.", body)]
     for title, items in _sections(run, results, wb):
         story.append(Paragraph(title, h1))
         for it in items:

@@ -21,7 +21,7 @@ ROUTES = {name.replace("_", "-"): os.environ.get(f"FISH_URL_{name.upper()}", f"h
           for name, port in SERVICE_PORTS.items()}
 HOP = {"connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade", "content-encoding", "content-length"}
 
-app = FastAPI(title="FishStocke gateway", docs_url=None, redoc_url=None)
+app = FastAPI(title="FishStock gateway", docs_url=None, redoc_url=None)
 client = httpx.AsyncClient(timeout=httpx.Timeout(300, connect=5))
 
 

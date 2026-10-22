@@ -87,7 +87,7 @@ def build_template(dtype: dict, species: list[dict], lookups: dict[str, list[str
         if options and sum(len(o) + 1 for o in options) < 250:
             dv = DataValidation(type="list", formula1='"' + ",".join(o.replace('"', "'") for o in options) + '"',
                                 allow_blank=True, showErrorMessage=True,
-                                error="Выберите значение из списка", errorTitle="FishStocke")
+                                error="Выберите значение из списка", errorTitle="FishStock")
             dv.add(f"{get_column_letter(i)}2:{get_column_letter(i)}5000")
             ws.add_data_validation(dv)
 
