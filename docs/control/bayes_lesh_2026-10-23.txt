@@ -1,0 +1,10 @@
+seine_catchability: запуск
+seine_catchability: done 
+stock_by_catch: запуск
+stock_by_catch: done 
+pdu_by_age: запуск
+pdu_by_age: done 
+bayes_cohort: запуск
+bayes_cohort: done 
+{"species": "lesh", "total_max_rel": 0.0028122716628754176, "by_age_max_rel_main": 0.007920806179486152, "by_age_median_rel": 0.000943124287350284, "rhat_max": 1.0059907140972633, "pass": true}
+exit 0
