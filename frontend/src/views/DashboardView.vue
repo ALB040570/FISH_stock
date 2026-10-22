@@ -39,7 +39,7 @@
           <el-checkbox v-model="multiFlag">{{ $t('dash.water_bodies') }}</el-checkbox>
           <StateBlock :error="saveErr" />
         </div>
-        <DashboardBoard v-model="tab" :board="b" :filters="filters" :wb-name="spNames[f.water_body]" :species="spNames" :editing="editing" @edit-widget="editW" @move="move" @remove="remove" />
+        <DashboardBoard v-model="tab" :board="b" :filters="filters" :wb-name="spNames[f.water_body]" :species="spNames" :editing="editing" @edit-widget="editW" @move="move" @remove="remove" @species="(c) => (f.species = c)" />
       </template>
     </StateBlock>
     <el-dialog v-model="wdlg" :title="$t('dash.widget')" width="760px">

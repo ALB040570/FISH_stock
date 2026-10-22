@@ -93,6 +93,10 @@ def test_monitoring_slides(browser):
     page.keyboard.press("ArrowRight")
     page.wait_for_function("location.search.includes('w=')")
     assert page.locator(".dot.on .dn").inner_text() == "2"
+    # щелчок по строке светофора — паспорт вида: вид выбран, открыт улов на усилие этого вида
+    page.locator(".tt tbody tr").nth(1).click()
+    page.wait_for_function("location.search.includes('w=c_cpue_net') && location.search.includes('sp=')")
+    page.locator(".chips .chip").first.click()
     # режим вида: чип вида → заголовок с названием вида, адрес помнит вид
     page.locator(".chips .chip").nth(1).click()
     page.wait_for_function("location.search.includes('sp=')")

@@ -187,6 +187,17 @@ function goWidget(id) {
     if (!slidesOn.value) nextTick(() => document.getElementById('w-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   })
 }
+// «паспорт вида»: выбрать вид и перейти к первому видовому виджету вкладки (обычно — улов на усилие)
+function openPassport(c) {
+  if (!c) return
+  emit('species', c)
+  const go = () => {
+    const first = (p.board?.widgets || []).find((w) => (w.tab || tabs.value[0].code) === tab.value && w.scope === 'species')
+    if (first) goWidget(first.id)
+  }
+  if (p.filters?.species === c) { go(); return }
+  const stop = watch(() => p.filters?.species, (v) => { if (v === c) { stop(); nextTick(go) } })
+}
 provide('board', {
   highlight,
   boardId: p.board?.id,
@@ -197,7 +208,7 @@ provide('board', {
   wbName: computed(() => p.wbName || ''),
   setHighlight: (y) => { highlight.value = y == null || highlight.value === y ? null : y },
   setSection: (s) => { const tb = tabs.value.find((x) => (x.sections || []).some((q) => q.code === s)); if (tb) { tab.value = tb.code; section.value = s } },
-  setSpecies: (c) => emit('species', c),
+  setSpecies: openPassport,
   setData: (id, d) => { dataById[id] = d },
   reloadCounts,
   goWidget,
