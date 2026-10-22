@@ -563,8 +563,10 @@ def _fc_series_now(res, lang, **_):
         return []
     a, b = hist[-1], fc[-1]
     ch = (b["median"] / a["median"] - 1) * 100 if a["median"] else 0
-    return [L(lang, f"К {b['year']} г. медиана {'выше' if ch >= 0 else 'ниже'} уровня {a['year']} г. на {nf(abs(ch), 0)} %; 95 % интервал — {_pc(b['lo'], lang)} – {_pc(b['hi'], lang)}.",
-              f"{b['year']} ж. дейін медиана {a['year']} ж. деңгейінен {nf(abs(ch), 0)} %-ға {'жоғары' if ch >= 0 else 'төмен'}; 95 % аралық — {_pc(b['lo'], lang)} – {_pc(b['hi'], lang)}.")]
+    t = str((res.get("chart") or {}).get("y_title", "")).startswith(("тонн", "тонна"))
+    f = (lambda v: f"{nf(v, 0)} т") if t else (lambda v: _pc(v, lang))
+    return [L(lang, f"К {b['year']} г. медиана {'выше' if ch >= 0 else 'ниже'} уровня {a['year']} г. на {nf(abs(ch), 0)} %; 95 % интервал — {f(b['lo'])} – {f(b['hi'])}.",
+              f"{b['year']} ж. дейін медиана {a['year']} ж. деңгейінен {nf(abs(ch), 0)} %-ға {'жоғары' if ch >= 0 else 'төмен'}; 95 % аралық — {f(b['lo'])} – {f(b['hi'])}.")]
 
 
 NOW.update({"fc_species": _fc_species_now, "fc_tiles": _fc_tiles_now, "fc_total": _fc_series_now, "fc_biomass": _fc_series_now})

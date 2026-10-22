@@ -266,13 +266,15 @@ export function bandChart(spec, ctype) {
   const series = []
   for (const b of spec.bands || []) {
     const lo = b.lo.map(ok), hi = b.hi.map(ok)
-    series.push({ type: 'custom', name: b.name, silent: true, z: 1, data: x.slice(0, -1).map((_, i) => i), itemStyle: { color: b.c != null ? col(b.c) : CHART.main, opacity: 0.5 },
+    // данные с границами полосы: по ним ось (в том числе логарифмическая) считает свой диапазон
+    series.push({ type: 'custom', name: b.name, silent: true, z: 1, itemStyle: { color: b.c != null ? col(b.c) : CHART.main, opacity: 0.5 },
+      data: x.slice(0, -1).map((_, i) => [i, lo[i] ?? lo[i + 1] ?? null, hi[i] ?? hi[i + 1] ?? null]),
       renderItem: (params, api) => {
         const i = api.value(0)
         if (lo[i] == null || hi[i] == null || lo[i + 1] == null || hi[i + 1] == null) return null
         const pts = [api.coord([i, lo[i]]), api.coord([i + 1, lo[i + 1]]), api.coord([i + 1, hi[i + 1]]), api.coord([i, hi[i]])]
         return { type: 'polygon', shape: { points: pts }, style: { fill: b.c != null ? col(b.c) : CHART.main, opacity: b.op || 0.2 } }
-      }, encode: { x: 0 }, tooltip: { show: false } })
+      }, encode: { x: 0, y: [1, 2] }, tooltip: { show: false } })
   }
   for (const it of spec.intervals || []) {
     const lo = it.lo.map(ok), hi = it.hi.map(ok), mid = it.mid.map(ok)
