@@ -384,3 +384,239 @@ for _g in ("seine", "net"):
     for _n, _fn in (("species", v_ca_species), ("tiles", v_ca_tiles), ("catch", v_ca_catch), ("curve", v_ca_curve),
                     ("ages", v_ca_ages), ("heat", v_ca_heat), ("params", v_ca_params)):
         VIEWS[f"ca_{_g}_{_n}"] = _bind(_fn, _g)
+
+
+# ================================================================== Запас по уловам (этап 2)
+def pieces(v, lang="ru"):
+    """Штуки компактно: 1,2 млн / 350 тыс / 820."""
+    if v is None:
+        return "—"
+    a = abs(v)
+    th = "мың" if lang == "kk" else "тыс"
+    if a >= 1e9:
+        return f"{nf(v / 1e9, 0 if a >= 1e10 else 1)} млрд"
+    if a >= 1e6:
+        return f"{nf(v / 1e6, 0 if a >= 1e8 else 1 if a >= 1e7 else 2)} млн"
+    if a >= 1e3:
+        return f"{nf(v / 1e3, 0 if a >= 1e5 else 1)} {th}"
+    return nf(v, 0)
+
+
+def _stock(D):
+    pl, meta = D.run_payload("stock_by_catch")
+    if pl is None or not (pl.get("stock") or {}).get("species"):
+        if meta is None:
+            raise NoData(L(D.lang, "Для водоёма ещё нет расчёта запаса по уловам — запустите расчёт в разделе «Расчёты»",
+                           "Су айдыны үшін ауланым бойынша қор әлі есептелмеген — «Есептеулер» бөлімінде есептеуді іске қосыңыз"))
+        raise NoData(L(D.lang, "В запуске нет результата расчёта запаса", "Іске қосуда қор есебінің нәтижесі жоқ"))
+    return pl["stock"], meta
+
+
+def _toggles(D, opt, hauls_only=False):
+    lang = D.lang
+    variant = opt.get("variant") if opt.get("variant") in ("with_ages", "out_ages") else "with_ages"
+    method = opt.get("method") if opt.get("method") in ("on_stock", "on_catch") else "on_stock"
+    t = [{"key": "variant", "title": L(lang, "Уловистость", "Аулағыштық"), "value": variant,
+          "options": [{"value": "with_ages", "label": L(lang, "по возрастам", "жастар бойынша")},
+                      {"value": "out_ages", "label": L(lang, "средняя по виду", "түр бойынша орташа")}]}]
+    if not hauls_only:
+        t.append({"key": "method", "title": L(lang, "Годовой запас", "Жылдық қор"), "value": method,
+                  "options": [{"value": "on_stock", "label": L(lang, "по запасам", "қорлар бойынша")},
+                              {"value": "on_catch", "label": L(lang, "по улову", "ауланым бойынша")}]})
+    return variant, method, t
+
+
+def _stock_species(D, opt):
+    st, meta = _stock(D)
+    code = opt.get("species")
+    if not code:
+        raise NoData(L(D.lang, "Выберите вид кнопкой под шапкой", "Тақырыптың астындағы түймемен түрді таңдаңыз"))
+    key = _key_for(D, {"fits": st["species"]}, code)
+    if key is None:
+        raise NoData(L(D.lang, f"Вид «{D.sp_name(code)}» не входит в расчёт запаса этого водоёма",
+                       f"«{D.sp_name(code)}» түрі осы су айдынының қор есебіне кірмейді"))
+    y, years = _year(st, opt)
+    return st, meta, st["species"][key], code, y, years
+
+
+def _stock_common(D, meta, years, y, code, variant=None, method=None, st=None):
+    lang = D.lang
+    parts = [D.sp_name(code) if code else None, str(y)]
+    if st and variant:
+        parts.append(L(lang, "уловистость по возрастам", "жастар бойынша аулағыштық") if variant == "with_ages"
+                     else L(lang, "уловистость средняя по виду", "түр бойынша орташа аулағыштық"))
+    if st and method:
+        parts.append(L(lang, "по запасам", "қорлар бойынша") if method == "on_stock" else L(lang, "по улову", "ауланым бойынша"))
+    return {"meta": meta, "year": y, "year_choices": years, "calc_year": True, "help": "method-stock",
+            "species_shown": code, "filter_label": " · ".join(p for p in parts if p)}
+
+
+def _gear_names(lang):
+    return {"net": L(lang, "Сети (балансовый)", "Аулар (баланс әдісі)"), "seine": L(lang, "Невод (27)", "Сүзекі (27)"),
+            "mean": L(lang, "Сети и невод (окончательный)", "Аулар мен сүзекі (түпкілікті)"), "npc": L(lang, "НПЦ", "ҒӨО")}
+
+
+def v_st_species(D, opt):
+    st, meta = _stock(D)
+    y, years = _year(st, opt)
+    variant, method, toggles = _toggles(D, opt)
+    G = st["gears"]
+    yi = years.index(y)
+    names = _names(D)
+    lang = D.lang
+    rows = []
+    for key, sp in st["species"].items():
+        mb = sp["variants"][variant][method]["totals"]
+        net, seine, mean = mb[G["net"]][yi], mb[G["seine"]][yi], mb[G["mean"]][yi]
+        npc = (sp.get("npc") or [None] * len(years))[yi]
+        code = names.get(key.strip().lower(), key)
+        rows.append({"_code": code, "species": D.sp_name(code), "net": net, "seine": seine, "mean": mean, "npc": npc,
+                     "ratio": (seine / net) if net and seine else None,
+                     "n_net": sp["n_hauls"][G["net"]][yi], "n_seine": sp["n_hauls"][G["seine"]][yi]})
+    rows.sort(key=lambda r: -(r["mean"] or 0))
+    gn = _gear_names(lang)
+    cols = [col("species", L(lang, "Вид", "Түр")), col("net", gn["net"], "integer"), col("seine", gn["seine"], "integer"),
+            col("mean", L(lang, "Окончательный", "Түпкілікті"), "integer"), col("npc", L(lang, "Оценка НПЦ", "ҒӨО бағасы"), "integer"),
+            col("ratio", L(lang, "Невод / сети, раз", "Сүзекі / аулар, есе"), "number"),
+            col("n_net", L(lang, "Ловов сетью", "Аумен аулау"), "integer"), col("n_seine", L(lang, "Ловов неводом", "Сүзекімен аулау"), "integer")]
+    return {"columns": cols, "rows": rows, "default_view": "table", "row_action": "species", "chart": None, "toggles": toggles,
+            "notes": [L(lang, "Штук рыб, возрасты от 1–2 до m1. Каждый вид — отдельно; суммировать виды нельзя. Щелчок по строке — все данные по виду.",
+                        "Балық дана, 1–2-ден m1-ге дейінгі жастар. Әр түр бөлек; түрлерді қосуға болмайды. Жолды басу — түр бойынша барлық деректер.")],
+            **_stock_common(D, meta, years, y, None, variant, method, st)}
+
+
+def v_st_tiles(D, opt):
+    st, meta, sp, code, y, years = _stock_species(D, opt)
+    variant, method, toggles = _toggles(D, opt)
+    G = st["gears"]
+    yi = years.index(y)
+    lang = D.lang
+    mb = sp["variants"][variant][method]["totals"]
+    net, seine, mean = mb[G["net"]][yi], mb[G["seine"]][yi], mb[G["mean"]][yi]
+    npc = (sp.get("npc") or [None] * len(years))[yi]
+    ratio = seine / net if net and seine else None
+    how = L(lang, "средневзвешенное по числу ловов", "аулау саны бойынша орташа салмақталған") if st.get("combine_how") == "hauls" \
+        else L(lang, "среднее (29)", "орташа (29)")
+    tiles = [
+        {"label": L(lang, f"Сети, {y}", f"Аулар, {y}"), "value": pieces(net, lang),
+         "hint": L(lang, "балансовый метод (как в старом коде)", "баланс әдісі (ескі кодтағыдай)") if st.get("net_formula") != "article"
+         else L(lang, "балансовый метод, формула (28)", "баланс әдісі, (28) формула")},
+        {"label": L(lang, f"Невод, {y}", f"Сүзекі, {y}"), "value": pieces(seine, lang), "hint": L(lang, "метод площадей (27)", "аудандар әдісі (27)")},
+        {"label": L(lang, "Окончательный запас", "Түпкілікті қор"), "value": pieces(mean, lang), "hint": L(lang, f"сети и невод: {how}", f"аулар мен сүзекі: {how}")},
+        {"label": L(lang, "Оценка НПЦ", "ҒӨО бағасы"), "value": pieces(npc, lang), "hint": L(lang, "из набора «Оценка запаса НПЦ»", "«ҒӨО қор бағасы» жиынтығынан")},
+        {"label": L(lang, "Невод / сети", "Сүзекі / аулар"), "value": f"{nf(ratio, 1)}×" if ratio else "—", "hint": L(lang, "во сколько раз больше", "неше есе көп")},
+        {"label": L(lang, "Ловов за год", "Жылдағы аулау"), "value": f"{nf(sp['n_hauls'][G['net']][yi], 0)} / {nf(sp['n_hauls'][G['seine']][yi], 0)}",
+         "hint": L(lang, "сетью / неводом", "аумен / сүзекімен")},
+    ]
+    return {"tiles": tiles, "default_view": "tiles", "chart": None, "toggles": toggles,
+            "columns": [col("label", L(lang, "Показатель", "Көрсеткіш")), col("value", L(lang, "Значение", "Мәні")), col("hint", L(lang, "Пояснение", "Түсініктеме"))],
+            "rows": [{"label": t["label"], "value": t["value"], "hint": t["hint"]} for t in tiles],
+            "values": {"net": net, "seine": seine, "mean": mean, "npc": npc, "ratio": ratio},
+            **_stock_common(D, meta, years, y, code, variant, method, st)}
+
+
+def v_st_yearly(D, opt):
+    st, meta, sp, code, y, years = _stock_species(D, opt)
+    variant, method, toggles = _toggles(D, opt)
+    G = st["gears"]
+    lang = D.lang
+    mb = sp["variants"][variant][method]["totals"]
+    gn = _gear_names(lang)
+    series = [{"name": gn["net"], "values": mb[G["net"]], "type": "line", "c": 0},
+              {"name": gn["seine"], "values": mb[G["seine"]], "type": "line", "c": 1},
+              {"name": gn["mean"], "values": mb[G["mean"]], "type": "line", "c": 2, "bold": True}]
+    if sp.get("npc"):
+        series.append({"name": gn["npc"], "values": sp["npc"], "type": "line", "c": 3, "dash": True})
+    rows = [{"year": yy, "net": mb[G["net"]][i], "seine": mb[G["seine"]][i], "mean": mb[G["mean"]][i],
+             "npc": (sp.get("npc") or [None] * len(years))[i], "_current": yy == y} for i, yy in enumerate(years)]
+    return {"chart": {"kind": "fit", "x": years, "series": series, "vrefs": [{"x": str(y), "label": str(y)}], "pick_year": True,
+                      "x_title": L(lang, "Год", "Жыл"), "y_title": L(lang, "штук", "дана"), "allowed": ["log", "linear"], "default": "log"},
+            "columns": [col("year", L(lang, "Год", "Жыл"), "integer"), col("net", gn["net"], "integer"), col("seine", gn["seine"], "integer"),
+                        col("mean", gn["mean"], "integer"), col("npc", gn["npc"], "integer")],
+            "rows": rows, "toggles": toggles, "row_action": "year",
+            "notes": [L(lang, "Штук рыб, все возрасты от 1–2 до m1 (без сеголеток). Вертикальная линия — выбранный год; щелчок по точке выбирает год.",
+                        "Балық дана, 1–2-ден m1-ге дейінгі барлық жастар (шабақсыз). Тік сызық — таңдалған жыл; нүктені басу жылды таңдайды.")],
+            **_stock_common(D, meta, years, y, code, variant, method, st)}
+
+
+def v_st_hauls(D, opt):
+    st, meta, sp, code, y, years = _stock_species(D, opt)
+    variant, _, toggles = _toggles(D, opt, hauls_only=True)
+    G = st["gears"]
+    lang = D.lang
+    vb = sp["variants"][variant]
+    H = st["hauls"]
+    gn = _gear_names(lang)
+    dots, rows = [], []
+    for k, g in enumerate(("net", "seine")):
+        gk = G[g]
+        pts = []
+        for h, v in enumerate(vb["hauls"][gk]):
+            yy = H[gk]["year"][h]
+            if v is None or yy not in years:
+                continue
+            lab = f"{H[gk]['date'][h]}, {H[gk]['place'][h]} ({H[gk]['type'][h]})"
+            pts.append([years.index(yy), v, lab])
+            rows.append({"gear": L(lang, "сеть", "ау") if g == "net" else L(lang, "невод", "сүзекі"), "year": yy, "date": H[gk]["date"][h],
+                         "place": H[gk]["place"][h], "type": H[gk]["type"][h], "stock": v})
+        dots.append({"name": L(lang, "Сети, лов", "Аулар, аулау") if g == "net" else L(lang, "Невод, лов", "Сүзекі, аулау"), "points": pts, "c": k})
+    lines = [{"name": L(lang, "Сети, год", "Аулар, жыл"), "values": vb["on_stock"]["totals"][G["net"]], "c": 0},
+             {"name": L(lang, "Невод, год", "Сүзекі, жыл"), "values": vb["on_stock"]["totals"][G["seine"]], "c": 1}]
+    return {"chart": {"kind": "dots", "x": years, "dots": dots, "lines": lines, "x_title": L(lang, "Год", "Жыл"),
+                      "y_title": L(lang, "штук", "дана"), "allowed": ["log", "linear"], "default": "log"},
+            "columns": [col("gear", L(lang, "Орудие", "Құрал")), col("year", L(lang, "Год", "Жыл"), "integer"), col("date", L(lang, "Дата", "Күні")),
+                        col("place", L(lang, "Место лова", "Аулау орны")), col("type", L(lang, "Тип лова", "Аулау түрі")),
+                        col("stock", L(lang, "Запас по лову, шт", "Аулау бойынша қор, дана"), "integer")],
+            "rows": rows, "toggles": toggles,
+            "notes": [L(lang, "Каждая точка — запас, оценённый по одному лову; линии — годовой запас по каждому орудию (среднее оценок по ловам).",
+                        "Әр нүкте — бір аулау бойынша бағаланған қор; сызықтар — әр құрал бойынша жылдық қор (аулаулар бағаларының орташасы).")],
+            **_stock_common(D, meta, years, y, code, variant, None, st)}
+
+
+def v_st_ages(D, opt):
+    st, meta, sp, code, y, years = _stock_species(D, opt)
+    variant, method, toggles = _toggles(D, opt)
+    G = st["gears"]
+    yi = years.index(y)
+    lang = D.lang
+    ba = sp["variants"][variant][method]["by_age"]
+    ages = sp["ages"]
+    net, seine, mean = ba[G["net"]][yi], ba[G["seine"]][yi], ba[G["mean"]][yi]
+    series = [{"name": L(lang, "Сети", "Аулар"), "values": net, "type": "bar", "c": 0},
+              {"name": L(lang, "Невод", "Сүзекі"), "values": seine, "type": "bar", "c": 1},
+              {"name": L(lang, "Окончательный (по нему распределяется ПДУ)", "Түпкілікті (ШРА осы бойынша бөлінеді)"), "values": mean, "type": "line", "c": 2, "bold": True}]
+    rows = [{"age": age_label(a), "net": net[i], "seine": seine[i], "mean": mean[i]} for i, a in enumerate(ages)]
+    return {"chart": {"kind": "fit", "x": [age_label(a) for a in ages], "series": series, "x_title": L(lang, "Возраст, лет", "Жасы, жыл"),
+                      "y_title": L(lang, "штук", "дана"), "allowed": ["log", "linear"], "default": "log"},
+            "columns": [col("age", L(lang, "Возраст, лет", "Жасы, жыл")), col("net", L(lang, "Сети", "Аулар"), "integer"),
+                        col("seine", L(lang, "Невод", "Сүзекі"), "integer"), col("mean", L(lang, "Окончательный", "Түпкілікті"), "integer")],
+            "rows": rows, "toggles": toggles,
+            "notes": [L(lang, "Возрасты по порядку от 1–2 до m1; запас каждого вида — отдельно.", "Жастар 1–2-ден m1-ге дейін ретімен; әр түрдің қоры бөлек.")],
+            **_stock_common(D, meta, years, y, code, variant, method, st)}
+
+
+def v_st_table(D, opt):
+    st, meta, sp, code, y, years = _stock_species(D, opt)
+    variant, method, toggles = _toggles(D, opt)
+    G = st["gears"]
+    lang = D.lang
+    mb = sp["variants"][variant][method]["totals"]
+    npc = sp.get("npc") or [None] * len(years)
+    rows = []
+    for i, yy in enumerate(years):
+        n, s_ = mb[G["net"]][i], mb[G["seine"]][i]
+        rows.append({"year": yy, "_current": yy == y, "net": n, "seine": s_, "mean": mb[G["mean"]][i], "npc": npc[i],
+                     "ratio": s_ / n if n and s_ else None, "n_net": sp["n_hauls"][G["net"]][i], "n_seine": sp["n_hauls"][G["seine"]][i]})
+    gn = _gear_names(lang)
+    cols = [col("year", L(lang, "Год", "Жыл"), "integer"), col("net", gn["net"], "integer"), col("seine", gn["seine"], "integer"),
+            col("mean", L(lang, "Окончательный", "Түпкілікті"), "integer"), col("npc", gn["npc"], "integer"),
+            col("ratio", L(lang, "Невод / сети, раз", "Сүзекі / аулар, есе"), "number"),
+            col("n_net", L(lang, "Ловов сетью", "Аумен аулау"), "integer"), col("n_seine", L(lang, "Ловов неводом", "Сүзекімен аулау"), "integer")]
+    return {"columns": cols, "rows": rows, "default_view": "table", "row_action": "year", "chart": None, "toggles": toggles,
+            "notes": [L(lang, "Штук рыб. Строка выбранного года выделена; щелчок по строке выбирает год.",
+                        "Балық дана. Таңдалған жыл жолы белгіленген; жолды басу жылды таңдайды.")],
+            **_stock_common(D, meta, years, y, code, variant, method, st)}
+
+
+VIEWS.update({"st_species": v_st_species, "st_tiles": v_st_tiles, "st_yearly": v_st_yearly, "st_hauls": v_st_hauls,
+              "st_ages": v_st_ages, "st_table": v_st_table})

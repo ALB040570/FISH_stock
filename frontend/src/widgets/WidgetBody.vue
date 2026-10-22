@@ -42,7 +42,7 @@
     <div v-else-if="mode === 'table'">
       <el-table :data="table.rows" size="small" :max-height="height" border :row-class-name="rowCls" @row-click="onRow">
         <el-table-column v-for="c in table.columns" :key="c.code" :prop="c.code" :label="colTitle(c)"
-                         :min-width="c.code === 'issue' || c.code === 'text' ? 360 : c.code === 'place' || c.code === 'species' ? 160 : 100"
+                         :min-width="c.code === 'issue' || c.code === 'text' ? 360 : c.code === 'place' || c.code === 'species' ? 160 : Math.min(190, Math.max(100, String(c.title).length * 6.5))"
                          :align="isNum(c) ? 'right' : 'left'" :fixed="c === table.columns[0] && table.columns.length > 8 ? 'left' : false">
           <template #default="{ row }"><span :class="cellCls(row, c)">{{ cell(row[c.code], c) }}</span></template>
         </el-table-column>
@@ -111,7 +111,7 @@ function cell(v, c) {
   if (v === null || v === undefined || v === '') return '—'
   if (typeof v === 'boolean') return v ? t('common.yes') : t('common.no')
   if (c.code === 'level') return t('wv.level_' + v)
-  if (typeof v === 'number') return c.type === 'integer' || c.code === 'year' ? v : fmt(v, 'auto')
+  if (typeof v === 'number') return c.code === 'year' ? v : c.type === 'integer' ? fmt(v, 0) : fmt(v, 'auto')
   return v
 }
 const cellCls = (row, c) => (c.code === 'level' ? 'lv-' + row.level : row._current ? 'cur' : '')
@@ -132,14 +132,17 @@ function onPick(e) {
     [xi, yi] = e.value; x = spec.x[xi]; y = spec.y[yi]
   } else if (spec.kind === 'box') {
     xi = e.seriesType === 'boxplot' ? e.dataIndex : e.value[0]; x = spec.x[xi]
-  } else if (spec.kind === 'lifecycle') {
+  } else if (spec.kind === 'lifecycle' || spec.kind === 'dots' || spec.kind === 'curve') {
     return
   } else {
     xi = e.dataIndex; x = spec.x?.[xi]
     const s = (spec.series || []).find((q) => q.name === e.seriesName)
     series = s ? s.key : null
   }
-  if (spec.pick_year && board?.setYear && y != null) { board.setYear(Number(y)); return }
+  if (spec.pick_year && board?.setYear) {
+    const yy = spec.kind === 'heatmap' ? y : x
+    if (yy != null && /^\d{4}$/.test(String(yy))) { board.setYear(Number(yy)); return }
+  }
   const yearAxis = spec.x_is_year ? x : spec.y_is_year ? y : null
   if (yearAxis != null && board) board.setHighlight(yearAxis)
   emit('pick', { x, y, xi, yi, series, seriesName: e.seriesName })

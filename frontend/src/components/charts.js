@@ -200,16 +200,23 @@ export function dualChart(spec, { highlight = null } = {}) {
   }
 }
 
-// Улов по возрастам: столбцы факта и линия модели; ctype linear | log (в логарифмах факт — точки, как в прежнем приложении)
+// Ряды по категориям (возрасты, годы): столбцы и линии; ctype linear | log. Цвет ряда — s.c (номер в палитре)
+// или фон для одиночного ряда факта; в логарифмах одиночный факт — точки (как в прежнем приложении)
 export function fitChart(spec, ctype) {
   const x = spec.x.map(String)
   const log = ctype === 'log'
   const pos = (v) => (v == null || (log && v <= 0) ? null : v)
-  const series = spec.series.map((s, k) => {
-    const color = k === 0 ? CHART.background : CHART.main
-    if (s.type === 'bar' && !log) return { type: 'bar', name: s.name, data: s.values, barMaxWidth: 34, itemStyle: { color: CHART.background } }
-    if (s.type === 'bar') return { type: 'scatter', name: s.name, data: s.values.map(pos), symbolSize: 9, itemStyle: { color: CHART.highlight } }
-    return { type: 'line', name: s.name, data: s.values.map(pos), symbol: 'circle', symbolSize: 5, lineStyle: { width: 2.4, color }, itemStyle: { color } }
+  const bars = spec.series.filter((s) => s.type === 'bar').length
+  const series = spec.series.map((s) => {
+    const color = s.c != null ? PALETTE[s.c % PALETTE.length] : null
+    if (s.type === 'bar' && color == null) {           // одиночный ряд факта (улов по возрастам)
+      if (!log) return { type: 'bar', name: s.name, data: s.values, barMaxWidth: 34, itemStyle: { color: CHART.background } }
+      return { type: 'scatter', name: s.name, data: s.values.map(pos), symbolSize: 9, itemStyle: { color: CHART.highlight } }
+    }
+    if (s.type === 'bar') return { type: 'bar', name: s.name, data: s.values.map(pos), barMaxWidth: bars > 1 ? 18 : 34, itemStyle: { color } }
+    const c = color || CHART.main
+    return { type: 'line', name: s.name, data: s.values.map(pos), symbol: 'circle', symbolSize: s.bold ? 7 : 5, z: s.bold ? 5 : 3,
+      lineStyle: { width: s.bold ? 3 : 2.2, color: c, type: s.dash ? 'dashed' : 'solid' }, itemStyle: { color: c } }
   })
   if (spec.vrefs?.length && series.length) {
     series[0].markLine = { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: CHART.limit },
@@ -218,8 +225,32 @@ export function fitChart(spec, ctype) {
   return {
     grid: { left: 70, right: 24, top: 44, bottom: 42 },
     tooltip: { trigger: 'axis', valueFormatter: (v) => fmt(v, 'auto') },
-    legend: { top: 0 },
+    legend: { top: 0, type: 'scroll' },
     xAxis: { type: 'category', data: x, name: spec.x_title || '', nameLocation: 'middle', nameGap: 26 },
+    yAxis: axisY(spec.y_title || '', log ? { type: 'log', logBase: 10 } : {}),
+    series,
+  }
+}
+
+// Точки по годам (оценки по отдельным ловам) и линии годовых значений; ctype linear | log
+export function dotsChart(spec, ctype) {
+  const x = spec.x.map(String)
+  const log = ctype === 'log'
+  const ok = (v) => v != null && (!log || v > 0)
+  const series = [
+    ...spec.dots.map((d) => ({ type: 'scatter', name: d.name, symbolSize: 6,
+      data: d.points.filter((q) => ok(q[1])).map((q) => ({ value: [q[0] + (d.c ? 0.12 : -0.12), q[1]], label: q[2] })),
+      itemStyle: { color: PALETTE[(d.c || 0) % PALETTE.length], opacity: 0.55 } })),
+    ...spec.lines.map((l) => ({ type: 'line', name: l.name, data: l.values.map((v, i) => [i, ok(v) ? v : null]), symbol: 'circle', symbolSize: 6, z: 5,
+      lineStyle: { width: 2.6, color: PALETTE[(l.c || 0) % PALETTE.length] }, itemStyle: { color: PALETTE[(l.c || 0) % PALETTE.length] } })),
+  ]
+  return {
+    grid: { left: 70, right: 24, top: 44, bottom: 42 },
+    tooltip: { trigger: 'item', formatter: (p) => (p.seriesType === 'scatter'
+      ? `${p.seriesName}<br>${p.data.label}<br><b>${fmt(p.value[1], 0)}</b>` : `${p.seriesName}, ${x[p.value[0]]}: <b>${fmt(p.value[1], 0)}</b>`) },
+    legend: { top: 0, type: 'scroll' },
+    xAxis: { type: 'value', min: -0.5, max: x.length - 0.5, interval: 1, name: spec.x_title || '', nameLocation: 'middle', nameGap: 26,
+      axisLabel: { formatter: (v) => x[v] ?? '' }, splitLine: { show: false } },
     yAxis: axisY(spec.y_title || '', log ? { type: 'log', logBase: 10 } : {}),
     series,
   }
@@ -256,6 +287,7 @@ export function buildChart(spec, ctype, opts) {
   if (!spec) return null
   if (spec.kind === 'fit') return fitChart(spec, ctype || spec.default)
   if (spec.kind === 'curve') return curveChart(spec)
+  if (spec.kind === 'dots') return dotsChart(spec, ctype || spec.default)
   if (spec.kind === 'series') return seriesChart(spec, ctype || spec.default || 'line', opts)
   if (spec.kind === 'heatmap') return heatmapChart(spec, opts)
   if (spec.kind === 'box') return boxChart(spec, opts)

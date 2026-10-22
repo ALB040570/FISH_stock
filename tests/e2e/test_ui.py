@@ -144,3 +144,24 @@ def test_monitoring_catchability(browser):
     page.locator(".secs label").filter(has_text="Сеть").click()
     page.wait_for_selector(".slide .tile")
     assert not errors, errors
+
+
+def test_monitoring_stock(browser):
+    """Запас по уловам: виды за год → вид, переключатели расчёта общие для слайдов."""
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("try{localStorage.removeItem('fishstock.monitoring.view')}catch(e){}")
+    login(page)
+    page.goto(URL + "/monitoring/zhaysan?tab=stock&s=by_catch")
+    page.wait_for_selector(".slide .el-table__row")
+    page.locator(".slide .el-table__row").first.click()
+    page.wait_for_function("location.search.includes('w=st_tiles')")
+    page.wait_for_selector(".slide .tile")
+    page.locator(".wctl .el-radio-button").filter(has_text="средняя по виду").click()
+    page.wait_for_selector(".wctl .el-radio-button.is-active:has-text('средняя по виду')")
+    page.locator(".nav.next").click()
+    page.wait_for_selector(".slide canvas")
+    assert page.locator(".wctl .el-radio-button.is-active").filter(has_text="средняя по виду").count() == 1
+    assert not errors, errors
+

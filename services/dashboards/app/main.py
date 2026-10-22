@@ -433,6 +433,9 @@ def _insight(src, flt, opt, wb):
     o = {**{k: v for k, v in opt.items() if k not in ("raw",)}, "species": flt.get("species") or opt.get("species")}
     if flt.get("year"):
         o["year"] = flt["year"]
+    for k in ("variant", "method"):      # варианты расчёта запаса — общие для слайдов вкладки
+        if flt.get(k):
+            o[k] = flt[k]
     try:
         if view in insights.NEEDS_RULES:
             res = fn(D, o, _rules())

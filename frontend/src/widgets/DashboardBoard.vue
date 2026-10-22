@@ -173,8 +173,11 @@ const cmpB = ref(null)
 const cmpOpen = ref(false)
 const compare = computed(() => (cmpA.value && cmpB.value && cmpA.value !== cmpB.value
   ? [Math.min(cmpA.value, cmpB.value), Math.max(cmpA.value, cmpB.value)] : null))
+// варианты расчёта (уловистость по возрастам / средняя по виду, годовой запас по запасам / по улову) — общие для слайдов вкладки
+const calcOpts = reactive({})
 const wfilters = computed(() => ({ ...p.filters, ...(compare.value ? { compare: compare.value } : {}),
-  ...(curTab.value?.year_picker && calcYear.value ? { year: calcYear.value } : {}) }))
+  ...(curTab.value?.year_picker && calcYear.value ? { year: calcYear.value } : {}),
+  ...(curTab.value?.year_picker ? { ...calcOpts } : {}) }))
 watch(() => p.filters?.water_body, () => { years.value = new Set(); highlight.value = null; cmpA.value = null; cmpB.value = null; calcYear.value = null; calcYears.value = [] })
 const dataById = reactive({})
 const counts = ref({})
@@ -237,6 +240,7 @@ provide('board', {
     }
   },
   setYear,
+  setCalcOpt: (k, v) => { calcOpts[k] = v },
   reloadCounts,
   goWidget,
   openJournal: (where) => { journalPreset.value = { ...where }; goWidget('d_journal') },

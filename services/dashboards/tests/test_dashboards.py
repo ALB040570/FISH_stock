@@ -146,3 +146,18 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     k = view("ca_seine_tiles", "lesh", lang="kk")
     assert k["tiles"][0]["label"] == "Иілу нүктесі j50" and "жылы" not in k["explain"]["how"][0]
     assert view("ca_seine_tiles", "nalim").get("empty")
+    # ---- запас по уловам: те же числа, что в результате; виды не складываются; возрасты по порядку
+    st = db.post("/widgets/data", headers=H("viewer"), json={"source": {"kind": "payload", "algorithm": "stock_by_catch"},
+                                                             "filters": {"water_body": "zhaysan"}, "options": {}}).json()["payload"]["stock"]
+    tot = st["species"]["лещ"]["variants"]["with_ages"]["on_stock"]["totals"]
+    yt = view("st_table", "lesh")
+    assert [r["mean"] for r in yt["rows"]] == tot["сеть+невод"] and [r["net"] for r in yt["rows"]] == tot["сеть"]
+    t2 = view("st_tiles", "lesh", variant="out_ages", method="on_catch")
+    oc = st["species"]["лещ"]["variants"]["out_ages"]["on_catch"]["totals"]["сеть+невод"][-1]
+    assert t2["values"]["mean"] == oc and [g["value"] for g in t2["toggles"]] == ["out_ages", "on_catch"]
+    sp_rows = view("st_species")["rows"]
+    assert len(sp_rows) == len(st["species"]) and next(r for r in sp_rows if r["_code"] == "lesh")["mean"] == tot["сеть+невод"][-1]
+    ages = [r["age"] for r in view("st_ages", "lesh")["rows"]]
+    assert ages[:3] == ["1–2", "2–3", "3–4"] and ages.index("10–11") > ages.index("9–10")
+    hl = view("st_hauls", "lesh")
+    assert hl["chart"]["kind"] == "dots" and sum(len(d["points"]) for d in hl["chart"]["dots"]) == len(hl["rows"])

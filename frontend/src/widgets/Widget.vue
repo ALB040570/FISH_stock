@@ -15,10 +15,7 @@
             <el-icon><component :is="MODE_ICON[m]" /></el-icon>
           </el-radio-button>
         </el-radio-group>
-        <el-radio-group v-if="mode === 'chart' && data?.chart?.kind === 'fit' && ctypes.length > 1" v-model="ctype" size="small" style="margin-right:4px">
-          <el-radio-button v-for="c in ctypes" :key="c" :value="c">{{ $t('wv.ct_' + c) }}</el-radio-button>
-        </el-radio-group>
-        <el-dropdown v-else-if="mode === 'chart' && ctypes.length > 1" trigger="click" @command="(c) => (ctype = c)">
+        <el-dropdown v-if="mode === 'chart' && ctypes.length > 1 && !isScale" trigger="click" @command="(c) => (ctype = c)">
           <el-button size="small" text :title="$t('wv.chart_type')"><el-icon><Histogram /></el-icon></el-button>
           <template #dropdown><el-dropdown-menu>
             <el-dropdown-item v-for="c in ctypes" :key="c" :command="c" :class="{ on: c === curCtype }">{{ $t('wv.ct_' + c) }}</el-dropdown-item>
@@ -40,6 +37,16 @@
         </el-dropdown>
         <slot name="tools" />
       </div>
+    </div>
+    <!-- варианты расчёта и шкала — отдельной строкой, чтобы не теснить заголовок -->
+    <div v-if="data?.toggles?.length || (mode === 'chart' && isScale)" class="wctl">
+        <el-radio-group v-for="tg in data?.toggles || []" :key="tg.key" :model-value="tg.value" size="small" 
+                        :title="tg.title" @update:model-value="(v) => (board?.setCalcOpt ? board.setCalcOpt(tg.key, v) : (optSel[tg.key] = v))">
+          <el-radio-button v-for="o in tg.options" :key="o.value" :value="o.value">{{ o.label }}</el-radio-button>
+        </el-radio-group>
+        <el-radio-group v-if="mode === 'chart' && isScale" v-model="ctype" size="small" >
+          <el-radio-button v-for="c in ctypes" :key="c" :value="c">{{ $t('wv.ct_' + c) }}</el-radio-button>
+        </el-radio-group>
     </div>
     <StateBlock :loading="loading" :error="error" :empty="!!data?.empty" :empty-text="emptyText" :retry="load">
       <template v-if="data">
@@ -112,7 +119,7 @@
   </div>
 </template>
 <script setup>
-import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { api, downloadDataUrl, downloadPost } from '../api'
@@ -134,6 +141,7 @@ const error = ref(null)
 const body = ref(null)
 const sel = ref(null)
 const yearSel = ref(null)
+const optSel = reactive({})  // переключатели расчёта (уловистость по возрастам / средняя, по запасам / по улову)
 const full = ref(false)
 const fullHeight = computed(() => Math.max(380, window.innerHeight - 220) + 'px')
 const height = computed(() => (p.big && board?.slideHeight ? board.slideHeight.value : (p.widget.h || 4) * 62 + 'px'))
@@ -158,7 +166,7 @@ async function load() {
   try {
     data.value = await api.post('dashboards', '/widgets/data', {
       source: p.widget.source, filters: { ...p.filters, lang: i18n.global.locale.value },
-      options: { ...(p.widget.options || {}), raw: p.widget.type === 'table', ...(yearSel.value ? { year: yearSel.value } : {}) },
+      options: { ...(p.widget.options || {}), ...optSel, raw: p.widget.type === 'table', ...(yearSel.value ? { year: yearSel.value } : {}) },
     })
     if (board && data.value?.chart?.x_is_year) board.addYears(data.value.chart.x)
     if (board && data.value?.chart?.y_is_year) board.addYears(data.value.chart.y)
@@ -166,7 +174,7 @@ async function load() {
     if (board?.setData) board.setData(p.widget.id, data.value)
   } catch (e) { error.value = e } finally { loading.value = false }
 }
-watch(() => [p.filters, p.widget, i18n.global.locale.value, yearSel.value], load, { deep: true, immediate: true })
+watch(() => [p.filters, p.widget, i18n.global.locale.value, yearSel.value, { ...optSel }], load, { deep: true, immediate: true })
 
 // ---- виды отображения
 const hasChart = computed(() => (p.widget.type === 'view' ? !!data.value?.chart : ['line', 'bar', 'kpi', 'special', 'text'].includes(p.widget.type)))
@@ -196,6 +204,7 @@ const mode = computed({
 })
 const ctypes = computed(() => (p.widget.type === 'view' ? data.value?.chart?.allowed || [] : ['line', 'bar'].includes(p.widget.type) ? ['line', 'bar'] : []))
 const ctype = ref(null)
+const isScale = computed(() => ['fit', 'dots'].includes(data.value?.chart?.kind) && ctypes.value.length > 1)
 const curCtype = computed(() => (ctype.value && ctypes.value.includes(ctype.value) ? ctype.value
   : p.widget.type === 'view' ? data.value?.chart?.default : p.widget.type))
 const canExport = computed(() => data.value && !data.value.empty && p.widget.type !== 'text')
@@ -288,6 +297,7 @@ onBeforeUnmount(() => unreg && unreg())
 .widget { min-width: 0; }
 .wh { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; gap: 8px; }
 .wtt { min-width: 0; }
+.wctl { display: flex; flex-wrap: wrap; gap: 8px; margin: -2px 0 10px; }
 .wt { font-weight: 600; }
 .spt { color: var(--fs-primary-2); }
 .cmb { position: relative; }
