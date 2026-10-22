@@ -15,7 +15,9 @@
         <div v-if="data.updated_at" class="muted small" style="margin-bottom:8px">{{ $t('wv.updated') }}: {{ new Date(data.updated_at).toLocaleString('ru-RU') }} · {{ data.updated_by }}</div>
         <StateBlock :error="saveErr" />
         <div class="rules">
-          <div v-for="r in data.rules" :key="r.code" class="card rule" :class="{ off: !r.enabled }">
+          <template v-for="(r, i) in data.rules" :key="r.code">
+          <h3 v-if="(r.group || 'data') !== (data.rules[i - 1]?.group || 'data') || i === 0" class="grp">{{ $t('wv.rules_group_' + (r.group || 'data')) }}</h3>
+          <div class="card rule" :class="{ off: !r.enabled }">
             <div class="row" style="justify-content:space-between; align-items:flex-start">
               <div>
                 <b>{{ tr(r, 'title') }}</b>
@@ -25,10 +27,11 @@
             </div>
             <div v-for="(spec, k) in r.params" :key="k" class="param">
               <span class="small">{{ spec.title }}</span>
-              <el-input-number v-model="r.values[k]" :min="spec.min" :max="spec.max" size="small" :disabled="!data.can_edit || !r.enabled" controls-position="right" style="width:130px" />
-              <span class="muted small">{{ $t('wv.default') }}: {{ spec.default }}</span>
+              <el-input-number v-model="r.values[k]" :min="spec.min" :max="spec.max" :step="spec.step || 1" :precision="spec.step && spec.step < 1 ? 2 : undefined" size="small" :disabled="!data.can_edit || !r.enabled" controls-position="right" style="width:130px" />
+              <span class="muted small">{{ $t('wv.default') }}: {{ String(spec.default).replace('.', ',') }}</span>
             </div>
           </div>
+          </template>
         </div>
       </template>
     </StateBlock>
@@ -61,6 +64,7 @@ onMounted(load)
 </script>
 <style scoped>
 .rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 12px; }
+.grp { grid-column: 1 / -1; margin: 10px 0 0; font-size: 15px; }
 .rule.off { opacity: 0.6; }
 .param { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .param > span:first-child { flex: 1; }

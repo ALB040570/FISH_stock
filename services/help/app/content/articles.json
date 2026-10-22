@@ -124,6 +124,12 @@
   "routes": []
  },
  {
+  "id": "catchability-trust",
+  "section": "ichthyologist",
+  "order": 41,
+  "routes": []
+ },
+ {
   "id": "cpue",
   "section": "ichthyologist",
   "order": 42,

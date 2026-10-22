@@ -152,7 +152,7 @@ def test_signals_and_rules(dash):
     assert "cpue_low" in rules or "cpue_extreme" in rules
     assert all(x["section"] for x in s["signals"])
     r = c.get("/signal-rules", headers=H("viewer")).json()
-    assert len(r["rules"]) == 11 and not r["can_edit"]
+    assert len(r["rules"]) == 15 and not r["can_edit"]
     body = {"rules": [{"code": x["code"], "enabled": x["code"] != "cpue_extreme", "values": x["values"]} for x in r["rules"]]}
     for x in body["rules"]:
         if x["code"] == "cpue_low":

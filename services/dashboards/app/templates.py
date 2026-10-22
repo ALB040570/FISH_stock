@@ -21,7 +21,8 @@ SECTIONS_DATA = [
 TABS_MONITORING = [
     {"code": "data", "title_ru": "Исходные данные", "title_kk": "Бастапқы деректер", "sections": SECTIONS_DATA},
     {"code": "catchability", "title_ru": "Уловистость", "title_kk": "Аулағыштық", "year_picker": True,
-     "sections": [{"code": "seine", "title_ru": "Невод", "title_kk": "Сүзекі"},
+     "sections": [{"code": "summary", "title_ru": "Сводка", "title_kk": "Жиынтық"},
+                  {"code": "seine", "title_ru": "Невод", "title_kk": "Сүзекі"},
                   {"code": "net", "title_ru": "Сеть", "title_kk": "Ау"}]},
     {"code": "stock", "title_ru": "Запасы", "title_kk": "Қорлар", "year_picker": True,
      "sections": [{"code": "by_catch", "title_ru": "По уловам", "title_kk": "Ауланым бойынша"},
@@ -105,7 +106,11 @@ def _ca(g, gl):
     ]
 
 
-CALC_CATCHABILITY = _ca("seine", "s") + _ca("net", "n")
+CALC_CATCHABILITY = [
+    C("k_trust", "catchability", "summary", "ca_trust", "wb", "Можно ли верить запасу", "Қорға сенуге бола ма",
+      "По каждому виду за год: сколько запаса задано границами уловистости, согласуются ли невод и сеть, не растут ли поколения, хороши ли пробы",
+      "Әр түр бойынша жылға: қордың қаншасы аулағыштық шектерімен берілген, сүзекі мен ау үйлесе ме, ұрпақтар өспей ме, сынамалар жақсы ма", 12, 8),
+] + _ca("seine", "s") + _ca("net", "n")
 
 def _b(id_, view, scope, title, title_kk, sub, sub_kk, h=7):
     return C(id_, "stock", "bayes", view, scope, title, title_kk, sub, sub_kk, 12, h)
@@ -360,6 +365,6 @@ COMPARE = {
 }
 
 # Ревизия системных шаблонов: при обновлении приложения неизменённые пользователями шаблоны обновляются
-TEMPLATE_REV = 12
+TEMPLATE_REV = 13
 
 SYSTEM = [MONITORING, COMPARE]

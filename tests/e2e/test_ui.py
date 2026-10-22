@@ -146,6 +146,26 @@ def test_monitoring_catchability(browser):
     assert not errors, errors
 
 
+def test_monitoring_trust(browser):
+    """Уловистость открывается на «Сводке»: 8 видов; строка → вид в «Неводе», ячейка «поколения» → «Запасы»."""
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("try{localStorage.removeItem('fishstock.monitoring.view')}catch(e){}")
+    login(page)
+    page.goto(URL + "/monitoring/zhaysan?tab=catchability")
+    page.wait_for_selector(".tr.row")
+    assert "s=summary" in page.url and page.locator(".tr.row").count() == 8
+    assert "Проверки пройдены у" in page.locator(".tr-head").inner_text()
+    page.locator(".tr.row .sp").first.click()
+    page.wait_for_function("location.search.includes('sp=') && location.search.includes('s=seine')")
+    page.goto(URL + "/monitoring/zhaysan?tab=catchability")
+    page.wait_for_selector(".tr.row")
+    page.locator(".tr.row").first.locator(".cell").nth(2).click()
+    page.wait_for_function("location.search.includes('tab=stock') && location.search.includes('w=st_ages')")
+    assert not errors, errors
+
+
 def test_monitoring_stock(browser):
     """Запас по уловам: виды за год → вид, переключатели расчёта общие для слайдов."""
     page = browser.new_page(viewport={"width": 1440, "height": 900})

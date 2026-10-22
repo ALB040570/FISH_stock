@@ -176,3 +176,62 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     assert {r["_code"] for r in ps["rows"]} >= {"lesh", "sudak"} and "F = k·M" not in str(ps["columns"])
     # байесовская модель и ПДУ приложения: в расчёте «stock» их нет — понятное сообщение, а не ошибка
     assert "полный расчёт" in view("by_total", "lesh")["message"] and "полный расчёт" in view("fc_tiles", "lesh")["message"]
+    # ---- «Можно ли верить запасу» (спецификация catchability_trust, контрольный пример Жайсан 2024)
+    tr = view("ca_trust")
+    T = {r["species"]: r for r in tr["trust"]["rows"]}
+    assert tr["year"] == 2024 and tr["default_view"] == "trust" and len(T) == 8
+    assert tr["trust"]["head"].startswith("Проверки пройдены у 2 из 8 видов")
+    ctl = {  # вид: (запас на границах %, невод/сеть, k, n, наибольший рост, рыб, R², уровень)
+        "лещ": (4.3, 1.99, 5, 14, 43.6, 574, 0.79, "warning"), "плотва": (34.0, 1.33, 1, 8, 8.3, 352, 0.84, "warning"),
+        "сазан": (35.0, 6.19, 5, 8, 37.6, 30, 0.82, "warning"), "карась": (0, 0.43, 3, 13, 2.8, 36, 0.84, "warning"),
+        "язь": (7.2, 1.46, 7, 11, 7.5, 11, 0.72, "warning"), "судак": (0, 1.26, 2, 9, 4.4, 363, 0.74, "ok"),
+        "окунь": (29.0, 2.65, 2, 11, 14.6, 297, 0.84, "warning"), "щука": (2.2, 0.90, 2, 8, 16.8, 71, 0.74, "ok")}
+    for s, (b, rt, k, n, x, ns, r2, lv) in ctl.items():
+        r = T[s]
+        assert round(r["bounds"]["pct"], 1) == b and round(r["gears"]["ratio"], 2) == rt, s
+        assert (r["cohorts"]["k"], r["cohorts"]["n"]) == (k, n) and round(r["cohorts"]["best"]["x"], 1) == x, s
+        assert r["sample"]["n"] == ns and round(r["sample"]["r2"], 2) == r2 and r["verdict"]["level"] == lv, s
+    assert T["язь"]["sample"]["pooled"] and not T["язь"]["sample"]["small"] and T["сазан"]["sample"]["small"]
+    assert T["щука"]["cohorts"]["k"] / T["щука"]["cohorts"]["n"] == 0.25 and not T["щука"]["cohorts"]["hit"]   # граница: только «больше»
+    assert T["лещ"]["verdict"]["phrase"] == ("Есть вопросы: 5 из 14 поколений выросли за год больше чем вдвое "
+                                            "(наибольший рост ×43,6).")
+    assert T["сазан"]["verdict"]["label"] == "4 вопроса" and T["язь"]["verdict"]["label"] == "Проба за все годы, поколения"
+    assert "(24)" not in str(tr) and "стар" not in str(tr).lower()
+    # первый год ряда — проверять поколения не с чем
+    first = view("ca_trust", year=min(seine["years"]))
+    assert all(r["cohorts"]["n"] == 0 and not r["cohorts"]["hit"] for r in first["trust"]["rows"])
+    # отключённое правило не проверяется; изменённый порог меняет вывод
+    rules = db.get("/signal-rules", headers=H("viewer")).json()["rules"]
+    put = [{"code": r["code"], "enabled": r["enabled"], "values": r["values"]} for r in rules]
+    for r in put:
+        if r["code"] == "cohort_growth":
+            r["enabled"] = False
+        if r["code"] == "gears_disagree":
+            r["values"] = {"ratio": 7}
+    assert db.put("/signal-rules", headers=H("ichthyologist"), json={"rules": put}).status_code == 200
+    T2 = {r["species"]: r for r in view("ca_trust")["trust"]["rows"]}
+    assert T2["лещ"]["verdict"]["level"] == "ok" and "отключено" in T2["лещ"]["verdict"]["phrase"]
+    assert not T2["сазан"]["gears"]["hit"] and not T2["окунь"]["gears"]["hit"] and T2["карась"]["verdict"]["level"] == "ok"
+    # одно орудие и вид без подгонки сети — без цвета и без ошибки
+    import copy, importlib
+    cv = importlib.import_module(mod.__package__ + ".calc_views")
+    real_stock, real_payload = cv._stock, cv._payload
+
+    def one_gear(D, *a, **k):
+        st, m = real_stock(D, *a, **k)
+        st = copy.deepcopy(st)
+        for sp in st["species"].values():
+            tot = sp["variants"]["with_ages"]["on_stock"]["totals"][st["gears"]["seine"]]
+            tot[:] = [0] * len(tot)
+        return st, m
+
+    def no_net(D, gear, *a, **k):
+        p, m = real_payload(D, gear, *a, **k)
+        if gear == "net":
+            p = {**p, "fits": {s: v for s, v in p["fits"].items() if s != "лещ"}}
+        return p, m
+    monkeypatch.setattr(cv, "_stock", one_gear)
+    monkeypatch.setattr(cv, "_payload", no_net)
+    T3 = {r["species"]: r for r in view("ca_trust")["trust"]["rows"]}
+    assert all(r["gears"]["one"] and r["gears"]["ratio"] is None and not r["gears"]["hit"] for r in T3.values())
+    assert T3["лещ"]["bounds"]["pct"] is not None and T3["лещ"]["bounds"]["gear"] in ("", "невод")

@@ -35,6 +35,9 @@
       <div v-if="!data.signals?.length" class="state muted small">{{ $t('wv.no_signals') }}</div>
     </div>
     <!-- светофор видов -->
+    <!-- можно ли верить запасу -->
+    <TrustTable v-else-if="mode === 'trust'" :data="data" :height="height" @species="(c) => $emit('species', c)"
+                @open="(c, w) => board?.openSpeciesAt ? board.openSpeciesAt(c, w) : $emit('species', c)" />
     <TrafficTable v-else-if="mode === 'traffic'" :data="data" :height="height" @species="(c) => $emit('species', c)" />
     <!-- журнал ловов -->
     <JournalTable v-else-if="mode === 'journal'" :data="data" :height="height" :title="title" />
@@ -59,6 +62,7 @@ import { base, buildChart, fmt } from '../components/charts'
 import specials from './specials'
 import { tableOf } from './views'
 import TrafficTable from './TrafficTable.vue'
+import TrustTable from './TrustTable.vue'
 import JournalTable from './JournalTable.vue'
 
 const p = defineProps({ widget: Object, data: Object, mode: String, ctype: String, height: String, filters: Object, species: Object, title: String })

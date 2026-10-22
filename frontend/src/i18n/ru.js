@@ -46,6 +46,9 @@ export default {
     j_search: 'Поиск', j_total: 'Итого', j_hauls: 'ловов', j_reset: 'Сбросить фильтры', j_export: 'Excel (отфильтрованное)',
     j_shown: 'Показано ловов: {n} из {m}', keys_hint: 'Листайте стрелками ← →', year: 'Год', prev_year: 'Предыдущий год', next_year: 'Следующий год',
   },
+  trust: { title: 'Можно ли верить запасу', species: 'Вид', bounds: 'Запас на границах', gears: 'Невод ÷ сеть', cohorts: 'Поколения выросли',
+    sample: 'Проба', verdict: 'Вывод', one_gear: 'одно орудие', usually: 'обычно', of: '{k} из {n}', fish: 'рыб', pooled: 'за все годы',
+    net_more: 'сеть {x}×', best_full: 'Наибольший рост ×{x}: {a} в {y0} → {b} в {y1}', edit_rules: 'Изменить пороги' },
   monitoring: {
     title: 'Мониторинг', choose: 'Выберите водоём', run_main: 'Основной запуск', run_last: 'Последний успешный запуск — не отмечен как основной',
     no_run: 'Для водоёма ещё нет выполненного расчёта.', to_runs: 'К запускам', copy: 'Сделать копию',
@@ -133,7 +136,7 @@ export default {
   wv: {
     by_run: 'по запуску', from: 'от', how: 'Как получено',
     no_chart: 'Для этого вида данных нет графика — переключитесь на таблицу', no_signals: 'Замечаний нет',
-    mode_chart: 'График', mode_table: 'Таблица', mode_tiles: 'Плитки', mode_cards: 'Карточки', mode_signals: 'Список',
+    rules_group_data: 'Исходные данные', rules_group_catchability: 'Уловистость', mode_chart: 'График', mode_table: 'Таблица', mode_tiles: 'Плитки', mode_cards: 'Карточки', mode_signals: 'Список',
     chart_type: 'Вид графика', ct_line: 'Линии', ct_linear: 'Линейная', ct_log: 'Логарифм.', ct_bar: 'Столбцы', ct_stack: 'Столбцы с накоплением', ct_stack100: 'Доли, 100 %',
     fullscreen: 'Во весь экран', download: 'Скачать', selected: 'Выбрано', show_rows: 'Показать строки данных',
     rows_found: 'Строк: {n}', open_dataset: 'Открыть набор данных', dataset: 'Набор данных', compare: 'Сравнить годы', and: 'и',

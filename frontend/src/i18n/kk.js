@@ -48,6 +48,9 @@ export default {
     j_search: 'Іздеу', j_total: 'Барлығы', j_hauls: 'аулау', j_reset: 'Сүзгілерді тастау', j_export: 'Excel (сүзілгені)',
     j_shown: 'Көрсетілген аулаулар: {m}-нен {n}', year: 'Жыл', prev_year: 'Алдыңғы жыл', next_year: 'Келесі жыл', keys_hint: '← → бағыттауыштарымен парақтаңыз',
   },
+  trust: { title: 'Қорға сенуге бола ма', species: 'Түр', bounds: 'Шектердегі қор', gears: 'Сүзекі ÷ ау', cohorts: 'Өскен ұрпақтар',
+    sample: 'Сынама', verdict: 'Қорытынды', one_gear: 'бір құрал', usually: 'әдетте', of: '{n}-нен {k}', fish: 'балық', pooled: 'барлық жылдар',
+    net_more: 'ау {x}×', best_full: 'Ең үлкен өсу ×{x}: {y0} ж. {a} → {y1} ж. {b}', edit_rules: 'Шектерді өзгерту' },
   monitoring: {
     title: 'Мониторинг', choose: 'Су айдынын таңдаңыз', run_main: 'Негізгі іске қосу',
     run_last: 'Соңғы сәтті іске қосу — негізгі ретінде белгіленбеген', no_run: 'Су айдыны үшін әлі орындалған есептеу жоқ.',
@@ -136,7 +139,7 @@ export default {
   wv: {
     by_run: 'іске қосу бойынша', from: '', how: 'Қалай алынды',
     no_chart: 'Бұл деректер үшін график жоқ — кестеге ауысыңыз', no_signals: 'Ескертулер жоқ',
-    mode_chart: 'График', mode_table: 'Кесте', mode_tiles: 'Плиткалар', mode_cards: 'Карточкалар', mode_signals: 'Тізім',
+    rules_group_data: 'Бастапқы деректер', rules_group_catchability: 'Аулағыштық', mode_chart: 'График', mode_table: 'Кесте', mode_tiles: 'Плиткалар', mode_cards: 'Карточкалар', mode_signals: 'Тізім',
     chart_type: 'График түрі', ct_line: 'Сызықтар', ct_linear: 'Сызықтық', ct_log: 'Логарифм.', ct_bar: 'Бағандар', ct_stack: 'Жинақталған бағандар', ct_stack100: 'Үлестер, 100 %',
     fullscreen: 'Толық экран', download: 'Жүктеп алу', selected: 'Таңдалды', show_rows: 'Деректер жолдарын көрсету',
     rows_found: 'Жолдар: {n}', open_dataset: 'Деректер жиынтығын ашу', dataset: 'Деректер жиынтығы', compare: 'Жылдарды салыстыру', and: 'және',

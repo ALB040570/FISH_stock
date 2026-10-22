@@ -223,6 +223,19 @@ function openSpeciesAll(c) {
   if (p.filters?.species === c) { go(); return }
   const stop = watch(() => p.filters?.species, (v) => { if (v === c) { stop(); nextTick(go) } })
 }
+// щелчок по ячейке сводки: выбрать вид и открыть слайд с причиной (может быть на другой вкладке)
+function openSpeciesAt(c, wid) {
+  if (!c) return
+  emit('species', c)
+  const go = () => {
+    const w = (p.board?.widgets || []).find((x) => x.id === wid)
+    if (!w) return
+    tab.value = w.tab || tabs.value[0].code
+    nextTick(() => { if (w.section) section.value = w.section; nextTick(() => { const i = visible.value.findIndex((x) => x.id === wid); if (i > -1) idx.value = i }) })
+  }
+  if (p.filters?.species === c) { go(); return }
+  const stop = watch(() => p.filters?.species, (v) => { if (v === c) { stop(); nextTick(go) } })
+}
 provide('board', {
   highlight,
   boardId: p.board?.id,
@@ -234,6 +247,7 @@ provide('board', {
   setHighlight: (y) => { highlight.value = y == null || highlight.value === y ? null : y },
   setSection: (s) => { const tb = tabs.value.find((x) => (x.sections || []).some((q) => q.code === s)); if (tb) { tab.value = tb.code; section.value = s } },
   setSpecies: openSpeciesAll,
+  openSpeciesAt,
   setData: (id, d) => {
     dataById[id] = d
     if (d?.calc_year && d.year_choices?.length) {

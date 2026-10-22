@@ -131,7 +131,7 @@ import ExplainPanel from './ExplainPanel.vue'
 import CommentsPanel from './CommentsPanel.vue'
 import { tableOf } from './views'
 
-const MODE_ICON = { chart: 'TrendCharts', table: 'Grid', tiles: 'Menu', cards: 'Postcard', signals: 'Bell', traffic: 'Odometer', journal: 'Notebook' }
+const MODE_ICON = { chart: 'TrendCharts', table: 'Grid', tiles: 'Menu', cards: 'Postcard', signals: 'Bell', traffic: 'Odometer', journal: 'Notebook', trust: 'CircleCheck' }
 const p = defineProps({ widget: Object, filters: Object, species: Object, big: Boolean })
 const board = inject('board', null)
 const { t, te } = useI18n()
@@ -183,6 +183,7 @@ const modes = computed(() => {
   const d = data.value
   if (!d || d.empty) return []
   const m = []
+  if (d.default_view === 'trust') m.push('trust')
   if (d.default_view === 'traffic') m.push('traffic')
   if (d.journal) m.push('journal')
   if (d.signals) m.push('signals')
