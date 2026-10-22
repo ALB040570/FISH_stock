@@ -200,6 +200,33 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     # первый год ряда — проверять поколения не с чем
     first = view("ca_trust", year=min(seine["years"]))
     assert all(r["cohorts"]["n"] == 0 and not r["cohorts"]["hit"] for r in first["trust"]["rows"])
+    # ---- часть Б: подробные проверки вида — те же числа, что в сводке
+    by = view("ca_bounds_years", "lesh")
+    r24 = next(r for r in by["rows"] if r["year"] == 2024)
+    assert round(r24["pct"], 1) == 4.3 and by["chart"]["pick_year"] and by["threshold"] == 25
+    ba = view("ca_bounds_ages", "plotva")
+    assert round(ba["bounds"]["pct"], 1) == 34.0 and [r["age"] for r in ba["rows"] if r["_level"]] == ["1–2", "2–3"]
+    co = view("ca_cohorts", "lesh")
+    last = [c for c in co["chart"]["cells"] if c[1] == len(co["chart"]["y"]) - 1]
+    assert sum(1 for c in last if c[5]) == 5 and len(last) == 14 and co["chart"]["fmt"] == "ratio"
+    assert "×43,6" in [c[3] for c in last]
+    ga = view("ca_gears_age", "lesh")
+    assert ga["chart"]["cells"] and all(len(c) == 6 for c in ga["chart"]["cells"])
+    pp = view("ca_passport")
+    assert pp["chart"]["y"][:2] == [tr["trust"]["rows"][0]["species"], tr["trust"]["rows"][1]["species"]] and len(pp["chart"]["y_codes"]) == 8
+    yaz = next(r for r in pp["rows"] if r["species"] == "язь" and r["year"] == 2024)
+    assert "проба за все годы" in yaz["issues"] and yaz["_level"] == "warning"
+    z = view("ca_z", "lesh")
+    assert len(z["chart"]["series"]) == 2 and next(r for r in z["rows"] if r["year"] == 2024)["Z"] == f["Z"]
+    assert len(view("ca_z")["chart"]["series"]) == 8
+    bl = view("ca_blind", "lesh")
+    assert bl["blind"] and "из 100 рыб попадается 1" in bl["blind"][0] and "умноженный на 100" in bl["blind"][0]
+    sg = view("ca_strong", "lesh")
+    assert len(sg["rows"]) == len(f["ages"]) or sg["rows"]
+    for m in ("dev", "gears", "growth"):
+        h = view("ca_seine_heat", "lesh", hmode=m)
+        assert h["hmode"] == m and h["chart"]["cells"] and h["toggles"][0]["value"] == m
+    assert view("ca_seine_heat", "lesh")["hmode"] == "c"
     # отключённое правило не проверяется; изменённый порог меняет вывод
     rules = db.get("/signal-rules", headers=H("viewer")).json()["rules"]
     put = [{"code": r["code"], "enabled": r["enabled"], "values": r["values"]} for r in rules]

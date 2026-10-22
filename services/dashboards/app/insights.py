@@ -1533,7 +1533,8 @@ VIEWS = OrderedDict([
     ("quota", v_quota), ("quota_change", v_quota_change), ("quota_vs_stock", v_quota_vs_stock),
     ("completeness", v_completeness), ("quality", v_quality),
 ])
-NEEDS_RULES = {"overview", "signals", "quality", "traffic", "ca_trust"}
+NEEDS_RULES = {"overview", "signals", "quality", "traffic", "ca_trust", "ca_bounds_years", "ca_bounds_ages", "ca_cohorts",
+               "ca_gears_age", "ca_passport", "ca_z", "ca_blind", "ca_strong", "ca_seine_heat", "ca_net_heat"}
 
 # результаты расчёта (уловистость, запасы) — отдельный модуль
 from . import calc_views  # noqa: E402

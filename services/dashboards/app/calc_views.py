@@ -320,11 +320,38 @@ def v_ca_ages(D, opt, gear):
 
 
 # ------------------------------------------------------------------ 6. тепловая карта годы × возрасты
-def v_ca_heat(D, opt, gear):
+HMODES = ("c", "dev", "gears", "growth")
+
+
+def _htoggle(lang, mode):
+    return [{"key": "hmode", "title": L(lang, "Показать", "Көрсету"), "value": mode,
+             "options": [{"value": "c", "label": L(lang, "уловистость", "аулағыштық")},
+                         {"value": "dev", "label": L(lang, "отклонение от средней", "орташадан ауытқу")},
+                         {"value": "gears", "label": L(lang, "невод ÷ сеть", "сүзекі ÷ ау")},
+                         {"value": "growth", "label": L(lang, "рост поколений", "ұрпақтардың өсуі")}]}]
+
+
+def v_ca_heat(D, opt, gear, rules=None):
     part, meta, key, code, y, years, f = _species_fit(D, opt, gear)
     lang = D.lang
+    mode = opt.get("hmode") if opt.get("hmode") in HMODES else "c"
+    tg = _htoggle(lang, mode)
+    if mode in ("gears", "growth"):
+        ctx, skey, sp, _ = _tsp(D, opt, rules)
+        ch, rows, xs = (_gears_heat if mode == "gears" else _growth_heat)(ctx, sp, lang)
+        note = (L(lang, "Во сколько раз запас по неводу больше, чем по сети, в каждом возрасте и году; рамка — расхождение больше порога правила.",
+                     "Әр жас пен жылда сүзекі бойынша қор аудан неше есе көп; жиек — ереже шегінен артық алшақтық.") if mode == "gears" else
+                L(lang, "Во сколько раз запас поколения изменился за год; рамка — рост больше допуска правила. Ожидается убыль (меньше ×1).",
+                  "Ұрпақ қоры бір жылда неше есе өзгерді; жиек — ереже шегінен артық өсу. Азаю күтіледі (×1-ден аз)."))
+        return {"chart": ch, "columns": _ratio_cols(lang, xs), "rows": rows, "row_action": "year", "toggles": tg, "hmode": mode, "notes": [note],
+                **_common(D, meta, years, y, code, gear, "catchability-trust")}
     by = part["fits"][key]
     ages = sorted({a for yy in years for a in (by.get(str(yy)) or {}).get("ages", [])})
+    means = {}
+    for a in ages:
+        vs = [dict(zip((by.get(str(yy)) or {}).get("ages") or [], (by.get(str(yy)) or {}).get("c") or [])).get(a) for yy in years]
+        vs = [v for v in vs if v is not None]
+        means[a] = sum(vs) / len(vs) if vs else None
     cells, rows = [], []
     for i, yy in enumerate(years):
         fy = by.get(str(yy)) or {}
@@ -332,13 +359,18 @@ def v_ca_heat(D, opt, gear):
         row = {"year": yy, "_current": yy == y}
         for j, a in enumerate(ages):
             v = cmap.get(a)
+            if mode == "dev":
+                v = (v / means[a] - 1) * 100 if (v is not None and means.get(a)) else None
             row[f"a{a}"] = v
             if v is not None:
-                cells.append([j, i, round(v, 3)])
+                cells.append([j, i, round(v, 3 if mode == "c" else 1)])
         rows.append(row)
     return {"chart": {"kind": "heatmap", "x": [age_label(a) for a in ages], "y": years, "cells": cells,
-                      "x_title": L(lang, "Возраст, лет", "Жасы, жыл"), "y_title": L(lang, "Год", "Жыл"), "value_title": "c",
-                      "fmt": "coef", "y_is_year": True, "pick_year": True, "selected_y": y, "max": part.get("c_upper")},
+                      "x_title": L(lang, "Возраст, лет", "Жасы, жыл"), "y_title": L(lang, "Год", "Жыл"),
+                      "value_title": "c" if mode == "c" else L(lang, "Отклонение c от средней за годы, %", "c-ның жылдар орташасынан ауытқуы, %"),
+                      "fmt": "coef" if mode == "c" else "dev", "y_is_year": True, "pick_year": True, "selected_y": y,
+                      "max": part.get("c_upper") if mode == "c" else None},
+            "toggles": tg, "hmode": mode,
             "columns": [col("year", L(lang, "Год", "Жыл"), "integer")] + [col(f"a{a}", age_label(a), "number") for a in ages],
             "rows": rows, "row_action": "year",
             "notes": [L(lang, "Каждая строка — отдельная кривая года. Щелчок по строке выбирает год.",
@@ -384,8 +416,8 @@ def v_ca_params(D, opt, gear):
 
 
 def _bind(fn, gear):
-    def view(D, opt):
-        return fn(D, opt, gear)
+    def view(D, opt, rules=None):
+        return fn(D, opt, gear, rules) if fn is v_ca_heat else fn(D, opt, gear)
     view.__name__ = f"{fn.__name__}_{gear}"
     return view
 
@@ -1464,7 +1496,11 @@ def _at_bound(c, lo, hi, tol_lo, tol_hi=1e-3):
     return abs(c - lo) <= tol_lo or abs(c - hi) <= tol_hi
 
 
-def v_ca_trust(D, opt, rules=None):
+_INTERNAL = ("_flagged", "_N", "_Np", "_ages", "_fs", "_fn")
+
+
+def _trust_ctx(D, opt, rules=None):
+    """Данные и пороги для проверок уловистости (сводка, паспорт, подробные слайды)."""
     from .insights import rule_params, RULES_BY
     rules = rules or {}
     lang = D.lang
@@ -1485,129 +1521,152 @@ def v_ca_trust(D, opt, rules=None):
     grow_words = (L(lang, "больше чем вдвое", "екі еседен артық") if abs(grow - 100) < 1e-9
                   else L(lang, f"больше чем на {nf(grow, 0)} %", f"{nf(grow, 0)} %-дан артық"))
     gear_w = {"seine": L(lang, "невод", "сүзекі"), "net": L(lang, "сеть", "ау")}
+    return dict(locals())
+
+
+def _trust_row(ctx, key, sp, y, yi):
+    """Проверки вида за год: строка сводки и плоская строка для Excel; None — нет запаса за год."""
+    from .insights import RULES_BY
+    D, lang, seine, net, G, names = ctx["D"], ctx["lang"], ctx["seine"], ctx["net"], ctx["G"], ctx["names"]
+    en_b, p_b, en_g, p_g, en_c, p_c = ctx["en_b"], ctx["p_b"], ctx["en_g"], ctx["p_g"], ctx["en_c"], ctx["p_c"]
+    en_r, p_r, en_s, p_s = ctx["en_r"], ctx["p_r"], ctx["en_s"], ctx["p_s"]
+    R, grow, grow_words, gear_w = ctx["R"], ctx["grow"], ctx["grow_words"], ctx["gear_w"]
+    code = names.get(key.strip().lower(), key)
+    ages = sp["ages"]
+    mb = sp["variants"]["with_ages"]["on_stock"]
+    stock_y = mb["by_age"][G["mean"]][yi] if yi < len(mb["by_age"][G["mean"]]) else None
+    if not stock_y:
+        return None
+    N = dict(zip(ages, stock_y))
+    Np = dict(zip(ages, mb["by_age"][G["mean"]][yi - 1])) if yi > 0 else None
+    fs = (seine["fits"].get(key) or {}).get(str(y))
+    fn = (net["fits"].get(key) or {}).get(str(y))
+    # 1. запас на границах уловистости
+    flagged, gears_f, fl_s, fl_n = [], set(), set(), set()
+    if fs:
+        for i, (j, c) in enumerate(zip(fs["ages"], fs["c"])):
+            lo = seine.get("c_lower_first") if i == 0 else seine.get("c_lower")
+            if _at_bound(c, lo, seine.get("c_upper"), 1e-4 if i == 0 else 1e-3):
+                flagged.append(j)
+                fl_s.add(j)
+                gears_f.add("seine")
+    if fn:
+        for j, c in zip(fn["ages"], fn["c"]):
+            if _at_bound(c, net.get("c_lower"), net.get("c_upper"), 1e-3):
+                if j not in flagged:
+                    flagged.append(j)
+                fl_n.add(j)
+                gears_f.add("net")
+    flagged.sort()
+    tot = sum(v for v in stock_y if v)
+    b_pct = sum(N.get(j) or 0 for j in flagged) / tot * 100 if tot else None
+    b_hit = en_b and b_pct is not None and b_pct > p_b["pct"]
+    b_ages = ", ".join(age_label(j) for j in flagged)
+    b_gear = ", ".join(gear_w[g] for g in ("seine", "net") if g in gears_f)
+    # 2. согласие орудий
+    tn, ts = mb["totals"][G["net"]], mb["totals"][G["seine"]]
+    vn, vs = tn[yi], ts[yi]
+    one_gear = not any(v for v in tn) or not any(v for v in ts)
+    ratio = (vs / vn) if (not one_gear and vn and vs is not None) else None
+    rs = sorted(s_ / n_ for s_, n_ in zip(ts, tn) if n_ and s_)
+    r_med = (rs[len(rs) // 2] if len(rs) % 2 else (rs[len(rs) // 2 - 1] + rs[len(rs) // 2]) / 2) if rs else None
+    g_hit = en_g and ratio is not None and (ratio > R or ratio < 1 / R)
+    # 3. проверка поколений
+    coh, best = [], None
+    if Np is not None:
+        for j in ages:
+            prev, cur = Np.get(j - 1), N.get(j)
+            if prev and prev > 0 and cur is not None:
+                grew = cur > prev * (1 + grow / 100)
+                coh.append(grew)
+                x = cur / prev
+                if best is None or x > best[0]:
+                    best = (x, j)
+    k, n = sum(coh), len(coh)
+    c_hit = en_c and n > 0 and k / n * 100 > p_c["share"]
+    # 4. качество проб
+    n_s = fs.get("n_sample") if fs else None
+    r2 = fs.get("r2") if fs else None
+    pooled = bool(fs and "проба за все годы" in str(fs.get("status") or ""))
+    small = en_s and not pooled and n_s is not None and n_s < p_s["min_fish"]
+    r2low = en_r and r2 is not None and r2 < p_r["r2"]
+    n_net = fn.get("n_sample") if fn else None
+    # 5. вывод
+    items, short = [], []
+    if pooled:
+        items.append(L(lang, "проба за все годы — параметры года взяты из сводной пробы", "барлық жылдардың сынамасы — жыл параметрлері жиынтық сынамадан алынды"))
+        short.append(("all", L(lang, "проба за все годы", "барлық жылдар сынамасы")))
+    if b_hit:
+        gw = L(lang, "невода" if gears_f == {"seine"} else "сети" if gears_f == {"net"} else "невода и сети",
+               "сүзекінің" if gears_f == {"seine"} else "аудың" if gears_f == {"net"} else "сүзекі мен аудың")
+        items.append(L(lang, f"{nf(b_pct, 0)} % запаса — возрасты {b_ages}, где уловистость {gw} на границе",
+                       f"қордың {nf(b_pct, 0)} %-ы — {gw} аулағыштығы шекте тұрған {b_ages} жастары"))
+        short.append(("bounds", L(lang, "границы", "шектер")))
+    if g_hit:
+        items.append(L(lang, f"невод даёт в {nf(ratio, 1)} раза больше сети", f"сүзекі аудан {nf(ratio, 1)} есе көп береді") if ratio >= 1
+                     else L(lang, f"сеть даёт в {nf(1 / ratio, 1)} раза больше невода", f"ау сүзекіден {nf(1 / ratio, 1)} есе көп береді"))
+        short.append(("gears", L(lang, "орудия", "құралдар")))
+    if c_hit:
+        items.append(L(lang, f"{k} из {n} поколений выросли за год {grow_words} (наибольший рост ×{nf(best[0], 1)})",
+                       f"{n} ұрпақтың {k}-і бір жылда {grow_words} өсті (ең үлкен өсу ×{nf(best[0], 1)})"))
+        short.append(("cohorts", L(lang, "поколения", "ұрпақтар")))
+    if small:
+        items.append(L(lang, f"в пробе {nf(n_s, 0)} рыб", f"сынамада {nf(n_s, 0)} балық"))
+        short.append(("small", L(lang, "мало рыб", "балық аз")))
+    if r2low:
+        items.append(L(lang, f"R² подгонки {nf(r2, 2)}", f"сәйкестендіру R² {nf(r2, 2)}"))
+        short.append(("r2", L(lang, "R² низкий", "R² төмен")))
+    off = [RULES_BY[c]["title_ru"] if lang != "kk" else RULES_BY[c]["title_kk"]
+           for c, e in (("catch_bounds_share", en_b), ("gears_disagree", en_g), ("cohort_growth", en_c), ("small_sample", en_s), ("fit_r2_low", en_r)) if not e]
+    checkable = any([b_pct is not None, ratio is not None, n > 0, n_s is not None])
+    level = "warning" if items else ("ok" if checkable else None)
+    if items:
+        phrase = L(lang, "Есть вопросы: ", "Сұрақтар бар: ") + "; ".join(items) + "."
+        if len(short) >= 4:
+            label = f"{len(short)} " + L(lang, _plural(len(short), "вопрос", "вопроса", "вопросов"), "сұрақ")
+        elif len(short) == 1:
+            label = {"all": L(lang, "Проба за все годы", "Барлық жылдар сынамасы"), "bounds": L(lang, "Границы", "Шектер"),
+                     "gears": L(lang, "Орудия", "Құралдар"), "cohorts": L(lang, "Поколения растут", "Ұрпақтар өседі"),
+                     "small": L(lang, "Мало рыб", "Балық аз"), "r2": L(lang, "R² низкий", "R² төмен")}[short[0][0]]
+        else:
+            txt = ", ".join(w for _, w in short)
+            label = txt[0].upper() + txt[1:]
+    elif checkable:
+        phrase = L(lang, "Проверки пройдены: уловистость определена данными, невод и сеть согласуются, поколения не растут.",
+                   "Тексерулер өтті: аулағыштық деректермен анықталған, сүзекі мен ау үйлеседі, ұрпақтар өспейді.")
+        label = L(lang, "Проверки пройдены", "Тексерулер өтті")
+    else:
+        phrase, label = L(lang, "Нет данных для проверки.", "Тексеру үшін деректер жоқ."), "—"
+    if off:
+        phrase += " " + L(lang, "Не проверялось (правило отключено): ", "Тексерілмеді (ереже өшірулі): ") + ", ".join(f"«{o}»" for o in off) + "."
+    stock_tot = tot
+    row = {
+        "_code": code, "species": D.sp_name(code), "_stock": stock_tot, "_level": level, "_reasons": [c for c, _ in short],
+        "_flagged": {j: [g for g, fl in (("seine", fl_s), ("net", fl_n)) if j in fl] for j in flagged},
+        "_N": N, "_Np": Np, "_ages": ages, "_fs": fs, "_fn": fn,
+        "bounds": {"pct": b_pct, "ages": b_ages, "gear": b_gear, "hit": b_hit, "thr": p_b["pct"], "on": en_b,
+                   "to": "k_n_curve" if gears_f == {"net"} else "k_s_curve"},
+        "gears": {"ratio": ratio, "median": r_med, "one": one_gear, "hit": g_hit, "thr": R, "on": en_g, "to": "st_yearly"},
+        "cohorts": {"k": k, "n": n, "flags": coh, "hit": c_hit, "on": en_c, "to": "st_ages",
+                    "best": {"x": best[0], "from": age_label(best[1] - 1), "to_age": age_label(best[1]), "y0": y - 1, "y1": y} if best else None},
+        "sample": {"n": n_s, "r2": r2, "pooled": pooled, "small": small, "r2low": r2low, "n_net": n_net if n_net != n_s else None, "to": "k_s_tiles"},
+        "verdict": {"level": level, "label": label, "phrase": phrase},
+    }
+    return row, {"species": row["species"], "b_pct": b_pct, "b_ages": (b_ages + (" · " + b_gear if b_gear else "")) if b_ages else "—",
+                 "ratio": ratio, "r_med": r_med, "coh": f"{k} / {n}" if n else "—", "best": best[0] if best else None,
+                 "n_s": n_s, "r2": r2, "pooled": L(lang, "да", "иә") if pooled else "—", "verdict": label, "phrase": phrase, "_code": code}
+
+
+def v_ca_trust(D, opt, rules=None):
+    ctx = _trust_ctx(D, opt, rules)
+    lang, st, meta, y, years, yi = ctx["lang"], ctx["st"], ctx["meta"], ctx["y"], ctx["years"], ctx["yi"]
+    p_b, R, p_c, p_r, p_s, grow_words = ctx["p_b"], ctx["R"], ctx["p_c"], ctx["p_r"], ctx["p_s"], ctx["grow_words"]
     rows, flat = [], []
     for key, sp in st["species"].items():
-        code = names.get(key.strip().lower(), key)
-        ages = sp["ages"]
-        mb = sp["variants"]["with_ages"]["on_stock"]
-        stock_y = mb["by_age"][G["mean"]][yi] if yi < len(mb["by_age"][G["mean"]]) else None
-        if not stock_y:
-            continue
-        N = dict(zip(ages, stock_y))
-        Np = dict(zip(ages, mb["by_age"][G["mean"]][yi - 1])) if yi > 0 else None
-        fs = (seine["fits"].get(key) or {}).get(str(y))
-        fn = (net["fits"].get(key) or {}).get(str(y))
-        # 1. запас на границах уловистости
-        flagged, gears_f = [], set()
-        if fs:
-            for i, (j, c) in enumerate(zip(fs["ages"], fs["c"])):
-                lo = seine.get("c_lower_first") if i == 0 else seine.get("c_lower")
-                if _at_bound(c, lo, seine.get("c_upper"), 1e-4 if i == 0 else 1e-3):
-                    flagged.append(j)
-                    gears_f.add("seine")
-        if fn:
-            for j, c in zip(fn["ages"], fn["c"]):
-                if _at_bound(c, net.get("c_lower"), net.get("c_upper"), 1e-3):
-                    if j not in flagged:
-                        flagged.append(j)
-                    gears_f.add("net")
-        flagged.sort()
-        tot = sum(v for v in stock_y if v)
-        b_pct = sum(N.get(j) or 0 for j in flagged) / tot * 100 if tot else None
-        b_hit = en_b and b_pct is not None and b_pct > p_b["pct"]
-        b_ages = ", ".join(age_label(j) for j in flagged)
-        b_gear = ", ".join(gear_w[g] for g in ("seine", "net") if g in gears_f)
-        # 2. согласие орудий
-        tn, ts = mb["totals"][G["net"]], mb["totals"][G["seine"]]
-        vn, vs = tn[yi], ts[yi]
-        one_gear = not any(v for v in tn) or not any(v for v in ts)
-        ratio = (vs / vn) if (not one_gear and vn and vs is not None) else None
-        rs = sorted(s_ / n_ for s_, n_ in zip(ts, tn) if n_ and s_)
-        r_med = (rs[len(rs) // 2] if len(rs) % 2 else (rs[len(rs) // 2 - 1] + rs[len(rs) // 2]) / 2) if rs else None
-        g_hit = en_g and ratio is not None and (ratio > R or ratio < 1 / R)
-        # 3. проверка поколений
-        coh, best = [], None
-        if Np is not None:
-            for j in ages:
-                prev, cur = Np.get(j - 1), N.get(j)
-                if prev and prev > 0 and cur is not None:
-                    grew = cur > prev * (1 + grow / 100)
-                    coh.append(grew)
-                    x = cur / prev
-                    if best is None or x > best[0]:
-                        best = (x, j)
-        k, n = sum(coh), len(coh)
-        c_hit = en_c and n > 0 and k / n * 100 > p_c["share"]
-        # 4. качество проб
-        n_s = fs.get("n_sample") if fs else None
-        r2 = fs.get("r2") if fs else None
-        pooled = bool(fs and "проба за все годы" in str(fs.get("status") or ""))
-        small = en_s and not pooled and n_s is not None and n_s < p_s["min_fish"]
-        r2low = en_r and r2 is not None and r2 < p_r["r2"]
-        n_net = fn.get("n_sample") if fn else None
-        # 5. вывод
-        items, short = [], []
-        if pooled:
-            items.append(L(lang, "проба за все годы — параметры года взяты из сводной пробы", "барлық жылдардың сынамасы — жыл параметрлері жиынтық сынамадан алынды"))
-            short.append(("all", L(lang, "проба за все годы", "барлық жылдар сынамасы")))
-        if b_hit:
-            gw = L(lang, "невода" if gears_f == {"seine"} else "сети" if gears_f == {"net"} else "невода и сети",
-                   "сүзекінің" if gears_f == {"seine"} else "аудың" if gears_f == {"net"} else "сүзекі мен аудың")
-            items.append(L(lang, f"{nf(b_pct, 0)} % запаса — возрасты {b_ages}, где уловистость {gw} на границе",
-                           f"қордың {nf(b_pct, 0)} %-ы — {gw} аулағыштығы шекте тұрған {b_ages} жастары"))
-            short.append(("bounds", L(lang, "границы", "шектер")))
-        if g_hit:
-            items.append(L(lang, f"невод даёт в {nf(ratio, 1)} раза больше сети", f"сүзекі аудан {nf(ratio, 1)} есе көп береді") if ratio >= 1
-                         else L(lang, f"сеть даёт в {nf(1 / ratio, 1)} раза больше невода", f"ау сүзекіден {nf(1 / ratio, 1)} есе көп береді"))
-            short.append(("gears", L(lang, "орудия", "құралдар")))
-        if c_hit:
-            items.append(L(lang, f"{k} из {n} поколений выросли за год {grow_words} (наибольший рост ×{nf(best[0], 1)})",
-                           f"{n} ұрпақтың {k}-і бір жылда {grow_words} өсті (ең үлкен өсу ×{nf(best[0], 1)})"))
-            short.append(("cohorts", L(lang, "поколения", "ұрпақтар")))
-        if small:
-            items.append(L(lang, f"в пробе {nf(n_s, 0)} рыб", f"сынамада {nf(n_s, 0)} балық"))
-            short.append(("small", L(lang, "мало рыб", "балық аз")))
-        if r2low:
-            items.append(L(lang, f"R² подгонки {nf(r2, 2)}", f"сәйкестендіру R² {nf(r2, 2)}"))
-            short.append(("r2", L(lang, "R² низкий", "R² төмен")))
-        off = [RULES_BY[c]["title_ru"] if lang != "kk" else RULES_BY[c]["title_kk"]
-               for c, e in (("catch_bounds_share", en_b), ("gears_disagree", en_g), ("cohort_growth", en_c), ("small_sample", en_s), ("fit_r2_low", en_r)) if not e]
-        checkable = any([b_pct is not None, ratio is not None, n > 0, n_s is not None])
-        level = "warning" if items else ("ok" if checkable else None)
-        if items:
-            phrase = L(lang, "Есть вопросы: ", "Сұрақтар бар: ") + "; ".join(items) + "."
-            if len(short) >= 4:
-                label = f"{len(short)} " + L(lang, _plural(len(short), "вопрос", "вопроса", "вопросов"), "сұрақ")
-            elif len(short) == 1:
-                label = {"all": L(lang, "Проба за все годы", "Барлық жылдар сынамасы"), "bounds": L(lang, "Границы", "Шектер"),
-                         "gears": L(lang, "Орудия", "Құралдар"), "cohorts": L(lang, "Поколения растут", "Ұрпақтар өседі"),
-                         "small": L(lang, "Мало рыб", "Балық аз"), "r2": L(lang, "R² низкий", "R² төмен")}[short[0][0]]
-            else:
-                txt = ", ".join(w for _, w in short)
-                label = txt[0].upper() + txt[1:]
-        elif checkable:
-            phrase = L(lang, "Проверки пройдены: уловистость определена данными, невод и сеть согласуются, поколения не растут.",
-                       "Тексерулер өтті: аулағыштық деректермен анықталған, сүзекі мен ау үйлеседі, ұрпақтар өспейді.")
-            label = L(lang, "Проверки пройдены", "Тексерулер өтті")
-        else:
-            phrase, label = L(lang, "Нет данных для проверки.", "Тексеру үшін деректер жоқ."), "—"
-        if off:
-            phrase += " " + L(lang, "Не проверялось (правило отключено): ", "Тексерілмеді (ереже өшірулі): ") + ", ".join(f"«{o}»" for o in off) + "."
-        stock_tot = tot
-        row = {
-            "_code": code, "species": D.sp_name(code), "_stock": stock_tot, "_level": level, "_reasons": [c for c, _ in short],
-            "bounds": {"pct": b_pct, "ages": b_ages, "gear": b_gear, "hit": b_hit, "thr": p_b["pct"], "on": en_b,
-                       "to": "k_n_curve" if gears_f == {"net"} else "k_s_curve"},
-            "gears": {"ratio": ratio, "median": r_med, "one": one_gear, "hit": g_hit, "thr": R, "on": en_g, "to": "st_yearly"},
-            "cohorts": {"k": k, "n": n, "flags": coh, "hit": c_hit, "on": en_c, "to": "st_ages",
-                        "best": {"x": best[0], "from": age_label(best[1] - 1), "to_age": age_label(best[1]), "y0": y - 1, "y1": y} if best else None},
-            "sample": {"n": n_s, "r2": r2, "pooled": pooled, "small": small, "r2low": r2low, "n_net": n_net if n_net != n_s else None, "to": "k_s_tiles"},
-            "verdict": {"level": level, "label": label, "phrase": phrase},
-        }
-        rows.append(row)
-        flat.append({"species": row["species"], "b_pct": b_pct, "b_ages": (b_ages + (" · " + b_gear if b_gear else "")) if b_ages else "—",
-                     "ratio": ratio, "r_med": r_med, "coh": f"{k} / {n}" if n else "—", "best": best[0] if best else None,
-                     "n_s": n_s, "r2": r2, "pooled": L(lang, "да", "иә") if pooled else "—", "verdict": label, "phrase": phrase, "_code": code})
+        res = _trust_row(ctx, key, sp, y, yi)
+        if res:
+            rows.append({k: v for k, v in res[0].items() if k not in _INTERNAL})
+            flat.append(res[1])
     if not rows:
         raise NoData(L(lang, f"За {y} г. нет запаса по видам", f"{y} ж. түрлер бойынша қор жоқ"))
     order = sorted(range(len(rows)), key=lambda i: -(rows[i]["_stock"] or 0))
@@ -1644,3 +1703,397 @@ def v_ca_trust(D, opt, rules=None):
 
 
 VIEWS["ca_trust"] = v_ca_trust
+
+
+
+# ================================================================== Проверки уловистости подробно (часть Б)
+# Те же сравнения, что в сводке, — по годам и по возрастам одного вида. Новых формул нет.
+def _tsp(D, opt, rules):
+    ctx = _trust_ctx(D, opt, rules)
+    code = opt.get("species")
+    if not code:
+        raise NoData(L(D.lang, "Выберите вид кнопкой под шапкой", "Тақырыптың астындағы түймемен түрді таңдаңыз"))
+    st = ctx["st"]
+    key = _key_for(D, {"fits": st["species"]}, code)
+    if key is None:
+        raise NoData(L(D.lang, f"Вид «{D.sp_name(code)}» не входит в расчёт запаса этого водоёма",
+                       f"«{D.sp_name(code)}» түрі осы су айдынының қор есебіне кірмейді"))
+    return ctx, key, st["species"][key], code
+
+
+def _by_year(ctx, key, sp):
+    out = {}
+    for i, yy in enumerate(ctx["years"]):
+        r = _trust_row(ctx, key, sp, yy, i)
+        if r:
+            out[yy] = r[0]
+    return out
+
+
+def _tcommon(D, ctx, code):
+    y = ctx["y"]
+    return {"meta": ctx["meta"], "year": y, "year_choices": ctx["years"], "calc_year": True, "help": "catchability-trust",
+            "species_shown": code, "filter_label": f"{D.sp_name(code)} · {y}" if code else str(y)}
+
+
+def _yr(lang):
+    return L(lang, "Год", "Жыл")
+
+
+def _gw(lang, gears):
+    w = {"seine": L(lang, "невод", "сүзекі"), "net": L(lang, "сеть", "ау")}
+    return ", ".join(w[g] for g in gears) if gears else "—"
+
+
+# ---- 1. на чём держится запас: по годам
+def v_ca_bounds_years(D, opt, rules=None):
+    ctx, key, sp, code = _tsp(D, opt, rules)
+    lang, years, y = ctx["lang"], ctx["years"], ctx["y"]
+    R = _by_year(ctx, key, sp)
+    thr = ctx["p_b"]["pct"]
+    vals = [None if yy not in R or R[yy]["bounds"]["pct"] is None else round(R[yy]["bounds"]["pct"], 1) for yy in years]
+    series = [{"name": L(lang, "Запас на границах уловистости, %", "Аулағыштық шектеріндегі қор, %"), "values": vals, "type": "line", "c": 0, "bold": True}]
+    if ctx["en_b"]:
+        series.append({"name": L(lang, f"Порог правила — {nf(thr, 0)} %", f"Ереже шегі — {nf(thr, 0)} %"), "values": [thr] * len(years),
+                       "type": "line", "c": 3, "dash": True})
+    rows = []
+    for yy in years:
+        b = (R.get(yy) or {}).get("bounds") or {}
+        rows.append({"year": yy, "_current": yy == y, "pct": b.get("pct"), "ages": b.get("ages") or "—", "gear": b.get("gear") or "—",
+                     "_level": "warning" if b.get("hit") else None})
+    hit = [yy for yy in years if ((R.get(yy) or {}).get("bounds") or {}).get("hit")]
+    return {"chart": {"kind": "fit", "x": years, "series": series, "vrefs": [{"x": str(y), "label": str(y)}], "pick_year": True,
+                      "x_title": _yr(lang), "y_title": L(lang, "% запаса", "қордың %-ы")},
+            "columns": [col("year", _yr(lang), "integer"), col("pct", L(lang, "Запас на границах, %", "Шектердегі қор, %"), "number"),
+                        col("ages", L(lang, "Возрасты на границе", "Шектегі жастар")), col("gear", L(lang, "Орудие", "Құрал"))],
+            "rows": rows, "row_action": "year", "hit_years": hit, "threshold": thr,
+            "notes": [L(lang, "Доля окончательного запаса вида в возрастах, где уловистость невода или сети равна своей границе. Щелчок по точке или строке выбирает год.",
+                        "Сүзекі не ау аулағыштығы өз шегіне тең жастардағы түрдің түпкілікті қор үлесі. Нүктені не жолды басу жылды таңдайды.")],
+            **_tcommon(D, ctx, code)}
+
+
+# ---- 1. на чём держится запас: по возрастам выбранного года
+def v_ca_bounds_ages(D, opt, rules=None):
+    ctx, key, sp, code = _tsp(D, opt, rules)
+    lang, y, yi = ctx["lang"], ctx["y"], ctx["yi"]
+    r = _trust_row(ctx, key, sp, y, yi)
+    if not r:
+        raise NoData(L(lang, f"За {y} г. нет запаса вида", f"{y} ж. түр қоры жоқ"))
+    r = r[0]
+    ages, N, fl = r["_ages"], r["_N"], r["_flagged"]
+    cs = dict(zip((r["_fs"] or {}).get("ages") or [], (r["_fs"] or {}).get("c") or []))
+    cn = dict(zip((r["_fn"] or {}).get("ages") or [], (r["_fn"] or {}).get("c") or []))
+    x = [age_label(j) for j in ages]
+    data = [None if j in fl else N.get(j) for j in ages]
+    bnd = [N.get(j) if j in fl else None for j in ages]
+    series = [{"name": L(lang, "уловистость по данным", "деректер бойынша аулағыштық"), "values": data, "type": "bar", "c": 0, "stack": "s"},
+              {"name": L(lang, "уловистость на границе", "аулағыштық шекте"), "values": bnd, "type": "bar", "warn": True, "stack": "s"}]
+    rows = [{"age": age_label(j), "stock": N.get(j), "c_s": cs.get(j), "c_n": cn.get(j), "bound": _gw(lang, fl.get(j)),
+             "_level": "warning" if j in fl else None} for j in ages]
+    return {"chart": {"kind": "fit", "x": x, "series": series, "x_title": L(lang, "Возраст, лет", "Жасы, жыл"), "y_title": L(lang, "Запас, шт", "Қор, дана")},
+            "columns": [col("age", L(lang, "Возраст", "Жас")), col("stock", L(lang, "Окончательный запас, шт", "Түпкілікті қор, дана"), "integer"),
+                        col("c_s", L(lang, "c невода", "сүзекі c"), "number"), col("c_n", L(lang, "c сети", "ау c"), "number"),
+                        col("bound", L(lang, "На границе", "Шекте"))],
+            "rows": rows, "bounds": r["bounds"],
+            "notes": [L(lang, "Окончательный запас по возрастам (уловистость по возрастам, по запасам); жёлтым — возрасты, где уловистость задана ограничением, а не данными.",
+                        "Жастар бойынша түпкілікті қор (жастар бойынша аулағыштық, қорлар бойынша); сарымен — аулағыштықты деректер емес, шектеу берген жастар.")],
+            **_tcommon(D, ctx, code)}
+
+
+# ---- тепловые карты отношений (рост поколений, невод ÷ сеть): цвет — по логарифму отношения, 1 — середина шкалы
+def _lg(x):
+    import math
+    return max(-1.0, min(1.0, math.log10(x))) if x and x > 0 else None
+
+
+def _growth_heat(ctx, sp, lang):
+    years, G = ctx["years"], ctx["G"]
+    ages = sp["ages"]
+    byA = sp["variants"]["with_ages"]["on_stock"]["by_age"][G["mean"]]
+    lim = 1 + ctx["grow"] / 100
+    xs = ages[1:]
+    cells, rows = [], []
+    for i in range(1, len(years)):
+        prev, cur = dict(zip(ages, byA[i - 1])), dict(zip(ages, byA[i]))
+        row = {"year": years[i], "_current": years[i] == ctx["y"]}
+        for xi, j in enumerate(xs):
+            a, b = prev.get(j - 1), cur.get(j)
+            if a and a > 0 and b is not None:
+                x = b / a
+                tip = (L(lang, f"{age_label(j - 1)} в {years[i - 1]}: {pieces(a)} → {age_label(j)} в {years[i]}: {pieces(b)}",
+                         f"{years[i - 1]} ж. {age_label(j - 1)}: {pieces(a, 'kk')} → {years[i]} ж. {age_label(j)}: {pieces(b, 'kk')}"))
+                cells.append([xi, i - 1, _lg(x), "×" + nf(x, 1), tip, bool(ctx["en_c"] and x > lim)])
+                row[f"a{j}"] = round(x, 3)
+        rows.append(row)
+    return {"kind": "heatmap", "x": [age_label(j) for j in xs], "y": years[1:], "cells": cells, "fmt": "ratio",
+            "x_title": L(lang, "Возраст в этом году, лет", "Осы жылғы жасы, жыл"), "y_title": _yr(lang),
+            "value_title": L(lang, "Запас поколения к прошлому году", "Ұрпақ қорының өткен жылға қатынасы"),
+            "y_is_year": True, "pick_year": True, "selected_y": ctx["y"]}, rows, xs
+
+
+def _gears_heat(ctx, sp, lang):
+    years, G = ctx["years"], ctx["G"]
+    ages = sp["ages"]
+    mb = sp["variants"]["with_ages"]["on_stock"]["by_age"]
+    S, Nn = mb[G["seine"]], mb[G["net"]]
+    R = ctx["R"]
+    cells, rows = [], []
+    for i, yy in enumerate(years):
+        row = {"year": yy, "_current": yy == ctx["y"]}
+        for xi, j in enumerate(ages):
+            a, b = (S[i][xi] if i < len(S) else None), (Nn[i][xi] if i < len(Nn) else None)
+            if a and b and a > 0 and b > 0:
+                x = a / b
+                tip = L(lang, f"невод {pieces(a)}, сеть {pieces(b)}", f"сүзекі {pieces(a, 'kk')}, ау {pieces(b, 'kk')}")
+                cells.append([xi, i, _lg(x), ("×" + nf(x, 1)) if x >= 1 else L(lang, "сеть ×", "ау ×") + nf(1 / x, 1), tip,
+                              bool(ctx["en_g"] and (x > R or x < 1 / R))])
+                row[f"a{j}"] = round(x, 3)
+        rows.append(row)
+    return {"kind": "heatmap", "x": [age_label(j) for j in ages], "y": years, "cells": cells, "fmt": "ratio",
+            "x_title": L(lang, "Возраст, лет", "Жасы, жыл"), "y_title": _yr(lang),
+            "value_title": L(lang, "Запас по неводу ÷ по сети", "Сүзекі ÷ ау бойынша қор"),
+            "y_is_year": True, "pick_year": True, "selected_y": ctx["y"]}, rows, ages
+
+
+def _ratio_cols(lang, ages):
+    return [col("year", _yr(lang), "integer")] + [col(f"a{a}", age_label(a), "number") for a in ages]
+
+
+# ---- 2. проверка поколений
+def v_ca_cohorts(D, opt, rules=None):
+    ctx, key, sp, code = _tsp(D, opt, rules)
+    lang = ctx["lang"]
+    ch, rows, xs = _growth_heat(ctx, sp, lang)
+    if not ch["cells"]:
+        raise NoData(L(lang, "Нет двух соседних лет запаса — поколения сравнить не с чем", "Көрші екі жылдың қоры жоқ — ұрпақтарды салыстыратын ештеңе жоқ"))
+    n = len(ch["cells"])
+    k = sum(1 for c in ch["cells"] if c[5])
+    return {"chart": ch, "columns": _ratio_cols(lang, xs), "rows": rows, "row_action": "year", "cohorts_total": n, "cohorts_grew": k,
+            "notes": [L(lang, f"Клетка — во сколько раз запас поколения изменился за год (поколение на диагонали: возраст +1, год +1). Рамка — рост больше допуска правила ({ctx['grow_words']}). Ожидается убыль, то есть меньше ×1.",
+                        f"Ұяшық — ұрпақ қоры бір жылда неше есе өзгерді (ұрпақ диагональда: жас +1, жыл +1). Жиек — ереже шегінен артық өсу ({ctx['grow_words']}). Азаю күтіледі, яғни ×1-ден аз.")],
+            **_tcommon(D, ctx, code)}
+
+
+# ---- 3. согласие орудий по возрастам
+def v_ca_gears_age(D, opt, rules=None):
+    ctx, key, sp, code = _tsp(D, opt, rules)
+    lang = ctx["lang"]
+    ch, rows, ages = _gears_heat(ctx, sp, lang)
+    if not ch["cells"]:
+        raise NoData(L(lang, "Нет возрастов, где запас посчитан и по неводу, и по сети", "Қор сүзекі бойынша да, ау бойынша да есептелген жастар жоқ"))
+    return {"chart": ch, "columns": _ratio_cols(lang, ages), "rows": rows, "row_action": "year",
+            "notes": [L(lang, f"Клетка — во сколько раз запас по неводу больше запаса по сети в этом возрасте («сеть ×» — больше сеть). Рамка — расхождение больше порога правила ({nf(ctx['R'], 1)} раза).",
+                        f"Ұяшық — осы жаста сүзекі бойынша қор ау бойынша қордан неше есе көп («ау ×» — ау көп). Жиек — ереже шегінен ({nf(ctx['R'], 1)} есе) артық алшақтық.")],
+            **_tcommon(D, ctx, code)}
+
+
+# ---- 4. паспорт достоверности: виды × годы
+def _sample_issues(r, lang):
+    b, s = r["bounds"], r["sample"]
+    out = []
+    if s["pooled"]:
+        out.append(L(lang, "проба за все годы", "барлық жылдар сынамасы"))
+    if s["small"]:
+        out.append(L(lang, f"мало рыб ({nf(s['n'], 0)})", f"балық аз ({nf(s['n'], 0)})"))
+    if s["r2low"]:
+        out.append(L(lang, f"R² {nf(s['r2'], 2)}", f"R² {nf(s['r2'], 2)}"))
+    if b["hit"]:
+        out.append(L(lang, f"на границах {nf(b['pct'], 0)} % запаса", f"шектерде қордың {nf(b['pct'], 0)} %-ы"))
+    return out
+
+
+def v_ca_passport(D, opt, rules=None):
+    ctx = _trust_ctx(D, opt, rules)
+    lang, years, st, y = ctx["lang"], ctx["years"], ctx["st"], ctx["y"]
+    per = []
+    for key, sp in st["species"].items():
+        R = _by_year(ctx, key, sp)
+        if R:
+            last = R.get(y) or R[max(R)]
+            per.append((last["_stock"] or 0, key, R))
+    if not per:
+        raise NoData(L(lang, "Нет запаса по видам", "Түрлер бойынша қор жоқ"))
+    per.sort(key=lambda t: -t[0])
+    cells, flat, ylab, codes = [], [], [], []
+    for si, (_, key, R) in enumerate(per):
+        any_r = next(iter(R.values()))
+        ylab.append(any_r["species"])
+        codes.append(any_r["_code"])
+        for xi, yy in enumerate(years):
+            r = R.get(yy)
+            if not r:
+                continue
+            iss = _sample_issues(r, lang)
+            s = r["sample"]
+            tip = (L(lang, f"проба {nf(s['n'], 0)} рыб", f"сынама {nf(s['n'], 0)} балық") if s["n"] is not None else "") + \
+                  (f"; R² {nf(s['r2'], 2)}" if s["r2"] is not None else "") + \
+                  (L(lang, f"; на границах {nf(r['bounds']['pct'], 0)} %", f"; шектерде {nf(r['bounds']['pct'], 0)} %") if r["bounds"]["pct"] is not None else "")
+            if iss:
+                tip += "<br>" + L(lang, "Вопросы: ", "Сұрақтар: ") + ", ".join(iss)
+            cells.append([xi, si, len(iss), nf(s["n"], 0) if s["n"] is not None else "—", tip, False])
+            flat.append({"species": r["species"], "year": yy, "n": s["n"], "r2": s["r2"], "pooled": L(lang, "да", "иә") if s["pooled"] else "—",
+                         "b_pct": r["bounds"]["pct"], "issues": ", ".join(iss) or "—", "_code": r["_code"], "_level": "warning" if iss else None})
+    return {"chart": {"kind": "heatmap", "x": years, "y": ylab, "y_codes": codes, "cells": cells, "fmt": "level",
+                      "x_title": _yr(lang), "y_title": L(lang, "Вид", "Түр"), "value_title": L(lang, "Вопросов", "Сұрақтар"),
+                      "x_is_year": True, "pick_year": True, "selected_y": y},
+            "columns": [col("species", L(lang, "Вид", "Түр")), col("year", _yr(lang), "integer"), col("n", L(lang, "Рыб в пробе", "Сынамадағы балық"), "integer"),
+                        col("r2", "R²", "number"), col("pooled", L(lang, "Проба за все годы", "Барлық жылдар сынамасы")),
+                        col("b_pct", L(lang, "Запас на границах, %", "Шектердегі қор, %"), "number"), col("issues", L(lang, "Вопросы", "Сұрақтар"))],
+            "rows": flat, "row_action": "species",
+            "notes": [L(lang, "Клетка — вид и год; число — рыб в пробе невода. Жёлтая клетка — есть вопросы к пробе: проба за все годы, мало рыб, низкий R² или запас на границах уловистости. Щелчок — все данные по виду за этот год.",
+                        "Ұяшық — түр мен жыл; сан — сүзекі сынамасындағы балық. Сары ұяшық — сынамаға сұрақтар бар: барлық жылдар сынамасы, балық аз, R² төмен немесе қор аулағыштық шектерінде. Басу — осы жылғы түр бойынша барлық деректер.")],
+            **_tcommon(D, ctx, None)}
+
+
+# ---- 5. смертность Z по годам
+def _unreliable(r):
+    s = r["sample"]
+    return bool(s["pooled"] or s["small"] or s["r2low"])
+
+
+def v_ca_z(D, opt, rules=None):
+    ctx = _trust_ctx(D, opt, rules)
+    lang, years, st, y, seine = ctx["lang"], ctx["years"], ctx["st"], ctx["y"], ctx["seine"]
+    code = opt.get("species")
+    if code:
+        _, key, sp, code = _tsp(D, opt, rules)
+        R = _by_year(ctx, key, sp)
+        fits = seine["fits"].get(key) or {}
+        z = [(fits.get(str(yy)) or {}).get("Z") for yy in years]
+        bad = [z[i] if yy in R and _unreliable(R[yy]) else None for i, yy in enumerate(years)]
+        series = [{"name": "Z", "values": z, "type": "line", "c": 0, "bold": True},
+                  {"name": L(lang, "ненадёжный год", "сенімсіз жыл"), "values": bad, "type": "scatter", "warn": True}]
+        rows = [{"year": yy, "_current": yy == y, "Z": z[i], "n": (R.get(yy) or {}).get("sample", {}).get("n"),
+                 "r2": (R.get(yy) or {}).get("sample", {}).get("r2"),
+                 "why": ", ".join(_sample_issues(R[yy], lang)[:3]) if yy in R and _unreliable(R[yy]) else "—",
+                 "_level": "warning" if bad[i] is not None else None} for i, yy in enumerate(years)]
+        cols = [col("year", _yr(lang), "integer"), col("Z", "Z", "number"), col("n", L(lang, "Рыб в пробе", "Сынамадағы балық"), "integer"),
+                col("r2", "R²", "number"), col("why", L(lang, "Почему ненадёжен", "Неге сенімсіз"))]
+        notes = [L(lang, "Общая смертность Z — наклон кривой улова невода. Жёлтые точки — годы, где проба за все годы, мало рыб или низкий R²: там Z не опирается на данные года.",
+                   "Жалпы өлім-жітім Z — сүзекі ауланым қисығының көлбеулігі. Сары нүктелер — барлық жылдар сынамасы, балық аз немесе R² төмен жылдар: онда Z жыл деректеріне сүйенбейді.")]
+        extra = {"z_bad": [yy for i, yy in enumerate(years) if bad[i] is not None]}
+    else:
+        per = []
+        for key, sp in st["species"].items():
+            R = _by_year(ctx, key, sp)
+            if not R:
+                continue
+            fits = seine["fits"].get(key) or {}
+            last = R.get(y) or R[max(R)]
+            per.append((last["_stock"] or 0, last["species"], [(fits.get(str(yy)) or {}).get("Z") for yy in years]))
+        if not per:
+            raise NoData(L(lang, "Нет подгонки невода по видам", "Түрлер бойынша сүзекі сәйкестендіруі жоқ"))
+        per.sort(key=lambda t: -t[0])
+        series = [{"name": nm, "values": zz, "type": "line", "c": i} for i, (_, nm, zz) in enumerate(per)]
+        rows = [{"year": yy, "_current": yy == y, **{f"s{i}": zz[k] for i, (_, nm, zz) in enumerate(per)}} for k, yy in enumerate(years)]
+        cols = [col("year", _yr(lang), "integer")] + [col(f"s{i}", nm, "number") for i, (_, nm, zz) in enumerate(per)]
+        notes = [L(lang, "Общая смертность Z по видам — наклон кривой улова невода. Ненадёжные годы вида видны на его слайде в разделе «Проверки».",
+                   "Түрлер бойынша жалпы өлім-жітім Z — сүзекі ауланым қисығының көлбеулігі. Түрдің сенімсіз жылдары оның «Тексерулер» бөліміндегі слайдында көрінеді.")]
+        extra = {}
+    return {"chart": {"kind": "fit", "x": years, "series": series, "vrefs": [{"x": str(y), "label": str(y)}], "pick_year": True,
+                      "x_title": _yr(lang), "y_title": "Z"},
+            "columns": cols, "rows": rows, "row_action": "year", "notes": notes, **extra, **_tcommon(D, ctx, code)}
+
+
+# ---- 6. кого не видит орудие
+def v_ca_blind(D, opt, rules=None):
+    ctx, key, sp, code = _tsp(D, opt, rules)
+    lang, y, yi, seine, net = ctx["lang"], ctx["y"], ctx["yi"], ctx["seine"], ctx["net"]
+    r = _trust_row(ctx, key, sp, y, yi)
+    fs, fn = (r[0]["_fs"], r[0]["_fn"]) if r else (None, None)
+    if not fs and not fn:
+        raise NoData(L(lang, f"За {y} г. нет уловистости вида", f"{y} ж. түр аулағыштығы жоқ"))
+    cs = dict(zip((fs or {}).get("ages") or [], (fs or {}).get("c") or []))
+    cn = dict(zip((fn or {}).get("ages") or [], (fn or {}).get("c") or []))
+    ages = sorted(set(cs) | set(cn))
+    series = []
+    if cs:
+        series.append({"name": L(lang, "невод", "сүзекі"), "values": [round(cs[j] * 100, 1) if j in cs else None for j in ages], "type": "bar", "c": 0})
+    if cn:
+        series.append({"name": L(lang, "сеть", "ау"), "values": [round(cn[j] * 100, 1) if j in cn else None for j in ages], "type": "bar", "c": 1})
+    phrases = []
+    for g, f, part in (("seine", fs, seine), ("net", fn, net)):
+        if not f:
+            continue
+        low = {}
+        for i, (j, c) in enumerate(zip(f["ages"], f["c"])):
+            lo = part.get("c_lower_first") if (g == "seine" and i == 0) else part.get("c_lower")
+            if c is not None and lo is not None and abs(c - lo) <= (1e-4 if lo < 0.05 else 1e-3):
+                low.setdefault(round(lo, 4), []).append(j)
+        gname = L(lang, "Невод", "Сүзекі") if g == "seine" else L(lang, "Сеть", "Ау")
+        for lo, js in sorted(low.items()):
+            ages_t = ", ".join(age_label(j) for j in js)
+            per100 = nf(lo * 100, 0)
+            mult = nf(1 / lo, 0)
+            phrases.append(L(lang, f"{gname} почти не ловит рыбу этого вида в возрасте {ages_t}: из 100 рыб попадается {per100}; запас этого возраста — улов, умноженный на {mult}.",
+                             f"{gname} осы түрдің {ages_t} жасындағы балығын іс жүзінде ауламайды: 100 балықтан {per100} түседі; осы жастың қоры — {mult}-ге көбейтілген ауланым."))
+    rows = [{"age": age_label(j), "s": round(cs[j] * 100, 1) if j in cs else None, "n": round(cn[j] * 100, 1) if j in cn else None,
+             "ms": (1 / cs[j]) if cs.get(j) else None, "mn": (1 / cn[j]) if cn.get(j) else None} for j in ages]
+    return {"chart": {"kind": "fit", "x": [age_label(j) for j in ages], "series": series, "x_title": L(lang, "Возраст, лет", "Жасы, жыл"),
+                      "y_title": L(lang, "Из 100 рыб попадает в орудие", "100 балықтан құралға түседі")},
+            "columns": [col("age", L(lang, "Возраст", "Жас")), col("s", L(lang, "Невод: из 100 рыб", "Сүзекі: 100 балықтан"), "number"),
+                        col("n", L(lang, "Сеть: из 100 рыб", "Ау: 100 балықтан"), "number"),
+                        col("ms", L(lang, "Невод: улов умножается на", "Сүзекі: ауланым көбейтіледі"), "number"),
+                        col("mn", L(lang, "Сеть: улов умножается на", "Ау: ауланым көбейтіледі"), "number")],
+            "rows": rows, "blind": phrases,
+            "notes": [L(lang, "Уловистость c, показанная как «из 100 рыб возраста в зоне облова попадает в орудие». Запас возраста = улов ÷ c: чем меньше рыб попадает, тем больше множитель улова.",
+                        "Аулағыштық c «аулау аймағындағы жастың 100 балығынан құралға түседі» түрінде. Жас қоры = ауланым ÷ c: аз түссе, ауланым көбейткіші көп.")],
+            **_tcommon(D, ctx, code)}
+
+
+# ---- 7. сильное поколение или артефакт
+def v_ca_strong(D, opt, rules=None):
+    ctx, key, sp, code = _tsp(D, opt, rules)
+    lang, y, yi, years, G = ctx["lang"], ctx["y"], ctx["yi"], ctx["years"], ctx["G"]
+    r = _trust_row(ctx, key, sp, y, yi)
+    if not r:
+        raise NoData(L(lang, f"За {y} г. нет запаса вида", f"{y} ж. түр қоры жоқ"))
+    r = r[0]
+    ages, N, Np, fl = r["_ages"], r["_N"], r["_Np"] or {}, r["_flagged"]
+    byA = sp["variants"]["with_ages"]["on_stock"]["by_age"][G["mean"]]
+    lim = 1 + ctx["grow"] / 100
+    rows, mx, mean = [], [], []
+    for xi, j in enumerate(ages):
+        cur = N.get(j)
+        allv = [byA[i][xi] for i in range(len(years)) if i < len(byA) and byA[i][xi]]
+        other = [byA[i][xi] for i in range(len(years)) if i != yi and i < len(byA) and byA[i][xi]]
+        mx.append(max(other) if other else None)
+        mean.append(sum(allv) / len(allv) if allv else None)
+        top = bool(cur and other and cur > max(other))
+        a = Np.get(j - 1)
+        gx = cur / a if (cur and a and a > 0) else None
+        grew = bool(ctx["en_c"] and gx is not None and gx > lim)
+        bnd = bool(ctx["en_b"] and j in fl)
+        why = []
+        if bnd:
+            why.append(L(lang, f"уловистость на границе ({_gw(lang, fl[j])})", f"аулағыштық шекте ({_gw(lang, fl[j])})"))
+        if grew:
+            why.append(L(lang, f"поколение выросло за год ×{nf(gx, 1)}", f"ұрпақ бір жылда ×{nf(gx, 1)} өсті"))
+        if top:
+            full = (L(lang, f"максимум за {len(allv)} лет — проверить: ", f"{len(allv)} жылдағы ең көп — тексеру: ") + "; ".join(why)) if why else \
+                L(lang, f"максимум за {len(allv)} лет, проверки пройдены", f"{len(allv)} жылдағы ең көп, тексерулер өтті")
+            verdict = L(lang, "максимум — проверить", "ең көп — тексеру") if why else L(lang, "максимум, проверки пройдены", "ең көп, тексерулер өтті")
+        else:
+            full, verdict = None, "—"
+        rank = 1 + sum(1 for v in other if cur is not None and v > cur) if cur else None
+        rows.append({"age": age_label(j), "stock": cur, "rank": f"{rank} / {len(allv)}" if rank else "—",
+                     "to_mean": (cur / mean[-1]) if (cur and mean[-1]) else None, "bound": _gw(lang, fl.get(j)),
+                     "growth": gx, "verdict": verdict, "_full": full, "_level": "warning" if (top and why) else None, "_top": top})
+    series = [{"name": L(lang, f"запас {y} г.", f"{y} ж. қоры"), "values": [N.get(j) for j in ages], "type": "bar", "c": 0},
+              {"name": L(lang, "максимум за другие годы", "басқа жылдардағы ең көп"), "values": mx, "type": "line", "c": 2, "dash": True},
+              {"name": L(lang, "средняя за годы", "жылдар бойынша орташа"), "values": mean, "type": "line", "c": 3, "dash": True}]
+    return {"chart": {"kind": "fit", "x": [age_label(j) for j in ages], "series": series, "x_title": L(lang, "Возраст, лет", "Жасы, жыл"),
+                      "y_title": L(lang, "Запас, шт", "Қор, дана"), "default": "log"},
+            "columns": [col("age", L(lang, "Возраст", "Жас")), col("stock", L(lang, "Запас, шт", "Қор, дана"), "integer"),
+                        col("rank", L(lang, "Место среди лет", "Жылдар арасындағы орны")), col("to_mean", L(lang, "К средней, раз", "Орташаға, есе"), "number"),
+                        col("bound", L(lang, "Уловистость на границе", "Аулағыштық шекте")), col("growth", L(lang, "Поколение за год, раз", "Ұрпақ бір жылда, есе"), "number"),
+                        col("verdict", L(lang, "Вывод", "Қорытынды"))],
+            "rows": rows, "default_view": "table",
+            "notes": [L(lang, "Возраст, где запас года больше, чем в любом другом году, — сильное поколение или ошибка оценки. Оценке можно верить больше, если уловистость этого возраста определена данными и поколение не «выросло» за год.",
+                        "Жылдың қоры кез келген басқа жылдан көп жас — күшті ұрпақ немесе бағалау қатесі. Осы жастың аулағыштығы деректермен анықталса және ұрпақ бір жылда «өспесе», бағаға көбірек сенуге болады.")],
+            **_tcommon(D, ctx, code)}
+
+
+VIEWS.update({"ca_bounds_years": v_ca_bounds_years, "ca_bounds_ages": v_ca_bounds_ages, "ca_cohorts": v_ca_cohorts,
+              "ca_gears_age": v_ca_gears_age, "ca_passport": v_ca_passport, "ca_z": v_ca_z, "ca_blind": v_ca_blind,
+              "ca_strong": v_ca_strong})

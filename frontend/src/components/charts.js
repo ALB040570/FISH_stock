@@ -1,5 +1,5 @@
 // Общий вид графиков: палитра темы (src/theme.js), читаемые оси, числа с пробелами.
-import { CHART, CHART_PALETTE, HEAT } from '../theme'
+import { CHART, CHART_PALETTE, HEAT, SIGNAL, CSS } from '../theme'
 
 // PALETTE — реактивный массив текущей схемы; в параметры графика передаётся копия pal()
 export const PALETTE = CHART_PALETTE
@@ -117,7 +117,37 @@ export function seriesChart(spec, ctype, { highlight = null } = {}) {
 }
 
 // Тепловая карта: cells [[x, y, значение]]; fmt int | pct | dev (расходящаяся шкала вокруг нуля)
+// Клетка может нести подпись, подсказку и рамку: [x, y, значение для цвета, подпись, подсказка, рамка].
+// fmt 'ratio' — цвет по логарифму отношения (середина — ×1); fmt 'level' — 0 спокойный, ≥ 1 жёлтый (есть вопросы).
+function heatRich(spec, { highlight = null } = {}) {
+  const ratio = spec.fmt === 'ratio'
+  const cells = spec.cells || []
+  const data = cells.map((c) => (c[5] ? { value: c.slice(0, 3), itemStyle: { borderColor: SIGNAL.warning, borderWidth: 2.5 } } : { value: c.slice(0, 3) }))
+  if (spec.selected_y != null) highlight = spec.selected_y
+  const ylen = (spec.y || []).length
+  const longY = Math.max(0, ...(spec.y || []).map((s) => String(s).length))
+  const vm = ratio
+    ? { min: -1, max: 1, calculable: false, orient: 'horizontal', left: 'center', bottom: 0, itemHeight: 160, itemWidth: 10,
+        inRange: { color: [...HEAT.div] }, text: ['×10', '×0,1'], textStyle: { fontSize: 10 } }
+    : { type: 'piecewise', show: false, dimension: 2,
+        pieces: [{ lte: 0, color: CSS.success + '2E' }, { gte: 1, color: SIGNAL.warning + '8C' }] }
+  return {
+    grid: { left: Math.min(200, 16 + longY * 6.6), right: 16, top: 8, bottom: ratio ? 62 : 40 },
+    tooltip: { formatter: (p) => `${spec.x_title}: <b>${spec.x[p.value[0]]}</b><br>${spec.y_title}: <b>${spec.y[p.value[1]]}</b><br>`
+      + (ratio ? `${spec.value_title}: <b>${cells[p.dataIndex][3]}</b><br>` : '') + (cells[p.dataIndex][4] || '') },
+    xAxis: { type: 'category', data: spec.x.map(String), name: spec.x_title, nameLocation: 'middle', nameGap: 24, splitArea: { show: true },
+      axisLabel: { formatter: spec.x_is_year ? hiLabel(highlight) : undefined, rich: hlRich() } },
+    yAxis: { type: 'category', data: spec.y.map(String), inverse: !spec.y_is_year && ylen > 0, splitArea: { show: true },
+      axisLabel: { interval: 0, formatter: spec.y_is_year ? hiLabel(highlight) : (v) => (v.length > 32 ? v.slice(0, 31) + '…' : v), rich: hlRich() } },
+    visualMap: vm,
+    series: [{ type: 'heatmap', data, label: { show: cells.length <= 400, fontSize: 9.5, color: ratio ? HEAT.label : CSS.text,
+        textBorderColor: ratio ? HEAT.outline : 'transparent', textBorderWidth: ratio ? 2 : 0, formatter: (p) => cells[p.dataIndex][3] ?? '' },
+      emphasis: { itemStyle: { borderColor: CHART.highlight, borderWidth: 2 } } }],
+  }
+}
+
 export function heatmapChart(spec, { highlight = null } = {}) {
+  if (spec.fmt === 'ratio' || spec.fmt === 'level') return heatRich(spec, { highlight })
   const vals = (spec.cells || []).map((c) => c[2]).filter((v) => v != null)
   const dev = spec.fmt === 'dev'
   // шкала отклонений: по 90-му процентилю модуля, чтобы один выброс не «съедал» цвета остальных клеток
@@ -206,14 +236,20 @@ export function fitChart(spec, ctype) {
   const x = spec.x.map(String)
   const log = ctype === 'log'
   const pos = (v) => (v == null || (log && v <= 0) ? null : v)
-  const bars = spec.series.filter((s) => s.type === 'bar').length
+  const bars = spec.series.filter((s) => s.type === 'bar' && !s.stack).length + (spec.series.some((s) => s.stack) ? 1 : 0)
   const series = spec.series.map((s) => {
     const color = s.c != null ? PALETTE[s.c % PALETTE.length] : null
-    if (s.type === 'bar' && color == null) {           // одиночный ряд факта (улов по возрастам)
+    if (s.type === 'bar' && color == null && !s.warn && !s.stack) {           // одиночный ряд факта (улов по возрастам)
       if (!log) return { type: 'bar', name: s.name, data: s.values, barMaxWidth: 34, itemStyle: { color: CHART.background } }
       return { type: 'scatter', name: s.name, data: s.values.map(pos), symbolSize: 9, itemStyle: { color: CHART.highlight } }
     }
-    if (s.type === 'bar') return { type: 'bar', name: s.name, data: s.values.map(pos), barMaxWidth: bars > 1 ? 18 : 34, itemStyle: { color } }
+    if (s.type === 'bar') {
+      const stacked = !!s.stack
+      return { type: 'bar', name: s.name, data: s.values.map(pos), stack: s.stack, barMaxWidth: bars > 1 && !stacked ? 18 : 34,
+        itemStyle: { color: s.warn ? SIGNAL.warning : color } }
+    }
+    if (s.type === 'scatter') return { type: 'scatter', name: s.name, data: s.values.map(pos), symbolSize: 12, z: 6,
+      itemStyle: { color: s.warn ? SIGNAL.warning : color || CHART.highlight } }
     const c = color || CHART.main
     return { type: 'line', name: s.name, data: s.values.map(pos), symbol: 'circle', symbolSize: s.bold ? 7 : 5, z: s.bold ? 5 : 3,
       lineStyle: { width: s.bold ? 3 : 2.2, color: c, type: s.dash ? 'dashed' : 'solid' }, itemStyle: { color: c } }

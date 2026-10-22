@@ -119,7 +119,7 @@ function cell(v, c) {
   return v
 }
 const cellCls = (row, c) => (c.code === 'level' ? 'lv-' + row.level : row._current ? 'cur' : '')
-const rowCls = ({ row }) => [row._current ? 'cur-row' : '', p.data?.drill?.by_row || p.data?.row_action ? 'clickable' : ''].join(' ')
+const rowCls = ({ row }) => [row._current ? 'cur-row' : '', row._level === 'warning' ? 'warn-row' : '', p.data?.drill?.by_row || p.data?.row_action ? 'clickable' : ''].join(' ')
 function onRow(row) {
   // результаты расчёта: строка вида — все данные по виду; строка года — выбрать год для всех слайдов раздела
   if (p.data?.row_action === 'species' && row._code) { emit('species', row._code); return }
@@ -147,6 +147,11 @@ function onPick(e) {
     const s = (spec.series || []).find((q) => q.name === e.seriesName)
     series = s ? s.key : null
   }
+  if (spec.kind === 'heatmap' && spec.y_codes) {        // паспорт: клетка «вид × год» — все данные по виду за этот год
+    if (board?.setYear && /^\d{4}$/.test(String(x))) board.setYear(Number(x))
+    if (spec.y_codes[yi]) emit('species', spec.y_codes[yi])
+    return
+  }
   if (spec.pick_year && board?.setYear) {
     const yy = spec.kind === 'heatmap' ? y : x
     if (yy != null && /^\d{4}$/.test(String(yy))) { board.setYear(Number(yy)); return }
@@ -163,6 +168,7 @@ defineExpose({ image })
 .warns { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .warns .sig { cursor: default; }
 :deep(.clickable) { cursor: pointer; }
+:deep(.warn-row) td:first-child { box-shadow: inset 3px 0 0 var(--fs-warning); }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .tile { border: 1px solid var(--fs-line); border-radius: 8px; padding: 10px 12px; background: var(--fs-card-soft); }
 .tile.link { cursor: pointer; }

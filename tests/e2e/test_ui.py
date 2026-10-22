@@ -166,6 +166,28 @@ def test_monitoring_trust(browser):
     assert not errors, errors
 
 
+def test_monitoring_checks(browser):
+    """Раздел «Проверки» вида: слайды открываются без ошибок; паспорт — щелчок по клетке открывает вид."""
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("try{localStorage.removeItem('fishstock.monitoring.view')}catch(e){}")
+    login(page)
+    page.goto(URL + "/monitoring/zhaysan?tab=catchability&s=checks&sp=lesh")
+    page.wait_for_selector(".slide canvas")
+    titles = []
+    for _ in range(7):
+        titles.append(page.locator(".slide .wt").first.inner_text())
+        if page.locator(".nav.next").is_enabled():
+            page.locator(".nav.next").click()
+            page.wait_for_timeout(1200)
+    assert any("Проверка поколений" in t for t in titles) and any("Кого не видит" in t for t in titles), titles
+    page.goto(URL + "/monitoring/zhaysan?tab=catchability&s=summary&w=k_passport")
+    page.wait_for_selector(".slide canvas")
+    assert "Паспорт" in page.locator(".slide").first.inner_text()
+    assert not errors, errors
+
+
 def test_monitoring_stock(browser):
     """Запас по уловам: виды за год → вид, переключатели расчёта общие для слайдов."""
     page = browser.new_page(viewport={"width": 1440, "height": 900})
