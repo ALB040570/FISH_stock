@@ -10,5 +10,6 @@ F=$(docker compose exec -T users sh -c 'ls -t /tmp/fsbackup/*.tar.gz | head -1' 
 docker compose cp "users:$F" "$OUT/"
 docker compose exec -T users rm -rf /tmp/fsbackup
 echo "Готово: $OUT/$(basename "$F")"
-# хранить последние 30 копий
-ls -t "$OUT"/fishstock*_*.tar.gz 2>/dev/null | tail -n +31 | xargs -r rm -f
+# хранить последние FISH_BACKUP_KEEP копий (по умолчанию 30)
+KEEP="${FISH_BACKUP_KEEP:-30}"
+ls -t "$OUT"/fishstock*_*.tar.gz 2>/dev/null | tail -n +$((KEEP + 1)) | xargs -r rm -f
