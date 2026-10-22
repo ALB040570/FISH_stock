@@ -44,7 +44,7 @@ export default {
     write: 'Написать комментарий…', send: 'Отправить', year_tag: 'К году', explain: 'Пояснение', species_passport: 'Все данные по виду',
     down: 'снижение', up: 'рост', j_years: 'Годы', j_months: 'Месяцы', j_gear: 'Орудие', j_type: 'Тип лова', j_places: 'Места лова',
     j_search: 'Поиск', j_total: 'Итого', j_hauls: 'ловов', j_reset: 'Сбросить фильтры', j_export: 'Excel (отфильтрованное)',
-    j_shown: 'Показано ловов: {n} из {m}', keys_hint: 'Листайте стрелками ← →',
+    j_shown: 'Показано ловов: {n} из {m}', keys_hint: 'Листайте стрелками ← →', year: 'Год', prev_year: 'Предыдущий год', next_year: 'Следующий год',
   },
   monitoring: {
     title: 'Мониторинг', choose: 'Выберите водоём', run_main: 'Основной запуск', run_last: 'Последний успешный запуск — не отмечен как основной',
@@ -134,7 +134,7 @@ export default {
     by_run: 'по запуску', from: 'от', how: 'Как получено',
     no_chart: 'Для этого вида данных нет графика — переключитесь на таблицу', no_signals: 'Замечаний нет',
     mode_chart: 'График', mode_table: 'Таблица', mode_tiles: 'Плитки', mode_cards: 'Карточки', mode_signals: 'Список',
-    chart_type: 'Вид графика', ct_line: 'Линии', ct_bar: 'Столбцы', ct_stack: 'Столбцы с накоплением', ct_stack100: 'Доли, 100 %',
+    chart_type: 'Вид графика', ct_line: 'Линии', ct_linear: 'Линейная', ct_log: 'Логарифм.', ct_bar: 'Столбцы', ct_stack: 'Столбцы с накоплением', ct_stack100: 'Доли, 100 %',
     fullscreen: 'Во весь экран', download: 'Скачать', selected: 'Выбрано', show_rows: 'Показать строки данных',
     rows_found: 'Строк: {n}', open_dataset: 'Открыть набор данных', dataset: 'Набор данных', compare: 'Сравнить годы', and: 'и',
     highlighted: 'Подсвечен год', report: 'Отчёт раздела (PDF)',

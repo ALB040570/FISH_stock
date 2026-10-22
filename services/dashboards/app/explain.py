@@ -553,6 +553,13 @@ NOW = {"overview": now_overview, "cpue": now_cpue, "composition": now_compositio
        "age_catch_hauls": now_age_catch_hauls, "journal": now_journal}
 
 
+from . import calc_explain  # noqa: E402
+
+HOW.update(calc_explain.HOW)
+NEXT.update(calc_explain.NEXT)
+NOW.update(calc_explain.NOW)
+
+
 def explain(view: str, res: dict, lang: str, opt: dict, sp_name: str | None, rules: dict | None = None) -> dict:
     how = [L(lang, ru, kk) for ru, kk in HOW.get(view, [])]
     try:

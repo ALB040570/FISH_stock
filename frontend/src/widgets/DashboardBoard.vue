@@ -8,6 +8,15 @@
       <el-radio-group v-if="sections.length" v-model="section" size="small" class="secs">
         <el-radio-button v-for="s in sections" :key="s.code" :value="s.code">{{ tr(s, 'title') }}</el-radio-button>
       </el-radio-group>
+      <!-- год результатов расчёта: стрелками, как в прежнем приложении; общий для всех слайдов раздела -->
+      <div v-if="curTab?.year_picker && calcYears.length" class="ystep" :aria-label="$t('mon.year')">
+        <span class="muted small">{{ $t('mon.year') }}</span>
+        <el-button size="small" :disabled="yIdx <= 0" :title="$t('mon.prev_year')" @click="stepYear(-1)"><el-icon><ArrowLeft /></el-icon></el-button>
+        <el-select :model-value="shownYear" size="small" style="width:88px" @update:model-value="setYear">
+          <el-option v-for="y in [...calcYears].reverse()" :key="y" :label="y" :value="y" />
+        </el-select>
+        <el-button size="small" :disabled="yIdx >= calcYears.length - 1" :title="$t('mon.next_year')" @click="stepYear(1)"><el-icon><ArrowRight /></el-icon></el-button>
+      </div>
       <span class="grow" />
       <el-tag v-if="compare" size="small" closable type="warning" @close="cmpA = cmpB = null">{{ $t('mon.compare_on') }}: {{ compare[0] }} · {{ compare[1] }}</el-tag>
       <el-tag v-if="highlight != null" size="small" closable type="warning" @close="highlight = null">{{ $t('wv.highlighted') }}: {{ highlight }}</el-tag>
@@ -103,6 +112,14 @@ const tab = ref(p.modelValue || route.query.tab || tabs.value[0]?.code)
 watch(tab, (v) => emit('update:modelValue', v))
 watch(tabs, (tt) => { if (!tt.find((x) => x.code === tab.value)) tab.value = tt[0]?.code })
 const curTab = computed(() => tabs.value.find((x) => x.code === tab.value) || tabs.value[0])
+// год результатов расчёта (вкладки с year_picker): выбранный пользователем, иначе последний (решает сервер)
+const calcYear = ref(route.query.y ? Number(route.query.y) : null)
+const calcYears = ref([])
+const reportedYear = ref(null)
+const shownYear = computed(() => calcYear.value ?? reportedYear.value)
+const yIdx = computed(() => calcYears.value.indexOf(shownYear.value))
+function setYear(y) { calcYear.value = y ? Number(y) : null }
+function stepYear(d) { const i = yIdx.value + d; if (i >= 0 && i < calcYears.value.length) setYear(calcYears.value[i]) }
 
 // режим: «Все виды» — водоём целиком; выбран вид — «Все данные по виду» (у виджета scope: wb | species | both)
 const spMode = computed(() => !!p.filters?.species)
@@ -137,9 +154,10 @@ function onKey(e) {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 // адрес помнит вкладку, раздел и слайд — ссылкой можно поделиться
-watch([tab, section, cur, slidesOn, () => p.filters?.species], () => {
+watch([tab, section, cur, slidesOn, () => p.filters?.species, calcYear], () => {
   if (!p.slides) return
-  const q = { ...route.query, tab: tab.value, sp: p.filters?.species || undefined, s: section.value || undefined, w: slidesOn.value ? cur.value?.id : undefined }
+  const q = { ...route.query, tab: tab.value, sp: p.filters?.species || undefined, s: section.value || undefined, w: slidesOn.value ? cur.value?.id : undefined,
+    y: curTab.value?.year_picker && calcYear.value ? calcYear.value : undefined }
   router.replace({ query: q })
   emit('state', { section: tr(sections.value.find((s) => s.code === section.value) || {}, 'title'), index: idx.value + 1,
     count: visible.value.length, slides: slidesOn.value })
@@ -155,8 +173,9 @@ const cmpB = ref(null)
 const cmpOpen = ref(false)
 const compare = computed(() => (cmpA.value && cmpB.value && cmpA.value !== cmpB.value
   ? [Math.min(cmpA.value, cmpB.value), Math.max(cmpA.value, cmpB.value)] : null))
-const wfilters = computed(() => ({ ...p.filters, ...(compare.value ? { compare: compare.value } : {}) }))
-watch(() => p.filters?.water_body, () => { years.value = new Set(); highlight.value = null; cmpA.value = null; cmpB.value = null })
+const wfilters = computed(() => ({ ...p.filters, ...(compare.value ? { compare: compare.value } : {}),
+  ...(curTab.value?.year_picker && calcYear.value ? { year: calcYear.value } : {}) }))
+watch(() => p.filters?.water_body, () => { years.value = new Set(); highlight.value = null; cmpA.value = null; cmpB.value = null; calcYear.value = null; calcYears.value = [] })
 const dataById = reactive({})
 const counts = ref({})
 async function reloadCounts() {
@@ -210,7 +229,14 @@ provide('board', {
   setHighlight: (y) => { highlight.value = y == null || highlight.value === y ? null : y },
   setSection: (s) => { const tb = tabs.value.find((x) => (x.sections || []).some((q) => q.code === s)); if (tb) { tab.value = tb.code; section.value = s } },
   setSpecies: openSpeciesAll,
-  setData: (id, d) => { dataById[id] = d },
+  setData: (id, d) => {
+    dataById[id] = d
+    if (d?.calc_year && d.year_choices?.length) {
+      if (calcYears.value.join() !== d.year_choices.join()) calcYears.value = [...d.year_choices]
+      reportedYear.value = d.year
+    }
+  },
+  setYear,
   reloadCounts,
   goWidget,
   openJournal: (where) => { journalPreset.value = { ...where }; goWidget('d_journal') },
@@ -254,6 +280,8 @@ async function report() {
 .secline { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; flex-wrap: wrap; }
 .secs { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; }
 .grow { flex: 1; }
+.ystep { display: inline-flex; align-items: center; gap: 4px; }
+.ystep .el-button + .el-select, .ystep .el-select + .el-button { margin-left: 0; }
 .slide { display: grid; grid-template-columns: 36px minmax(0, 1fr) 380px 36px; gap: 10px; align-items: start; }
 .slide-main :deep(.widget) { margin: 0; }
 .slide-side { max-height: calc(100vh - 230px); overflow-y: auto; padding: 14px 16px; position: sticky; top: 140px; }

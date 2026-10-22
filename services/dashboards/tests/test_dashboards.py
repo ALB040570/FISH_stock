@@ -90,3 +90,59 @@ def test_catch_by_age_formula20(calc_stack, tmp_path, monkeypatch):
                                                              "filters": f, "options": {"gear_kind": "net"}}).json()
     r19 = next(r for r in y["rows"] if r["year"] == 2019)
     assert abs(sum(v for k, v in r19.items() if k.startswith("a")) - sum(r["total"] for r in j["rows"])) < 0.5
+
+
+def test_catchability_views(calc_stack, tmp_path, monkeypatch):
+    """Уловистость в мониторинге: блоки-слайды повторяют числа результата этапов 1–2 (как страницы прежнего приложения)."""
+    dm, da, aa, aa_mod = calc_stack
+    c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "stock"}).json()
+    aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"), json={})
+    assert mod_process(aa_mod)
+    mod = load_service("dashboards", tmp_path, monkeypatch)
+    for k, cl in (("algo_admin", aa), ("data_admin", da), ("data_model", dm)):
+        mod.SVC[k] = mod.Svc(k, http=cl)
+    db = TestClient(mod.app)
+
+    def view(name, sp=None, **flt):
+        r = db.post("/widgets/data", headers=H("viewer"), json={"source": {"kind": "insight", "view": name},
+                                                                 "filters": {"water_body": "zhaysan", "species": sp, **flt}, "options": {}})
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    seine = db.post("/widgets/data", headers=H("viewer"), json={"source": {"kind": "payload", "algorithm": "seine_catchability"},
+                                                                "filters": {"water_body": "zhaysan"}, "options": {}}).json()["payload"]
+    net = db.post("/widgets/data", headers=H("viewer"), json={"source": {"kind": "payload", "algorithm": "stock_by_catch"},
+                                                              "filters": {"water_body": "zhaysan"}, "options": {}}).json()["payload"]["net"]
+    f = seine["fits"]["лещ"]["2024"]
+    # контрольные числа прежнего приложения (лещ, 2024): j50 ≈ 3,1; a = 3,97; c = 0,01…0,67; Z = 0,43; R² = 0,79; 574 рыбы
+    assert round(f["j50"], 1) == 3.1 and round(f["a"], 2) == 3.97 and round(f["Z"], 2) == 0.43 and f["n_sample"] == 574
+    t = view("ca_seine_tiles", "lesh")
+    vals = {x["label"]: x["value"] for x in t["tiles"]}
+    assert vals["Точка перегиба j50"] == "3,1" and vals["Крутизна a"] == "3,97" and vals["Уловистость по возрастам"] == "0,01 … 0,67"
+    assert vals["Общая смертность Z"] == "0,43" and vals["Качество подгонки R²"] == "0,79" and vals["Данные года"] == "574 рыб"
+    assert t["year"] == 2024 and t["calc_year"] and t["warnings"] and "двухлеток" in t["warnings"][0]["text"]
+    # улов и кривая — те же ряды, что в результате
+    ch = view("ca_seine_catch", "lesh")["chart"]
+    assert ch["series"][0]["values"] == f["observed"] and ch["series"][1]["values"] == f["fitted"] and ch["x"][0] == "1–2"
+    cu = view("ca_seine_curve", "lesh")["chart"]
+    assert cu["series"][0]["values"] == f["c"] and cu["vrefs"][0]["x"] == f["j50"] and cu["hrefs"][1]["y"] == seine["c_upper"]
+    # тепловая карта и параметры: все годы, выбранный год выделен; год переключается фильтром
+    h = view("ca_seine_heat", "lesh", year=2019)
+    assert h["year"] == 2019 and len(h["rows"]) == len(seine["years"]) and h["chart"]["pick_year"]
+    assert next(r for r in h["rows"] if r["year"] == 2019)["_current"]
+    p = view("ca_seine_params", "sudak", year=2023)
+    r23 = next(r for r in p["rows"] if r["year"] == 2023)
+    assert r23["a"] == seine["fits"]["судак"]["2023"]["a"] and p["row_action"] == "year"
+    # все виды за год: строка — вид (щелчок — все данные по виду)
+    s = view("ca_seine_species")
+    assert len(s["rows"]) == len(seine["species"]) and s["row_action"] == "species" and {r["_code"] for r in s["rows"]} >= {"lesh", "sudak"}
+    # сеть: вершина параболы, ветви, σ
+    fn = net["fits"]["лещ"]["2024"]
+    nt = {x["label"]: x["value"] for x in view("ca_net_tiles", "lesh")["tiles"]}
+    assert nt["Вершина параболы c¹"] == "возраст " + f"{int(fn['peak']) - 1}–{int(fn['peak'])}"
+    ag = view("ca_net_ages", "lesh")
+    assert [r["sigma"] for r in ag["rows"]] == fn["sigma"]
+    # казахский язык и вид вне расчёта
+    k = view("ca_seine_tiles", "lesh", lang="kk")
+    assert k["tiles"][0]["label"] == "Иілу нүктесі j50" and "жылы" not in k["explain"]["how"][0]
+    assert view("ca_seine_tiles", "nalim").get("empty")

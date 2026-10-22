@@ -123,3 +123,24 @@ def test_monitoring_slides(browser):
     page.wait_for_selector(".grid12 > .widget")
     assert page.locator(".slide").count() == 0
     assert not errors, errors
+
+
+def test_monitoring_catchability(browser):
+    """Уловистость: невод и сеть слайдами, все виды → вид, год стрелками и щелчком по строке."""
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("try{localStorage.removeItem('fishstock.monitoring.view')}catch(e){}")
+    login(page)
+    page.goto(URL + "/monitoring/zhaysan?tab=catchability&s=seine")
+    page.wait_for_selector(".slide .el-table__row")
+    page.locator(".slide .el-table__row").first.click()          # вид → все данные по виду, «Параметры года»
+    page.wait_for_function("location.search.includes('sp=') && location.search.includes('w=k_s_tiles')")
+    page.wait_for_selector(".slide .tile")
+    assert page.locator(".dots .dot").count() >= 6
+    y0 = page.locator(".ystep .el-select").inner_text()
+    page.locator(".ystep button").first.click()                  # предыдущий год
+    page.wait_for_function(f"location.search.includes('y={int(y0) - 1}')")
+    page.locator(".secs label").filter(has_text="Сеть").click()
+    page.wait_for_selector(".slide .tile")
+    assert not errors, errors

@@ -124,7 +124,9 @@ export function heatmapChart(spec, { highlight = null } = {}) {
   const abs = vals.map((v) => Math.abs(v)).sort((a, b) => a - b)
   const m = dev ? Math.max(10, Math.min(abs[abs.length - 1] || 1, (abs[Math.floor(abs.length * 0.9)] || 1) * 1.2)) : Math.max(1, ...abs)
   const ylen = (spec.y || []).length
-  const lab = (v) => (v == null ? '' : dev ? (v > 0 ? '+' : '') + fmt(v, 0) : spec.fmt === 'pct' ? fmt(v, v >= 10 ? 0 : 1) : fmt(v, 0))
+  const lab = (v) => (v == null ? '' : dev ? (v > 0 ? '+' : '') + fmt(v, 0) : spec.fmt === 'pct' ? fmt(v, v >= 10 ? 0 : 1)
+    : spec.fmt === 'coef' ? fmt(v, 2) : fmt(v, 0))
+  if (spec.selected_y != null) highlight = spec.selected_y
   const longY = Math.max(0, ...(spec.y || []).map((s) => String(s).length))
   return {
     grid: { left: Math.min(200, 16 + longY * 6.6), right: 16, top: 8, bottom: 62 },
@@ -133,8 +135,9 @@ export function heatmapChart(spec, { highlight = null } = {}) {
       axisLabel: { formatter: spec.x_is_year ? hiLabel(highlight) : undefined, rich: hlRich() } },
     yAxis: { type: 'category', data: spec.y.map(String), inverse: !spec.y_is_year && ylen > 0, splitArea: { show: true },
       axisLabel: { interval: 0, formatter: spec.y_is_year ? hiLabel(highlight) : (v) => (v.length > 32 ? v.slice(0, 31) + '…' : v), rich: hlRich() } },
-    visualMap: { min: dev ? -m : 0, max: dev ? m : Math.max(1, ...vals), calculable: false, orient: 'horizontal', left: 'center', bottom: 0,
-      itemHeight: 160, itemWidth: 10, inRange: { color: dev ? [...HEAT.div] : [...HEAT.seq] }, text: [lab(dev ? m : Math.max(1, ...vals)), lab(dev ? -m : 0)],
+    visualMap: { min: dev ? -m : 0, max: dev ? m : spec.max != null ? spec.max : Math.max(1, ...vals), calculable: false, orient: 'horizontal', left: 'center', bottom: 0,
+      itemHeight: 160, itemWidth: 10, inRange: { color: dev ? [...HEAT.div] : [...HEAT.seq] },
+      text: [lab(dev ? m : spec.max != null ? spec.max : Math.max(1, ...vals)), lab(dev ? -m : 0)],
       textStyle: { fontSize: 10 } },
     series: [{ type: 'heatmap', data: spec.cells, label: { show: spec.cells.length <= 400, fontSize: 9.5, color: HEAT.label, textBorderColor: HEAT.outline, textBorderWidth: 2,
         formatter: (p) => lab(p.value[2]) },
@@ -197,8 +200,62 @@ export function dualChart(spec, { highlight = null } = {}) {
   }
 }
 
+// Улов по возрастам: столбцы факта и линия модели; ctype linear | log (в логарифмах факт — точки, как в прежнем приложении)
+export function fitChart(spec, ctype) {
+  const x = spec.x.map(String)
+  const log = ctype === 'log'
+  const pos = (v) => (v == null || (log && v <= 0) ? null : v)
+  const series = spec.series.map((s, k) => {
+    const color = k === 0 ? CHART.background : CHART.main
+    if (s.type === 'bar' && !log) return { type: 'bar', name: s.name, data: s.values, barMaxWidth: 34, itemStyle: { color: CHART.background } }
+    if (s.type === 'bar') return { type: 'scatter', name: s.name, data: s.values.map(pos), symbolSize: 9, itemStyle: { color: CHART.highlight } }
+    return { type: 'line', name: s.name, data: s.values.map(pos), symbol: 'circle', symbolSize: 5, lineStyle: { width: 2.4, color }, itemStyle: { color } }
+  })
+  if (spec.vrefs?.length && series.length) {
+    series[0].markLine = { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: CHART.limit },
+      label: { formatter: (p) => p.name, position: 'insideEndTop', color: CHART.label, textBorderWidth: 0 }, data: spec.vrefs.map((r) => ({ xAxis: String(r.x), name: r.label })) }
+  }
+  return {
+    grid: { left: 70, right: 24, top: 44, bottom: 42 },
+    tooltip: { trigger: 'axis', valueFormatter: (v) => fmt(v, 'auto') },
+    legend: { top: 0 },
+    xAxis: { type: 'category', data: x, name: spec.x_title || '', nameLocation: 'middle', nameGap: 26 },
+    yAxis: axisY(spec.y_title || '', log ? { type: 'log', logBase: 10 } : {}),
+    series,
+  }
+}
+
+// Кривая по возрастам (коэффициент уловистости): горизонтальные границы и вертикальные отметки на дробном возрасте
+export function curveChart(spec) {
+  const xs = spec.x_num || spec.x
+  const lab = new Map(xs.map((v, i) => [v, spec.x[i]]))
+  const series = spec.series.map((s, k) => ({ type: 'line', name: s.name, data: s.values.map((v, i) => [xs[i], v]),
+    symbol: 'circle', symbolSize: k === 0 ? 7 : 5, lineStyle: { width: k === 0 ? 2.6 : 2, type: s.dash ? 'dashed' : 'solid', color: k === 0 ? CHART.main : CHART.fit },
+    itemStyle: { color: k === 0 ? CHART.main : CHART.fit } }))
+  const ml = [
+    ...(spec.hrefs || []).map((r) => ({ yAxis: r.y, name: r.label, lineStyle: { type: 'dashed', color: CHART.limit }, label: { formatter: r.label, position: 'insideEndTop', color: CHART.label, textBorderWidth: 0 } })),
+    ...(spec.vrefs || []).filter((r) => r.x != null).map((r, i) => ({ xAxis: r.x, name: r.label,
+      lineStyle: { type: r.dash ? 'dotted' : 'solid', color: CHART.highlight, width: 1.6 },
+      label: { formatter: r.label, position: i % 2 ? 'insideMiddleTop' : 'insideEndTop', color: CHART.highlight, textBorderWidth: 0 } })),
+  ]
+  if (series.length) series[0].markLine = { silent: true, symbol: 'none', data: ml }
+  const lo = Math.min(...xs), hi = Math.max(...xs)
+  return {
+    grid: { left: 62, right: 24, top: 44, bottom: 42 },
+    tooltip: { trigger: 'axis', formatter: (ps) => `${spec.x_title}: <b>${lab.get(ps[0].value[0]) ?? ps[0].value[0]}</b><br>`
+      + ps.map((q) => `${q.marker}${q.seriesName}: <b>${fmt(q.value[1], 3)}</b>`).join('<br>') },
+    legend: { top: 0 },
+    xAxis: { type: 'value', min: lo, max: hi, interval: 1, name: spec.x_title || '', nameLocation: 'middle', nameGap: 26,
+      axisLabel: { formatter: (v) => lab.get(v) ?? '' }, splitLine: { show: false } },
+    yAxis: axisY(spec.y_title || '', { min: 0, max: spec.y_max || null, axisLabel: { formatter: (v) => fmt(v, 1) } }),
+    series,
+  }
+}
+
 export function buildChart(spec, ctype, opts) {
   if (!spec) return null
+  if (spec.kind === 'fit') return fitChart(spec, ctype || spec.default)
+  if (spec.kind === 'curve') return curveChart(spec)
   if (spec.kind === 'series') return seriesChart(spec, ctype || spec.default || 'line', opts)
   if (spec.kind === 'heatmap') return heatmapChart(spec, opts)
   if (spec.kind === 'box') return boxChart(spec, opts)

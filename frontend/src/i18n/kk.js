@@ -46,7 +46,7 @@ export default {
     write: 'Пікір жазу…', send: 'Жіберу', year_tag: 'Жылға', explain: 'Түсіндірме', species_passport: 'Түр бойынша барлық деректер',
     down: 'төмендеу', up: 'өсу', j_years: 'Жылдар', j_months: 'Айлар', j_gear: 'Құрал', j_type: 'Аулау түрі', j_places: 'Аулау орындары',
     j_search: 'Іздеу', j_total: 'Барлығы', j_hauls: 'аулау', j_reset: 'Сүзгілерді тастау', j_export: 'Excel (сүзілгені)',
-    j_shown: 'Көрсетілген аулаулар: {m}-нен {n}', keys_hint: '← → бағыттауыштарымен парақтаңыз',
+    j_shown: 'Көрсетілген аулаулар: {m}-нен {n}', year: 'Жыл', prev_year: 'Алдыңғы жыл', next_year: 'Келесі жыл', keys_hint: '← → бағыттауыштарымен парақтаңыз',
   },
   monitoring: {
     title: 'Мониторинг', choose: 'Су айдынын таңдаңыз', run_main: 'Негізгі іске қосу',
@@ -137,7 +137,7 @@ export default {
     by_run: 'іске қосу бойынша', from: '', how: 'Қалай алынды',
     no_chart: 'Бұл деректер үшін график жоқ — кестеге ауысыңыз', no_signals: 'Ескертулер жоқ',
     mode_chart: 'График', mode_table: 'Кесте', mode_tiles: 'Плиткалар', mode_cards: 'Карточкалар', mode_signals: 'Тізім',
-    chart_type: 'График түрі', ct_line: 'Сызықтар', ct_bar: 'Бағандар', ct_stack: 'Жинақталған бағандар', ct_stack100: 'Үлестер, 100 %',
+    chart_type: 'График түрі', ct_line: 'Сызықтар', ct_linear: 'Сызықтық', ct_log: 'Логарифм.', ct_bar: 'Бағандар', ct_stack: 'Жинақталған бағандар', ct_stack100: 'Үлестер, 100 %',
     fullscreen: 'Толық экран', download: 'Жүктеп алу', selected: 'Таңдалды', show_rows: 'Деректер жолдарын көрсету',
     rows_found: 'Жолдар: {n}', open_dataset: 'Деректер жиынтығын ашу', dataset: 'Деректер жиынтығы', compare: 'Жылдарды салыстыру', and: 'және',
     highlighted: 'Белгіленген жыл', report: 'Бөлім есебі (PDF)',

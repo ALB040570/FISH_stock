@@ -121,24 +121,38 @@ class Data:
     def place(self, v):
         return self.places.get(place_key(v), str(v).strip()) if v not in (None, "") else None
 
-    def run_table(self, algorithm, table):
-        """Таблица результата шага из запуска для мониторинга (основной, иначе последний успешный)."""
-        key = f"_run:{algorithm}:{table}"
+    def run_result(self, algorithm):
+        """Результат шага из запуска для мониторинга (основной, иначе последний успешный): (результат, сведения о запуске).
+        (None, None) — запуска нет; (None, сведения) — в запуске нет выполненного шага."""
+        key = f"_runres:{algorithm}"
         if key not in self._d:
             info = self.svc["algo_admin"].get(f"/water-bodies/{self.wb}/monitoring-run?algorithm={algorithm}") or {}
             run = info.get("run")
             out = (None, None)
             if run:
+                meta = {"run_id": run["id"], "is_main": info.get("is_main"), "calculation_title": run.get("calculation_title"),
+                        "run_finished_at": run.get("finished_at")}
                 i = next((k for k, st_ in enumerate(run["steps"]) if st_["algorithm"] == algorithm
                           and st_.get("status") in ("done", "reused")), None)
-                if i is not None:
-                    res = self.svc["algo_admin"].get(f"/runs/{run['id']}/steps/{i}/result") or {}
-                    t = (res.get("tables") or {}).get(table)
-                    meta = {"run_id": run["id"], "is_main": info.get("is_main"), "calculation_title": run.get("calculation_title"),
-                            "run_finished_at": run.get("finished_at")}
-                    out = (t["rows"] if t else None, meta)
+                res = (self.svc["algo_admin"].get(f"/runs/{run['id']}/steps/{i}/result") or {}) if i is not None else None
+                out = (res, meta)
             self._d[key] = out
         return self._d[key]
+
+    def run_table(self, algorithm, table):
+        """Таблица результата шага из запуска для мониторинга (основной, иначе последний успешный)."""
+        res, meta = self.run_result(algorithm)
+        if meta is None:
+            return None, None
+        t = ((res or {}).get("tables") or {}).get(table)
+        return (t["rows"] if t else None), meta
+
+    def run_payload(self, algorithm):
+        """Полное представление шага (payload) из того же запуска."""
+        res, meta = self.run_result(algorithm)
+        if meta is None:
+            return None, None
+        return (res or {}).get("payload"), meta
 
     def source(self, dtype, titles):
         _, meta = self.table(dtype)
@@ -1500,6 +1514,11 @@ VIEWS = OrderedDict([
     ("completeness", v_completeness), ("quality", v_quality),
 ])
 NEEDS_RULES = {"overview", "signals", "quality", "traffic"}
+
+# результаты расчёта (уловистость, запасы) — отдельный модуль
+from . import calc_views  # noqa: E402
+
+VIEWS.update(calc_views.VIEWS)
 
 
 # ------------------------------------------------------------------ сравнение двух лет

@@ -8,7 +8,10 @@
       <div v-else class="state muted small">{{ $t('wv.no_chart') }}</div>
     </template>
     <!-- плитки -->
-    <div v-else-if="mode === 'tiles'" class="tiles">
+    <div v-else-if="mode === 'tiles' && data.warnings?.length" class="warns">
+      <div v-for="(w, i) in data.warnings" :key="i" class="sig lv-warning"><el-icon class="si"><WarningFilled /></el-icon><span>{{ w.text }}</span></div>
+    </div>
+    <div v-if="mode === 'tiles'" class="tiles">
       <div v-for="(t, i) in tiles" :key="i" class="tile" :class="{ link: t.section, warn: t.level === 'warning' }" @click="t.section && $emit('section', t.section)">
         <div class="tv" :class="signCls(t)">{{ tileValue(t) }}<span v-if="t.unit" class="tu">{{ t.unit === '%' ? ' %' : ' ' + shortUnit(t.unit) }}</span></div>
         <div class="tl">{{ t.label }}</div>
@@ -112,8 +115,13 @@ function cell(v, c) {
   return v
 }
 const cellCls = (row, c) => (c.code === 'level' ? 'lv-' + row.level : row._current ? 'cur' : '')
-const rowCls = ({ row }) => (row._current ? 'cur-row' : p.data?.drill?.by_row ? 'clickable' : '')
-function onRow(row) { if (p.data?.drill?.by_row) emit('row', row) }
+const rowCls = ({ row }) => [row._current ? 'cur-row' : '', p.data?.drill?.by_row || p.data?.row_action ? 'clickable' : ''].join(' ')
+function onRow(row) {
+  // результаты расчёта: строка вида — все данные по виду; строка года — выбрать год для всех слайдов раздела
+  if (p.data?.row_action === 'species' && row._code) { emit('species', row._code); return }
+  if (p.data?.row_action === 'year' && row.year && board?.setYear) { board.setYear(row.year); return }
+  if (p.data?.drill?.by_row) emit('row', row)
+}
 
 function onPick(e) {
   const d = p.data
@@ -131,6 +139,7 @@ function onPick(e) {
     const s = (spec.series || []).find((q) => q.name === e.seriesName)
     series = s ? s.key : null
   }
+  if (spec.pick_year && board?.setYear && y != null) { board.setYear(Number(y)); return }
   const yearAxis = spec.x_is_year ? x : spec.y_is_year ? y : null
   if (yearAxis != null && board) board.setHighlight(yearAxis)
   emit('pick', { x, y, xi, yi, series, seriesName: e.seriesName })
@@ -140,6 +149,9 @@ defineExpose({ image })
 </script>
 <style scoped>
 .txt { white-space: pre-wrap; line-height: 1.5; }
+.warns { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.warns .sig { cursor: default; }
+:deep(.clickable) { cursor: pointer; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .tile { border: 1px solid var(--fs-line); border-radius: 8px; padding: 10px 12px; background: var(--fs-card-soft); }
 .tile.link { cursor: pointer; }

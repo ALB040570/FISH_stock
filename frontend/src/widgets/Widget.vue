@@ -6,7 +6,7 @@
         <div v-if="subtitle" class="ws">{{ subtitle }}</div>
       </div>
       <div class="tools">
-        <el-select v-if="data?.year_choices?.length" :model-value="yearSel ?? data.year" size="small" style="width:84px; margin-right:4px"
+        <el-select v-if="data?.year_choices?.length && !data.calc_year" :model-value="yearSel ?? data.year" size="small" style="width:84px; margin-right:4px"
                    @update:model-value="(v) => (yearSel = v)">
           <el-option v-for="y in [...data.year_choices].reverse()" :key="y" :label="y" :value="y" />
         </el-select>
@@ -15,7 +15,10 @@
             <el-icon><component :is="MODE_ICON[m]" /></el-icon>
           </el-radio-button>
         </el-radio-group>
-        <el-dropdown v-if="mode === 'chart' && ctypes.length > 1" trigger="click" @command="(c) => (ctype = c)">
+        <el-radio-group v-if="mode === 'chart' && data?.chart?.kind === 'fit' && ctypes.length > 1" v-model="ctype" size="small" style="margin-right:4px">
+          <el-radio-button v-for="c in ctypes" :key="c" :value="c">{{ $t('wv.ct_' + c) }}</el-radio-button>
+        </el-radio-group>
+        <el-dropdown v-else-if="mode === 'chart' && ctypes.length > 1" trigger="click" @command="(c) => (ctype = c)">
           <el-button size="small" text :title="$t('wv.chart_type')"><el-icon><Histogram /></el-icon></el-button>
           <template #dropdown><el-dropdown-menu>
             <el-dropdown-item v-for="c in ctypes" :key="c" :command="c" :class="{ on: c === curCtype }">{{ $t('wv.ct_' + c) }}</el-dropdown-item>

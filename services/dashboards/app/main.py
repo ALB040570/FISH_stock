@@ -29,7 +29,7 @@ ST = app.state.settings
 ROOT = ST.service_dir()
 boards = Collection(ROOT, "dashboards")
 WIDGET_TYPES = ("kpi", "line", "bar", "table", "band", "text", "special", "view")
-SOURCE_KINDS = ("dataset", "run", "payload", "status", "insight")
+SOURCE_KINDS = ("dataset", "run", "payload", "status", "insight", "help")
 settings = Collection(ROOT, "settings")
 
 
