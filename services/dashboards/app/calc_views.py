@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+import re
+
 from .insights import NoData, col
 
 ALG = {"seine": "seine_catchability", "net": "stock_by_catch"}
@@ -23,6 +25,15 @@ def nf(v, d=2):
         return "—"
     s = f"{v:,.{d}f}".replace(",", " ").replace(".", ",")
     return s
+
+
+def clean_status(s):
+    """Примечание расчёта для интерфейса: без номеров формул методики, десятичная запятая."""
+    if not s:
+        return s
+    s = re.sub(r"нарушено\s*\(\d+\)\s*:", "нарушено ограничение:", str(s))
+    s = re.sub(r"\s*\((?:\d{2})\)", "", s)
+    return re.sub(r"(\d)\.(\d)", r"\1,\2", s)
 
 
 def age_label(j):
@@ -117,7 +128,7 @@ def v_ca_species(D, opt, gear):
         c = f.get("c") or [None]
         code = names.get(key.strip().lower(), key)
         r = {"_code": code, "species": D.sp_name(code), "n_sample": f.get("n_sample"), "total_catch": f.get("total_catch"),
-             "status": f.get("status")}
+             "status": clean_status(f.get("status"))}
         if gear == "seine":
             r.update({"j50": f.get("j50"), "j50_rule": age_label(f.get("j50_rule")), "a": f.get("a"), "c_first": c[0],
                       "c_last": c[-1], "Z": f.get("Z"), "r2": f.get("r2")})
@@ -136,7 +147,7 @@ def v_ca_species(D, opt, gear):
                 else L(lang, "Улов сетью, шт", "Аумен ауланым, дана"), "integer"),
             col("status", L(lang, "Примечание", "Ескертпе"))]
     if gear == "seine":
-        cols = [sp, col("j50", "j50 " + L(lang, "МНК", "ЕКӘ"), "number"), col("j50_rule", L(lang, "j50 по статье (возраст)", "Мақала бойынша j50 (жас)")),
+        cols = [sp, col("j50", "j50 " + L(lang, "МНК", "ЕКӘ"), "number"), col("j50_rule", L(lang, "j50 по правилу (возраст)", "Ереже бойынша j50 (жас)")),
                 col("a", L(lang, "Крутизна a", "Тіктік a"), "number"), col("c_first", "c(1–2)", "number"),
                 col("c_last", "c(m1)", "number"), col("Z", "Z", "number"), col("r2", "R²", "number")] + tail
     else:
@@ -159,8 +170,8 @@ def v_ca_tiles(D, opt, gear):
     if gear == "seine":
         tiles = [
             {"label": L(lang, "Точка перегиба j50", "Иілу нүктесі j50"), "value": nf(f.get("j50"), 1),
-             "hint": L(lang, f"номер возраста; по правилу статьи: {nf(f.get('j50_rule'), 0)} (возраст {age_label(f.get('j50_rule'))})",
-                       f"жас нөмірі; мақала ережесі бойынша: {nf(f.get('j50_rule'), 0)} (жасы {age_label(f.get('j50_rule'))})")},
+             "hint": L(lang, f"номер возраста; по правилу «m0 + 1 или возраст наибольшего улова»: {nf(f.get('j50_rule'), 0)} (возраст {age_label(f.get('j50_rule'))})",
+                       f"жас нөмірі; «m0 + 1 немесе ең көп ауланым жасы» ережесі бойынша: {nf(f.get('j50_rule'), 0)} (жасы {age_label(f.get('j50_rule'))})")},
             {"label": L(lang, "Крутизна a", "Тіктік a"), "value": nf(f.get("a"), 2), "hint": L(lang, "1/год", "1/жыл")},
             {"label": L(lang, "Уловистость по возрастам", "Жастар бойынша аулағыштық"),
              "value": f"{nf(c[0], 2)} … {nf(c[-1], 2)}" if c else "—",
@@ -206,7 +217,7 @@ def v_ca_tiles(D, opt, gear):
                        f"{nf(f.get('hours'), 0)} сағ, ау {nf(f.get('net_length'), 0)} м, {nf(f.get('speed'), 0)} м/сағ")},
             data_tile,
         ]
-        warn = [str(f["status"])] if f.get("status") and f.get("status") != "ок" else []
+        warn = [clean_status(f["status"])] if f.get("status") and f.get("status") != "ок" else []
     signals = []
     if warn:
         signals.append({"level": "warning", "text": L(lang, "Обратите внимание: ", "Назар аударыңыз: ") + "; ".join(warn) + "."})
@@ -256,11 +267,11 @@ def v_ca_curve(D, opt, gear):
     if gear == "seine":
         vrefs.append({"x": f.get("j50"), "label": f"j50 = {nf(f.get('j50'), 1)}", "num": True})
         if f.get("j50_rule") is not None and f.get("j50") is not None and abs(f["j50_rule"] - f["j50"]) > 0.05:
-            vrefs.append({"x": f.get("j50_rule"), "label": L(lang, "по статье: ", "мақала бойынша: ") + age_label(f["j50_rule"]), "num": True, "dash": True})
+            vrefs.append({"x": f.get("j50_rule"), "label": L(lang, "по правилу: ", "ереже бойынша: ") + age_label(f["j50_rule"]), "num": True, "dash": True})
         name = L(lang, "МНК (сигмоида)", "ЕКӘ (сигмоида)")
     else:
         vrefs.append({"x": f.get("peak"), "label": L(lang, "вершина ", "төбе ") + age_label(f.get("peak")), "num": True})
-        name = L(lang, "Парабола (22)–(24)", "Парабола (22)–(24)")
+        name = L(lang, "Парабола", "Парабола")
     series = [{"name": name, "values": f.get("c")}]
     old = f.get("c_old")
     if isinstance(old, list) and any(v is not None for v in old):
@@ -346,7 +357,7 @@ def v_ca_params(D, opt, gear):
         if not d:
             continue
         c = d.get("c") or [None]
-        r = {"year": yy, "_current": yy == y, "n_sample": d.get("n_sample"), "total_catch": d.get("total_catch"), "status": d.get("status")}
+        r = {"year": yy, "_current": yy == y, "n_sample": d.get("n_sample"), "total_catch": d.get("total_catch"), "status": clean_status(d.get("status"))}
         if gear == "seine":
             r.update({"a": d.get("a"), "j50": d.get("j50"), "j50_rule": d.get("j50_rule"), "Z": d.get("Z"), "b": d.get("b"),
                       "c_first": c[0], "c_last": c[-1], "r2": d.get("r2")})
@@ -358,7 +369,7 @@ def v_ca_params(D, opt, gear):
     tail = [col("n_sample", L(lang, "Рыб в пробе", "Сынамадағы балық"), "integer"),
             col("total_catch", L(lang, "Улов неводом, шт", "Сүзекімен ауланым, дана") if gear == "seine" else L(lang, "Улов сетью, шт", "Аумен ауланым, дана"), "integer")]
     if gear == "seine":
-        cols = [yr, col("a", "a", "number"), col("j50", "j50 " + L(lang, "МНК", "ЕКӘ"), "number"), col("j50_rule", L(lang, "j50 статья", "j50 мақала"), "integer"),
+        cols = [yr, col("a", "a", "number"), col("j50", "j50 " + L(lang, "МНК", "ЕКӘ"), "number"), col("j50_rule", L(lang, "j50 по правилу", "Ереже бойынша j50"), "integer"),
                 col("Z", "Z", "number"), col("b", "b", "number"), col("c_first", "c(2)", "number"), col("c_last", "c(m1)", "number"),
                 col("r2", "R²", "number")] + tail
     else:
@@ -452,7 +463,7 @@ def _stock_common(D, meta, years, y, code, variant=None, method=None, st=None):
 
 
 def _gear_names(lang):
-    return {"net": L(lang, "Сети (балансовый)", "Аулар (баланс әдісі)"), "seine": L(lang, "Невод (27)", "Сүзекі (27)"),
+    return {"net": L(lang, "Сети (балансовый)", "Аулар (баланс әдісі)"), "seine": L(lang, "Невод (метод площадей)", "Сүзекі (аудандар әдісі)"),
             "mean": L(lang, "Сети и невод (окончательный)", "Аулар мен сүзекі (түпкілікті)"), "npc": L(lang, "НПЦ", "ҒӨО")}
 
 
@@ -496,12 +507,11 @@ def v_st_tiles(D, opt):
     npc = (sp.get("npc") or [None] * len(years))[yi]
     ratio = seine / net if net and seine else None
     how = L(lang, "средневзвешенное по числу ловов", "аулау саны бойынша орташа салмақталған") if st.get("combine_how") == "hauls" \
-        else L(lang, "среднее (29)", "орташа (29)")
+        else L(lang, "среднее", "орташа")
     tiles = [
         {"label": L(lang, f"Сети, {y}", f"Аулар, {y}"), "value": pieces(net, lang),
-         "hint": L(lang, "балансовый метод (как в старом коде)", "баланс әдісі (ескі кодтағыдай)") if st.get("net_formula") != "article"
-         else L(lang, "балансовый метод, формула (28)", "баланс әдісі, (28) формула")},
-        {"label": L(lang, f"Невод, {y}", f"Сүзекі, {y}"), "value": pieces(seine, lang), "hint": L(lang, "метод площадей (27)", "аудандар әдісі (27)")},
+         "hint": L(lang, "балансовый метод", "баланс әдісі")},
+        {"label": L(lang, f"Невод, {y}", f"Сүзекі, {y}"), "value": pieces(seine, lang), "hint": L(lang, "метод площадей", "аудандар әдісі")},
         {"label": L(lang, "Окончательный запас", "Түпкілікті қор"), "value": pieces(mean, lang), "hint": L(lang, f"сети и невод: {how}", f"аулар мен сүзекі: {how}")},
         {"label": L(lang, "Оценка НПЦ", "ҒӨО бағасы"), "value": pieces(npc, lang), "hint": L(lang, "из набора «Оценка запаса НПЦ»", "«ҒӨО қор бағасы» жиынтығынан")},
         {"label": L(lang, "Невод / сети", "Сүзекі / аулар"), "value": f"{nf(ratio, 1)}×" if ratio else "—", "hint": L(lang, "во сколько раз больше", "неше есе көп")},
@@ -911,8 +921,8 @@ def v_by_pred(D, opt):
         ages = R["model_ages"]
         return {"x": age_label(m2), "label": "m2"} if m2 is not None and m2 < ages[-1] else None
     return _by_ages_band(D, opt, "pred_q", "γ",
-                         L(lang, "Давление хищников γ убывает как 1/j до возраста m2; в уравнении (17) — знаменатель 1 + γ.",
-                           "Жыртқыштар қысымы γ m2 жасына дейін 1/j ретінде кемиді; (17) теңдеуде — 1 + γ бөлімі."), vr)
+                         L(lang, "Давление хищников γ убывает как 1/j до возраста m2; численность возраста делится на 1 + γ.",
+                           "Жыртқыштар қысымы γ m2 жасына дейін 1/j ретінде кемиді; жас саны 1 + γ-ға бөлінеді."), vr)
 
 
 def v_by_q(D, opt):
