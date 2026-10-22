@@ -1,0 +1,507 @@
+{
+ "species": "карась",
+ "rhat_max_params": 1.0059353254658534,
+ "ess_bulk_min_params": 1737.5745097334966,
+ "ess_tail_min_params": 859.4164726922138,
+ "rhat_max_X": 1.0059760149742214,
+ "ess_bulk_min_X": 1609.6321649998517,
+ "ess_tail_min_X": 1494.2794518329592,
+ "divergences": 0,
+ "divergences_by_chain": [
+  0,
+  0,
+  0,
+  0
+ ],
+ "ebfmi_by_chain": [
+  0.8970660245657985,
+  0.9236600499435602,
+  0.8763335313457791,
+  0.8972040569497537
+ ],
+ "ebfmi_min": 0.8763335313457791,
+ "n_free_params": 66,
+ "n_hauls": 690,
+ "n_obs_values": 8970,
+ "likelihood": "pad",
+ "n_zero_hauls": 466,
+ "monotonicity": {
+  "violations": 238250,
+  "checked": 504000,
+  "rel_tol": 1e-09,
+  "ok": false,
+  "worst_rel_excess": 0.6820287251410502,
+  "cells": [
+   {
+    "t_index": 2,
+    "age": 9,
+    "draws": 372
+   },
+   {
+    "t_index": 2,
+    "age": 10,
+    "draws": 2765
+   },
+   {
+    "t_index": 2,
+    "age": 11,
+    "draws": 3617
+   },
+   {
+    "t_index": 2,
+    "age": 12,
+    "draws": 4000
+   },
+   {
+    "t_index": 2,
+    "age": 13,
+    "draws": 4000
+   },
+   {
+    "t_index": 3,
+    "age": 7,
+    "draws": 9
+   },
+   {
+    "t_index": 3,
+    "age": 10,
+    "draws": 4000
+   },
+   {
+    "t_index": 3,
+    "age": 11,
+    "draws": 4000
+   },
+   {
+    "t_index": 3,
+    "age": 12,
+    "draws": 4000
+   },
+   {
+    "t_index": 3,
+    "age": 13,
+    "draws": 4000
+   },
+   {
+    "t_index": 4,
+    "age": 6,
+    "draws": 4000
+   },
+   {
+    "t_index": 4,
+    "age": 7,
+    "draws": 1722
+   },
+   {
+    "t_index": 4,
+    "age": 8,
+    "draws": 2173
+   },
+   {
+    "t_index": 4,
+    "age": 9,
+    "draws": 706
+   },
+   {
+    "t_index": 4,
+    "age": 10,
+    "draws": 3987
+   },
+   {
+    "t_index": 4,
+    "age": 11,
+    "draws": 4000
+   },
+   {
+    "t_index": 4,
+    "age": 12,
+    "draws": 4000
+   },
+   {
+    "t_index": 4,
+    "age": 13,
+    "draws": 4000
+   },
+   {
+    "t_index": 5,
+    "age": 2,
+    "draws": 13
+   },
+   {
+    "t_index": 5,
+    "age": 6,
+    "draws": 4000
+   },
+   {
+    "t_index": 5,
+    "age": 7,
+    "draws": 4000
+   },
+   {
+    "t_index": 5,
+    "age": 8,
+    "draws": 3984
+   },
+   {
+    "t_index": 5,
+    "age": 9,
+    "draws": 4000
+   },
+   {
+    "t_index": 5,
+    "age": 10,
+    "draws": 3847
+   },
+   {
+    "t_index": 5,
+    "age": 11,
+    "draws": 4000
+   },
+   {
+    "t_index": 5,
+    "age": 12,
+    "draws": 4000
+   },
+   {
+    "t_index": 5,
+    "age": 13,
+    "draws": 4000
+   },
+   {
+    "t_index": 6,
+    "age": 2,
+    "draws": 90
+   },
+   {
+    "t_index": 6,
+    "age": 3,
+    "draws": 467
+   },
+   {
+    "t_index": 6,
+    "age": 4,
+    "draws": 1
+   },
+   {
+    "t_index": 6,
+    "age": 6,
+    "draws": 3208
+   },
+   {
+    "t_index": 6,
+    "age": 7,
+    "draws": 4000
+   },
+   {
+    "t_index": 6,
+    "age": 8,
+    "draws": 4000
+   },
+   {
+    "t_index": 6,
+    "age": 9,
+    "draws": 4000
+   },
+   {
+    "t_index": 6,
+    "age": 10,
+    "draws": 4000
+   },
+   {
+    "t_index": 6,
+    "age": 11,
+    "draws": 4000
+   },
+   {
+    "t_index": 6,
+    "age": 12,
+    "draws": 4000
+   },
+   {
+    "t_index": 6,
+    "age": 13,
+    "draws": 4000
+   },
+   {
+    "t_index": 7,
+    "age": 2,
+    "draws": 282
+   },
+   {
+    "t_index": 7,
+    "age": 3,
+    "draws": 2924
+   },
+   {
+    "t_index": 7,
+    "age": 4,
+    "draws": 1219
+   },
+   {
+    "t_index": 7,
+    "age": 5,
+    "draws": 5
+   },
+   {
+    "t_index": 7,
+    "age": 6,
+    "draws": 1178
+   },
+   {
+    "t_index": 7,
+    "age": 7,
+    "draws": 3497
+   },
+   {
+    "t_index": 7,
+    "age": 8,
+    "draws": 4000
+   },
+   {
+    "t_index": 7,
+    "age": 9,
+    "draws": 4000
+   },
+   {
+    "t_index": 7,
+    "age": 10,
+    "draws": 4000
+   },
+   {
+    "t_index": 7,
+    "age": 11,
+    "draws": 4000
+   },
+   {
+    "t_index": 7,
+    "age": 12,
+    "draws": 4000
+   },
+   {
+    "t_index": 7,
+    "age": 13,
+    "draws": 4000
+   },
+   {
+    "t_index": 8,
+    "age": 2,
+    "draws": 421
+   },
+   {
+    "t_index": 8,
+    "age": 3,
+    "draws": 3641
+   },
+   {
+    "t_index": 8,
+    "age": 4,
+    "draws": 3882
+   },
+   {
+    "t_index": 8,
+    "age": 5,
+    "draws": 2071
+   },
+   {
+    "t_index": 8,
+    "age": 6,
+    "draws": 4000
+   },
+   {
+    "t_index": 8,
+    "age": 7,
+    "draws": 4000
+   },
+   {
+    "t_index": 8,
+    "age": 8,
+    "draws": 4000
+   },
+   {
+    "t_index": 8,
+    "age": 9,
+    "draws": 4000
+   },
+   {
+    "t_index": 8,
+    "age": 10,
+    "draws": 4000
+   },
+   {
+    "t_index": 8,
+    "age": 11,
+    "draws": 4000
+   },
+   {
+    "t_index": 8,
+    "age": 12,
+    "draws": 4000
+   },
+   {
+    "t_index": 8,
+    "age": 13,
+    "draws": 4000
+   },
+   {
+    "t_index": 9,
+    "age": 2,
+    "draws": 470
+   },
+   {
+    "t_index": 9,
+    "age": 3,
+    "draws": 3748
+   },
+   {
+    "t_index": 9,
+    "age": 4,
+    "draws": 3964
+   },
+   {
+    "t_index": 9,
+    "age": 5,
+    "draws": 3987
+   },
+   {
+    "t_index": 9,
+    "age": 6,
+    "draws": 4000
+   },
+   {
+    "t_index": 9,
+    "age": 7,
+    "draws": 4000
+   },
+   {
+    "t_index": 9,
+    "age": 8,
+    "draws": 4000
+   },
+   {
+    "t_index": 9,
+    "age": 9,
+    "draws": 4000
+   },
+   {
+    "t_index": 9,
+    "age": 10,
+    "draws": 4000
+   },
+   {
+    "t_index": 9,
+    "age": 11,
+    "draws": 4000
+   },
+   {
+    "t_index": 9,
+    "age": 12,
+    "draws": 4000
+   },
+   {
+    "t_index": 9,
+    "age": 13,
+    "draws": 4000
+   }
+  ]
+ },
+ "worst_rhat": [
+  {
+   "name": "X_initial_older_raw",
+   "index": 12,
+   "rhat": 1.0059353254658534,
+   "ess_bulk": 6160.001230778219,
+   "ess_tail": 2719.587157127168
+  },
+  {
+   "name": "beta_1d",
+   "index": 2024,
+   "rhat": 1.004827845036002,
+   "ess_bulk": 4256.31740774598,
+   "ess_tail": 1498.1247651658673
+  },
+  {
+   "name": "s_year_fluct",
+   "index": 2016,
+   "rhat": 1.0029026492216908,
+   "ess_bulk": 2989.675021983274,
+   "ess_tail": 2880.2998707176857
+  },
+  {
+   "name": "density_alpha",
+   "index": 2018,
+   "rhat": 1.0027708150683066,
+   "ess_bulk": 6685.222322844252,
+   "ess_tail": 2846.454242315353
+  },
+  {
+   "name": "q_raw",
+   "index": 15,
+   "rhat": 1.0026819130362206,
+   "ess_bulk": 5699.304577723309,
+   "ess_tail": 2712.3985728050493
+  },
+  {
+   "name": "q_raw",
+   "index": 7,
+   "rhat": 1.0026560594389564,
+   "ess_bulk": 4835.737486727997,
+   "ess_tail": 2743.8226801568103
+  },
+  {
+   "name": "X_initial_older_raw",
+   "index": 5,
+   "rhat": 1.0025746777330753,
+   "ess_bulk": 3313.6691130249555,
+   "ess_tail": 1680.3074749931657
+  },
+  {
+   "name": "density_alpha",
+   "index": 2017,
+   "rhat": 1.002325879303375,
+   "ess_bulk": 5753.238885746539,
+   "ess_tail": 2504.5228461845777
+  },
+  {
+   "name": "sigma_stock",
+   "index": null,
+   "rhat": 1.0023046782046365,
+   "ess_bulk": 5492.1435835039965,
+   "ess_tail": 2736.4086857310517
+  },
+  {
+   "name": "fec_at_m1",
+   "index": null,
+   "rhat": 1.002261856823947,
+   "ess_bulk": 5395.454430892607,
+   "ess_tail": 2176.3115451181193
+  }
+ ],
+ "cap_active_cells": 90,
+ "cap_active_any": 95,
+ "plots": [
+  "trace_density_alpha.png",
+  "trace_s_base.png",
+  "trace_s_juvenile_steep.png",
+  "trace_s_aging_slow.png",
+  "trace_s_year_fluct.png",
+  "trace_beta_1d.png",
+  "trace_q_raw.png",
+  "trace_egg_survival_base.png",
+  "trace_fec_at_m0.png",
+  "trace_fec_at_m1.png",
+  "trace_X_initial_older_raw.png",
+  "trace_sigma_stock.png",
+  "prior_posterior_density_alpha.png",
+  "prior_posterior_s_base.png",
+  "prior_posterior_s_juvenile_steep.png",
+  "prior_posterior_s_aging_slow.png",
+  "prior_posterior_s_year_fluct.png",
+  "prior_posterior_beta_1d.png",
+  "prior_posterior_q_raw.png",
+  "prior_posterior_egg_survival_base.png",
+  "prior_posterior_fec_at_m0.png",
+  "prior_posterior_fec_at_m1.png",
+  "prior_posterior_X_initial_older_raw.png",
+  "prior_posterior_sigma_stock.png"
+ ]
+}

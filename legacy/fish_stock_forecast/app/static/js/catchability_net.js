@@ -64,7 +64,7 @@
         { name: "Парабола (22)–(24)", values: c, colorVar: "--series-1", markers: true },
         { name: "Прежний расчёт", values: hasOld ? d.c_old : null, colorVar: "--series-2", dash: true },
       ],
-      refs: [{ y: state.data.c_lower, label: "мин 0,1" }, { y: state.data.c_upper, label: "макс 0,8" }],
+      refs: [{ y: d.c_lower, label: `мин c̄/3 = ${f2(d.c_lower)}` }, { y: state.data.c_upper, label: "макс 0,8" }],
       vrefs: [{ x: d.peak, label: `вершина ${ageLabel(d.peak)}` }],
       format: f2, tipHead: ageTip,
     });

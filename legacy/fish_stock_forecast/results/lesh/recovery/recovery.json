@@ -1,0 +1,20 @@
+{
+ "truth_source": "медианы основного расчёта (zhaysan_bayes_lesh.npz)",
+ "coverage": [
+  {
+   "quantity": "X_estimated, все возрасты",
+   "n": 160,
+   "coverage95": 0.7875
+  },
+  {
+   "quantity": "X_estimated, возрасты 2..m1",
+   "n": 150,
+   "coverage95": 0.78
+  },
+  {
+   "quantity": "параметры",
+   "n": 57,
+   "coverage95": 0.8771929824561403
+  }
+ ]
+}

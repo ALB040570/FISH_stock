@@ -1,0 +1,20 @@
+{
+ "truth_source": "медианы основного расчёта (zhaysan_bayes_sudak.npz)",
+ "coverage": [
+  {
+   "quantity": "X_estimated, все возрасты",
+   "n": 110,
+   "coverage95": 0.7090909090909091
+  },
+  {
+   "quantity": "X_estimated, возрасты 2..m1",
+   "n": 100,
+   "coverage95": 0.68
+  },
+  {
+   "quantity": "параметры",
+   "n": 52,
+   "coverage95": 0.8653846153846154
+  }
+ ]
+}

@@ -223,7 +223,8 @@ def results_payload(species: str, source: str = "new") -> dict:
     keep_meta = {k: meta.get(k) for k in (
         "mode", "mode_title", "started", "finished", "seconds", "chains", "draws_per_chain", "tune", "divergences",
         "divergences_by_chain", "treedepth_hits", "step_size", "acceptance_rate", "rhat_X_max", "numpy_check",
-        "notes", "n_obs", "dropped", "check_vs_old", "m0", "m1", "m2", "fec_bounds")}
+        "notes", "n_obs", "dropped", "check_vs_old", "m0", "m1", "m2", "fec_bounds", "monotonic_violations",
+        "cap_active_cells", "diagnostics")}
     return {
         **base, "available": True, "meta": keep_meta, "param_rows": meta.get("param_rows", []),
         "config_used": meta.get("config", {}), "config_changed": _config_changed(species, source, meta),
@@ -232,7 +233,8 @@ def results_payload(species: str, source: str = "new") -> dict:
         "total_obs_q": _j(a["total_obs_q"]), "total_all_q": _j(a["total_all_q"]),
         "X_q": _j(X_q), "s_q": _j(a["s_q"]), "pred_q": _j(a["pred_q"]), "beta1d_q": _j(a["beta1d_q"]),
         "q_bias_q": _j(a["q_bias_q"]), "theta_q": _j(a["theta_q"]), "density_alpha_q": _j(a["density_alpha_q"]),
-        "press_base_q": _j(a["press_base_q"]), "rhat_X": _j(a["rhat_X"]) if "rhat_X" in a else None,
+        "rhat_X": _j(a["rhat_X"]) if "rhat_X" in a else None,
+        "cap_active_frac": _j(a["cap_active_frac"]) if "cap_active_frac" in a else None,
         "deaths": deaths,
         "data": {
             "final_by_age": _j(a["yearly_final"]), "net_by_age": _j(a["yearly_net"]),

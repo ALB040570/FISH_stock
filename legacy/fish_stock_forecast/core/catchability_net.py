@@ -6,10 +6,18 @@
     вершина             c¹ = max(m0 + 1, argmax_j Y_j)          Y_j — годовой улов сетью
     парабола  (22)      c_j = c⁰ − a1·(j − c¹)²,   j_min <= j <= c¹
                         c_j = c⁰ − a2·(j − c¹)²,   c¹ <= j <= m1
-    условия             c̄ − a1·(j_min − c¹)² = 0.1   →  a1 = (c̄ − 0.1) / (j_min − c¹)²
-                        c̄ − a2·(m1 − c¹)² = 0.2      →  a2 = (c̄ − 0.2) / (m1 − c¹)²
-    среднее  (23)       (1/n) Σ_j c_j = c̄            →  c⁰ = c̄ + (1/n) Σ_j a_j·(j − c¹)²
-    ограничения (24)    0.1 <= c_j <= 0.8 (при c̄ < 0.5 выполняются автоматически: c⁰ < 2c̄ − 0.1)
+    края                c(j_min) = c⁰ − a1·(j_min − c¹)² = e1 = c̄/3
+                        c(m1)    = c⁰ − a2·(m1 − c¹)²    = e2 = 2c̄/3
+    среднее  (23)       (1/n) Σ_j c_j = c̄
+    решение             u_j = ((j − c¹)/(край ветви − c¹))²,  A1 = (1/n)Σ_левая u_j,  A2 = (1/n)Σ_правая u_j
+                        c⁰ = (c̄ − e1·A1 − e2·A2) / (1 − A1 − A2),  a1 = (c⁰ − e1)/(j_min − c¹)²,  a2 = (c⁰ − e2)/(m1 − c¹)²
+    ограничения (24)    c̄/3 <= c_j <= 0.8  (нижнее выполняется само: минимум — на краю)
+
+В первой редакции статьи в условиях краёв стояло c̄ вместо c⁰, поэтому края получались выше
+0,1 и 0,2 на (c⁰ − c̄); теперь края равны заданным значениям точно (решение автора от 16.10.2026).
+
+Края — доли среднего (config.NET_END_LEFT_FRAC, NET_END_RIGHT_FRAC): при c̄ = 0.3 это 0.1 и 0.2,
+как в первой редакции статьи; при меньшем c̄ парабола остаётся «колоколом» (a1, a2 > 0).
 
 c̄ — заданный средний коэффициент уловистости сети вида (k_catchability_1).
 В статье первая группа j = 1; в уловах одногодков нет, поэтому j_min = 2 (config.NET_MIN_AGE).
@@ -25,7 +33,7 @@ import pandas as pd
 from . import config
 from .catch import HaulCatch, build_haul_catch
 from .ages import age_label
-from .data_source import FishProps, load_fish_props
+from .data_source import FishProps, load_fish_props, smooth_age_sample
 
 CUBE_NAME = "corrected_catchability_coefficient"  # имя переменной как в старом .nc
 
@@ -44,17 +52,24 @@ class Parabola:
 
 
 def fit_parabola(ages, observed, m0: int, c_mean: float,
-                 end_left: float = config.NET_END_LEFT, end_right: float = config.NET_END_RIGHT) -> Parabola:
-    """Парабола по формулам (22)-(24). ages — группы j_min..m1, observed — улов по ним."""
+                 end_left: float | None = None, end_right: float | None = None) -> Parabola:
+    """Парабола по формулам (22)-(24). ages — группы j_min..m1, observed — улов по ним.
+    end_left / end_right — значения на краях; по умолчанию c̄/3 и 2c̄/3."""
+    end_left = c_mean * config.NET_END_LEFT_FRAC if end_left is None else end_left
+    end_right = c_mean * config.NET_END_RIGHT_FRAC if end_right is None else end_right
     ages = np.asarray(ages, float)
     observed = np.asarray(observed, float)
     j_min, m1 = ages[0], ages[-1]
     peak = float(max(m0 + 1, ages[int(np.argmax(observed))]))
     peak = min(peak, m1)
-    a1 = (c_mean - end_left) / (j_min - peak) ** 2 if peak > j_min else 0.0
-    a2 = (c_mean - end_right) / (m1 - peak) ** 2 if m1 > peak else 0.0
-    d2 = (ages - peak) ** 2
-    c0 = c_mean + float(np.mean(np.where(ages <= peak, a1 * d2, a2 * d2)))
+    # c_j = c⁰ − (c⁰ − e1)·u_j слева и c⁰ − (c⁰ − e2)·u_j справа, u_j = ((j − c¹)/(край − c¹))²;
+    # из (23): c⁰·(1 − A1 − A2) + e1·A1 + e2·A2 = c̄,  A = (1/n)·Σ u_j по ветви
+    left, right = ages < peak, ages > peak
+    A1 = float(np.sum(((ages[left] - peak) / (j_min - peak)) ** 2)) / len(ages) if left.any() else 0.0
+    A2 = float(np.sum(((ages[right] - peak) / (m1 - peak)) ** 2)) / len(ages) if right.any() else 0.0
+    c0 = (c_mean - end_left * A1 - end_right * A2) / (1.0 - A1 - A2)
+    a1 = (c0 - end_left) / (j_min - peak) ** 2 if left.any() else 0.0
+    a2 = (c0 - end_right) / (m1 - peak) ** 2 if right.any() else 0.0
     return Parabola(peak=peak, c0=c0, a1=a1, a2=a2)
 
 
@@ -86,8 +101,9 @@ class NetFitResult:
     def violations(self) -> list[str]:
         c = self.catchability
         out = []
-        if c.min() < config.NET_C_LOWER - 1e-9:
-            out.append(f"c < {config.NET_C_LOWER} в возрасте {age_label(self.ages[np.argmin(c)])}")
+        lower = self.c_mean * config.NET_C_LOWER_FRAC
+        if c.min() < lower - 1e-9:
+            out.append(f"c < {lower:.3g} в возрасте {age_label(self.ages[np.argmin(c)])}")
         if c.max() > config.NET_C_UPPER + 1e-9:
             out.append(f"c > {config.NET_C_UPPER} в возрасте {age_label(self.ages[np.argmax(c)])}")
         return out
@@ -169,7 +185,7 @@ def compute_net_catchability(
             n_sample = int(hc.sample_raw[yi, si, mask].sum())
             total = float(yearly[yi, si].sum())
             if n_sample < min_sample:
-                sm = pooled_raw[si, mask] + 1.0
+                sm = smooth_age_sample(pooled_raw[si], hc.ages, m1)[mask]
                 observed, source = sm / sm.sum(), SOURCE_POOLED
             elif total <= 0:
                 observed, source = hc.shares[yi, si, mask], SOURCE_SAMPLE

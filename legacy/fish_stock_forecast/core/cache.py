@@ -51,6 +51,8 @@ def fingerprint(*extra) -> str:
         "data_stock": _sig(old),
         "code": _sig(_CORE_DIR.glob("*.py")),
         "extra": [str(e) for e in extra],
+        # сглаживание возрастных проб меняют из командной строки (run_bayes --age-old), а не в коде
+        "age": [config.AGE_PSEUDOCOUNT_TOTAL, config.AGE_POOL_MIN_SAMPLE, config.AGE_POOL_NEIGHBOURS],
     }
     return hashlib.sha1(json.dumps(data, ensure_ascii=False).encode("utf-8")).hexdigest()
 
