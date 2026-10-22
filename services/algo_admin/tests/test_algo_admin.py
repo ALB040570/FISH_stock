@@ -13,9 +13,9 @@ def mod_process(mod):
 def test_catalog_and_profiles(calc_stack):
     dm, da, aa, mod = calc_stack
     cat = aa.get("/catalog", headers=H("viewer")).json()
-    assert [a["code"] for a in cat] == ["seine_catchability", "stock_by_catch", "pdu_by_age", "bayes_cohort", "forecast_pdu"]
-    assert all(a["latest"] == "1.0.3" for a in cat)
-    files = aa.get("/catalog/bayes_cohort/versions/1.0.3/files", headers=H("viewer")).json()
+    assert [a["code"] for a in cat] == ["seine_catchability", "stock_by_catch", "pdu_by_age", "bayes_cohort", "forecast_pdu", "bayes_checks"]
+    assert all(a["latest"] == "2.0.0" for a in cat)
+    files = aa.get("/catalog/bayes_cohort/versions/2.0.0/files", headers=H("viewer")).json()
     assert any(f["path"] == "fishcore/bayes/dynamics.py" for f in files)
     p = aa.get("/profiles/bayes_cohort/zhaysan", headers=H("viewer")).json()
     assert set(p["profile"]["values"]["species_profiles"]) == {"lesh", "sudak", "okun", "plotva", "shuka", "sazan", "karas", "yaz"}
@@ -26,11 +26,11 @@ def test_catalog_and_profiles(calc_stack):
     r = aa.put("/profiles/bayes_cohort/balkhash", headers=H("mathematician"), json={"values": vals})
     assert r.status_code == 422 and "β" in str(r.json())
     # отключение версии — только математик/админ
-    assert aa.post("/catalog/forecast_pdu/versions/1.0.3/disable", headers=H("ichthyologist")).status_code == 403
-    assert aa.post("/catalog/forecast_pdu/versions/1.0.3/disable", headers=H("mathematician")).status_code == 200
+    assert aa.post("/catalog/forecast_pdu/versions/2.0.0/disable", headers=H("ichthyologist")).status_code == 403
+    assert aa.post("/catalog/forecast_pdu/versions/2.0.0/disable", headers=H("mathematician")).status_code == 200
     c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan"})
     assert c.status_code == 422 and "нет включённых версий" in str(c.json())
-    aa.post("/catalog/forecast_pdu/versions/1.0.3/enable", headers=H("admin"))
+    aa.post("/catalog/forecast_pdu/versions/2.0.0/enable", headers=H("admin"))
 
 
 def test_run_stock_chain(calc_stack):
@@ -110,3 +110,27 @@ def test_classification(calc_stack):
     assert kinds["beta_mu"] == "mu" and kinds["beta_sigma"] == "sigma"
     assert kinds["beta_lower"] == "lower" and kinds["x0_hi"] == "upper" and kinds["s_clip_lo"] == "lower"
     assert kinds.get("draws") is None
+
+
+def test_reference_change_migration(tmp_path, monkeypatch):
+    """Переход на эталон 22.10.2026: прежние эталонные версии удаляются, профили водоёмов получают новые значения
+    по умолчанию с сохранением изменений пользователей; закреплённая в расчёте удалённая версия заменяется новой."""
+    import json
+    from conftest import load_service
+    mod = load_service("algo_admin", tmp_path, monkeypatch)
+    E = mod.E
+    prev = json.loads((mod.build.PACKAGES / "bayes_cohort" / "previous_defaults_1.0.json").read_text(encoding="utf-8"))
+    # как на сервере до обновления: эталонная версия 1.0.3 и профиль со значениями прежнего эталона
+    man = json.loads(json.dumps(E.manifest("seine_catchability", "2.0.0")))
+    man["version"] = "1.0.3"
+    E.publish(man, {"manifest.json": json.dumps(man).encode()}, actor="system", source="builtin")
+    old_vals = json.loads(json.dumps(prev))
+    old_vals["lesh"]["draws"] = 3000                       # изменено пользователем
+    E.save_profile("bayes_cohort", "balkhash", {"species_profiles": old_vals}, "u1", "до обновления")
+    E.seed_builtin()
+    assert [v["version"] for v in E.versions("seine_catchability")] == ["2.0.0"]
+    lesh = E.get_profile("bayes_cohort", "balkhash")["values"]["species_profiles"]["lesh"]
+    assert lesh["draws"] == 3000 and lesh["catch_mode"] == "cap" and lesh["likelihood"] == "delta"
+    assert "press_mu" not in lesh and lesh["target_accept"] == 0.95
+    E.seed_builtin()                                       # второй запуск ничего не меняет
+    assert len(E.profiles.list_versions(E.profile_id("bayes_cohort", "balkhash"))) == 2

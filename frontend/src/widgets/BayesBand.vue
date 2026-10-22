@@ -5,7 +5,7 @@
       <span class="small muted">
         {{ $t('w.model') }}: {{ sp.meta?.mode_title }} · R̂ max {{ fmt(sp.meta?.rhat_X_max, 3) }} · {{ $t('w.divergences') }} {{ sp.meta?.divergences ?? '—' }}
       </span>
-      <el-tag v-if="sp.meta?.rhat_X_max > 1.05" type="warning" size="small">{{ $t('w.not_converged') }}</el-tag>
+      <el-tag v-if="sp.meta?.rhat_X_max > 1.01" type="warning" size="small">{{ $t('w.not_converged') }}</el-tag>
     </div>
     <EChart :option="opt" height="330px" />
     <div class="small muted">{{ $t('w.band_hint') }}</div>

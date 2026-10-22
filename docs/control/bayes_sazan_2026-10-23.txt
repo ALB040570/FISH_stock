@@ -1,0 +1,10 @@
+seine_catchability: запуск
+seine_catchability: done 
+stock_by_catch: запуск
+stock_by_catch: done 
+pdu_by_age: запуск
+pdu_by_age: done 
+bayes_cohort: запуск
+bayes_cohort: done 
+{"species": "sazan", "total_max_rel": 0.007576256890425538, "by_age_max_rel_main": 0.014939907201069096, "by_age_median_rel": 0.0036652670597424894, "rhat_max": 1.0040261292585964, "pass": true}
+exit 0

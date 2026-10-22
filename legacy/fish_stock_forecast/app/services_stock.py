@@ -116,14 +116,14 @@ def net_payload() -> dict:
             "ages": _arr(r.ages.astype(int)), "observed": _arr(r.observed), "c": _arr(r.catchability),
             "c_old": old_c, "sigma": _arr(sigma[yi, si, idx]),
             "peak": _num(p.peak), "c0": _num(p.c0), "a1": _num(p.a1), "a2": _num(p.a2),
-            "c_mean": _num(r.c_mean), "m0": r.m0, "m1": r.m1,
+            "c_mean": _num(r.c_mean), "c_lower": _num(r.c_mean * config.NET_C_LOWER_FRAC), "m0": r.m0, "m1": r.m1,
             "n_sample": r.n_sample, "total_catch": _num(r.total_catch), "n_hauls": r.n_hauls,
             "source": r.source, "status": r.status, "observed_is_catch": r.source.startswith("годовой улов"),
             "hours": _num(float(props.net_hours[year])), "net_length": _num(float(props.net_length[year])),
             "speed": _num(float(props.cruise_speed[fish]) * 3600),
         }
     return {"waterbody": res.waterbody, "years": res.years, "species": res.species,
-            "c_lower": config.NET_C_LOWER, "c_upper": config.NET_C_UPPER,
+            "c_upper": config.NET_C_UPPER,
             "fits": fits, "old_available": old is not None, **_footer()}
 
 

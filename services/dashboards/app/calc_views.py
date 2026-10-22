@@ -259,9 +259,11 @@ def v_ca_curve(D, opt, gear):
     part, meta, key, code, y, years, f = _species_fit(D, opt, gear)
     lang = D.lang
     ages = f.get("ages") or []
-    lo, hi = part.get("c_lower"), part.get("c_upper")
-    hrefs = [{"y": lo, "label": L(lang, f"мин {nf(lo, 1)}" + (" (с возраста 2–3)" if gear == "seine" else ""),
-                                  f"мин {nf(lo, 1)}" + (" (2–3 жастан)" if gear == "seine" else ""))},
+    # у сети с версии 2.0.0 нижняя граница своя у каждого вида (доля c̄) — она в подгонке года
+    lo, hi = f.get("c_lower", part.get("c_lower")), part.get("c_upper")
+    dl = 1 if gear == "seine" else 2
+    hrefs = [{"y": lo, "label": L(lang, f"мин {nf(lo, dl)}" + (" (с возраста 2–3)" if gear == "seine" else ""),
+                                  f"мин {nf(lo, dl)}" + (" (2–3 жастан)" if gear == "seine" else ""))},
              {"y": hi, "label": L(lang, f"макс {nf(hi, 1)}", f"макс {nf(hi, 1)}")}]
     vrefs = []
     if gear == "seine":
@@ -1052,6 +1054,24 @@ def v_by_diag(D, opt):
         (L(lang, "Ловов в правдоподобии", "Шынайылықтағы аулаулар"), f"{m.get('n_obs')}" + (L(lang, f" (исключено {m['dropped']})", f" ({m['dropped']} алынып тасталды)") if m.get("dropped") else "")),
         ("m0 / m1 / m2", f"{m.get('m0')} / {m.get('m1')} / {m.get('m2')}"),
     ]
+    dg = m.get("diagnostics") or {}
+    if dg:                                                 # версия 2.0.0: критерии сходимости методики
+        items += [
+            (L(lang, "R̂ параметров, max (критерий ≤ 1,01)", "Параметрлердің R̂, max (≤ 1,01)"), nf(dg.get("rhat_max_params"), 3) if dg.get("rhat_max_params") else "—"),
+            (L(lang, "ESS bulk / tail, min (критерий ≥ 400)", "ESS bulk / tail, min (≥ 400)"),
+             f"{nf(dg.get('ess_bulk_min_params'), 0)} / {nf(dg.get('ess_tail_min_params'), 0)}" if dg.get("ess_bulk_min_params") is not None else "—"),
+            (L(lang, "E-BFMI, min (критерий > 0,3)", "E-BFMI, min (> 0,3)"), nf(dg.get("ebfmi_min"), 2) if dg.get("ebfmi_min") is not None else "—"),
+        ]
+    if m.get("monotonic_ok") is not None:
+        items.append((L(lang, "Когорты не растут (X_j(t+1) ≤ X_j−1(t))", "Когорталар өспейді"),
+                      L(lang, "да", "иә") if m["monotonic_ok"] else L(lang, f"нарушений: {m.get('monotonic_violations')}", f"бұзушылық: {m.get('monotonic_violations')}")))
+    if m.get("cap_active_cells") is not None:
+        items.append((L(lang, "Лет-возрастов, где изъятие упёрлось в предел", "Алу шекке тірелген жыл-жастар"), m["cap_active_cells"]))
+    qn = R.get("log_q_net_q")
+    if qn:
+        import math
+        items.append((L(lang, "Поправка сети относительно невода Q сеть (медиана, 95 %)", "Ау түзетуі Q (медиана, 95 %)"),
+                      f"{nf(math.exp(qn[2]), 2)} ({nf(math.exp(qn[0]), 2)} – {nf(math.exp(qn[4]), 2)})"))
     rows = [{"key": k, "value": "—" if v is None else str(v)} for k, v in items]
     return {"columns": [col("key", L(lang, "Показатель", "Көрсеткіш")), col("value", L(lang, "Значение", "Мәні"))], "rows": rows,
             "default_view": "table", "chart": None, "diag": {"divergences": dv, "rhat": m.get("rhat_X_max"), "n_obs": m.get("n_obs")},
@@ -1552,7 +1572,7 @@ def _trust_row(ctx, key, sp, y, yi):
                 gears_f.add("seine")
     if fn:
         for j, c in zip(fn["ages"], fn["c"]):
-            if _at_bound(c, net.get("c_lower"), net.get("c_upper"), 1e-3):
+            if _at_bound(c, fn.get("c_lower", net.get("c_lower")), net.get("c_upper"), 1e-3):
                 if j not in flagged:
                     flagged.append(j)
                 fl_n.add(j)
@@ -2017,7 +2037,7 @@ def v_ca_blind(D, opt, rules=None):
             continue
         low = {}
         for i, (j, c) in enumerate(zip(f["ages"], f["c"])):
-            lo = part.get("c_lower_first") if (g == "seine" and i == 0) else part.get("c_lower")
+            lo = part.get("c_lower_first") if (g == "seine" and i == 0) else f.get("c_lower", part.get("c_lower"))
             if c is not None and lo is not None and abs(c - lo) <= (1e-4 if lo < 0.05 else 1e-3):
                 low.setdefault(round(lo, 4), []).append(j)
         gname = L(lang, "Невод", "Сүзекі") if g == "seine" else L(lang, "Сеть", "Ау")
@@ -2097,3 +2117,174 @@ def v_ca_strong(D, opt, rules=None):
 VIEWS.update({"ca_bounds_years": v_ca_bounds_years, "ca_bounds_ages": v_ca_bounds_ages, "ca_cohorts": v_ca_cohorts,
               "ca_gears_age": v_ca_gears_age, "ca_passport": v_ca_passport, "ca_z": v_ca_z, "ca_blind": v_ca_blind,
               "ca_strong": v_ca_strong})
+
+
+# ================================================================== Проверки модели (шаг «Проверки байесовской модели»)
+def _checks(D):
+    pl, meta = D.run_payload("bayes_checks")
+    if pl is None:
+        if meta is None:
+            raise NoData(L(D.lang, "Проверок модели ещё нет — запустите расчёт «Полный расчёт и проверки модели» (долго — ночью)",
+                           "Модель тексерулері әлі жоқ — «Толық есептеу және модельді тексеру» есебін іске қосыңыз (ұзақ — түнде)"))
+        raise NoData(L(D.lang, "В запуске нет шага «Проверки байесовской модели»", "Іске қосуда «Байестік модельді тексеру» қадамы жоқ"))
+    return pl, meta
+
+
+def _ccommon(meta, help_id="method-checks"):
+    return {"meta": meta, "help": help_id}
+
+
+def _ratio_range(vals):
+    v = [x for x in vals if x is not None and x == x]
+    if not v:
+        return "—"
+    lo, hi = min(v), max(v)
+    return nf(lo, 2) if abs(hi - lo) < 0.005 else f"{nf(lo, 2)}–{nf(hi, 2)}"
+
+
+def v_bc_net(D, opt):
+    pl, meta = _checks(D)
+    lang = D.lang
+    net = pl.get("net")
+    if not net:
+        raise NoData(L(lang, "Проверка балансового метода в этом запуске не выполнялась", "Бұл іске қосуда баланс әдісі тексерілмеді"))
+    want = D.sp_name(opt.get("species")) if opt.get("species") else None
+    pname = {"V, м/ч": L(lang, "Скорость перемещения V", "Жылжу жылдамдығы V"), "k": L(lang, "Уловистость сети k", "Ау аулағыштығы k"),
+             "время стоянки, ч": L(lang, "Время застоя сети", "Ау тұру уақыты"), "p_to_net": L(lang, "Доля движущихся к сети", "Ауға қарай жылжитындар үлесі")}
+    by = {}
+    for r in net["rows"]:
+        if r["parameter"] == "база" or (want and r["species"] != want):
+            continue
+        key = (r["species"], r["parameter"])
+        by.setdefault(key, {})[round(r["rel_change"] * 100)] = r["stock_factor"]
+    rows = []
+    for (sp, par), d in by.items():
+        ks = sorted(d)
+        row = {"species": sp, "parameter": pname.get(par, par), "_code": None}
+        for i, k in enumerate(ks[:4]):
+            row[f"f{i}"] = d[k]
+            row[f"p{i}"] = k
+        rows.append(row)
+    if not rows:
+        raise NoData(L(lang, "Для вида нет строк проверки", "Түр үшін тексеру жолдары жоқ"))
+    heads = ["−50 %", "−25 %", "+25 %", "+50 %"]
+    cols = [col("species", L(lang, "Вид", "Түр")), col("parameter", L(lang, "Параметр", "Параметр"))] + \
+        [col(f"f{i}", (h if rows[0].get(f"p{i}") in (-50, -25, 25, 50) else f"{rows[0].get(f'p{i}'):+d} %") + L(lang, ", множитель", ", көбейткіш"), "number") for i, h in enumerate(heads)]
+    allf = [r.get(f"f{i}") for r in rows for i in range(4) if r.get(f"f{i}") is not None]
+    return {"columns": cols, "rows": rows, "default_view": "table", "chart": None,
+            "range": [min(allf), max(allf)] if allf else None, "year": net.get("year"),
+            "notes": [L(lang, "Во сколько раз меняется оценка запаса по сети, если изменить один входной параметр балансового метода (остальные — как в расчёте). «Доля движущихся к сети»: −40 / −20 / +20 / +40 %.",
+                        "Баланс әдісінің бір кіріс параметрін өзгерткенде ау бойынша қор бағасы неше есе өзгереді (қалғандары — есептегідей). «Ауға қарай жылжитындар үлесі»: −40 / −20 / +20 / +40 %.")],
+            **_ccommon(meta)}
+
+
+def v_bc_retro(D, opt):
+    pl, meta = _checks(D)
+    lang = D.lang
+    if not pl.get("retro"):
+        raise NoData(L(lang, "Ретроспективный прогноз в этом запуске не выполнялся", "Бұл іске қосуда ретроспективті болжам жасалмады"))
+    rows = []
+    for sp, r in pl["retro"].items():
+        ms = r["metrics"]
+        main = ms[0] if ms else {}
+        z = next((m for m in ms if "zero_share_obs" in m), {})
+        rows.append({"species": sp, "n": main.get("n"), "rmse": main.get("rmse_log"), "bias": main.get("bias_log"),
+                     "cov": main.get("coverage95"), "z_obs": z.get("zero_share_obs"),
+                     "z_pred": (f"{nf(z['zero_share_pred'], 2)} ({nf(z['zero_share_q025'], 2)}–{nf(z['zero_share_q975'], 2)})" if z else "—")})
+    yrs = next(iter(pl["retro"].values())).get("forecast_years") or []
+    return {"columns": [col("species", L(lang, "Вид", "Түр")), col("n", "n", "integer"), col("rmse", L(lang, "RMSE (лог)", "RMSE (лог)"), "number"),
+                        col("bias", L(lang, "Смещение (лог)", "Ығысу (лог)"), "number"), col("cov", L(lang, "Покрытие 95 %", "95 % қамту"), "number"),
+                        col("z_obs", L(lang, "Пустых, факт", "Бос, нақты"), "number"), col("z_pred", L(lang, "Пустых, прогноз (95 %)", "Бос, болжам (95 %)"))],
+            "rows": rows, "default_view": "table", "chart": None,
+            "notes": [L(lang, f"Модель заново подогнана по годам до {pl.get('year_max')} включительно и прогнозирует оценки по ловам {yrs[0] if yrs else ''}–{yrs[-1] if yrs else ''} гг. Покрытие — доля непустых наблюдений внутри 95 % прогностического интервала (номинально 0,95).",
+                        f"Модель {pl.get('year_max')} жылға дейінгі жылдар бойынша қайта сәйкестендірілді және {yrs[0] if yrs else ''}–{yrs[-1] if yrs else ''} жж. аулау бағаларын болжайды. Қамту — 95 % болжам аралығындағы бос емес бақылаулар үлесі (номиналды 0,95).")],
+            **_ccommon(meta)}
+
+
+def _compare_table(D, pl, meta, key, title_var):
+    lang = D.lang
+    data = pl.get(key) or {}
+    if not data:
+        raise NoData(L(lang, "Эта проверка в запуске не выполнялась", "Бұл тексеру іске қосуда жасалмады"))
+    rows = []
+    for sp, comp in data.items():
+        by_var = {}
+        for r in comp:
+            by_var.setdefault(r.get("variant"), []).append(r)
+        for var, rs in by_var.items():
+            yrs = sorted(r["year"] for r in rs)
+            ratio = {r["year"]: r.get("median_ratio") for r in rs}
+            last3 = yrs[-3:]
+            row = {"species": sp, "variant": var, "early": _ratio_range([ratio[y] for y in yrs[:-3]])}
+            for i, y in enumerate(last3):
+                row[f"y{i}"] = ratio.get(y)
+            rows.append(row)
+    yrs = sorted({r["year"] for comp in data.values() for r in comp})
+    last3 = yrs[-3:]
+    cols = [col("species", L(lang, "Вид", "Түр")), col("variant", title_var),
+            col("early", f"{yrs[0]}–{yrs[-4]}" if len(yrs) > 3 else "—")] + [col(f"y{i}", str(y), "number") for i, y in enumerate(last3)]
+    return rows, cols
+
+
+def v_bc_prior(D, opt):
+    pl, meta = _checks(D)
+    lang = D.lang
+    rows, cols = _compare_table(D, pl, meta, "prior", L(lang, "Вариант", "Нұсқа"))
+    return {"columns": cols, "rows": rows, "default_view": "table", "chart": None,
+            "notes": [L(lang, f"Отношение медианы численности рыб старше одного года при σ априорных распределений смертности и β, увеличенных в {nf(pl.get('prior_factor'), 0)} раза, к основному расчёту (1 — без изменений).",
+                        f"Өлім-жітім мен β априорлық σ {nf(pl.get('prior_factor'), 0)} есе үлкейткендегі бір жастан асқан балық санының медианасының негізгі есепке қатынасы (1 — өзгеріссіз).")],
+            **_ccommon(meta)}
+
+
+def v_bc_pad(D, opt):
+    pl, meta = _checks(D)
+    lang = D.lang
+    rows, cols = _compare_table(D, pl, meta, "pad", L(lang, "Константа", "Тұрақты"))
+    for r in rows:
+        r["variant"] = str(r["variant"]).replace("obs_pad = ", "")
+    return {"columns": cols, "rows": rows, "default_view": "table", "chart": None,
+            "notes": [L(lang, "Отношение медианы численности рыб старше одного года при логнормальном правдоподобии, где пустые ловы заменены константой, к основному расчёту (дельта-модель). Чем больше пустых ловов у вида, тем сильнее уровень запаса зависит от константы.",
+                        "Бос аулаулар тұрақтымен алмастырылған логнормаль шынайылықтағы бір жастан асқан балық санының медианасының негізгі есепке (дельта-модель) қатынасы.")],
+            **_ccommon(meta)}
+
+
+def v_bc_recovery(D, opt):
+    pl, meta = _checks(D)
+    lang = D.lang
+    data = pl.get("recovery") or {}
+    if not data:
+        raise NoData(L(lang, "Проверка на синтетических данных в запуске не выполнялась", "Синтетикалық деректерде тексеру жасалмады"))
+    qn = {"X_estimated, все возрасты": L(lang, "численность, все возрасты", "сан, барлық жастар"),
+          "X_estimated, возрасты 2..m1": L(lang, "численность, возрасты от 1–2", "сан, 1–2 жастан"), "параметры": L(lang, "параметры", "параметрлер")}
+    rows = [{"species": sp, "quantity": qn.get(c["quantity"], c["quantity"]), "n": c.get("n"), "cov": c.get("coverage95")} for sp, r in data.items() for c in r["coverage"]]
+    return {"columns": [col("species", L(lang, "Вид", "Түр")), col("quantity", L(lang, "Величина", "Шама")), col("n", "n", "integer"),
+                        col("cov", L(lang, "Покрытие 95 %", "95 % қамту"), "number")],
+            "rows": rows, "default_view": "table", "chart": None,
+            "notes": [L(lang, "Данные смоделированы по апостериорным медианам с той же схемой ловов и оценены заново. Покрытие — доля истинных значений внутри 95 % интервалов (номинально 0,95).",
+                        "Деректер апостериорлық медианалар бойынша сол аулау сызбасымен модельденіп, қайта бағаланды. Қамту — 95 % аралықтағы шынайы мәндер үлесі (номиналды 0,95).")],
+            **_ccommon(meta)}
+
+
+def v_bc_runs(D, opt):
+    pl, meta = _checks(D)
+    lang = D.lang
+    tn = {"retro": L(lang, "ретроспектива", "ретроспектива"), "prior": L(lang, "априорные × σ", "априорлық × σ"),
+          "pad": L(lang, "пустые ловы", "бос аулаулар"), "recovery": L(lang, "синтетические данные", "синтетикалық деректер")}
+    rows = []
+    for name, d in (pl.get("runs") or {}).items():
+        for sp, r in d.items():
+            bad = (r.get("rhat") or 0) > 1.01 or (r.get("ess_bulk") or 1e9) < 400 or (r.get("ess_tail") or 1e9) < 400 or (r.get("divergences") or 0) > 0
+            rows.append({"check": tn.get(name, name), "species": sp, "rhat": r.get("rhat"), "ess": f"{nf(r.get('ess_bulk'), 0)} / {nf(r.get('ess_tail'), 0)}",
+                         "div": r.get("divergences"), "bfmi": r.get("ebfmi"), "_level": "warning" if bad else None})
+    if not rows:
+        raise NoData(L(lang, "Полных расчётов в проверках не было", "Тексерулерде толық есептеулер болмады"))
+    return {"columns": [col("check", L(lang, "Проверка", "Тексеру")), col("species", L(lang, "Вид", "Түр")), col("rhat", "R̂ max", "number"),
+                        col("ess", "ESS bulk / tail"), col("div", L(lang, "Расходимостей", "Алшақтықтар"), "integer"), col("bfmi", "E-BFMI", "number")],
+            "rows": rows, "default_view": "table", "chart": None,
+            "notes": [L(lang, "Сходимость каждого расчёта проверки; жёлтым — не выполнен хотя бы один критерий (R̂ ≤ 1,01, ESS ≥ 400, без расходимостей).",
+                        "Әр тексеру есебінің жинақталуы; сарымен — кемінде бір критерий орындалмады (R̂ ≤ 1,01, ESS ≥ 400, алшақтықсыз).")],
+            **_ccommon(meta)}
+
+
+VIEWS.update({"bc_net": v_bc_net, "bc_retro": v_bc_retro, "bc_prior": v_bc_prior, "bc_pad": v_bc_pad,
+              "bc_recovery": v_bc_recovery, "bc_runs": v_bc_runs})

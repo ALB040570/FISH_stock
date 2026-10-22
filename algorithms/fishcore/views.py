@@ -11,6 +11,7 @@ import pandas as pd
 
 from . import config
 from .ages import age_label, age_title
+from .net_model import zone0_substeps
 from .stock import GEARS, MEAN, METHOD_TITLES, METHODS, VARIANT_TITLES, VARIANTS
 
 
@@ -104,9 +105,12 @@ def net_payload(res, net_c, props) -> dict:
             "source": r.source, "status": r.status, "observed_is_catch": r.source.startswith("годовой улов"),
             "hours": num(float(props.net_hours[year])), "net_length": num(float(props.net_length[year])),
             "speed": num(float(props.cruise_speed[fish]) * 3600),
+            "c_lower": num(r.c_mean * config.NET_C_LOWER_FRAC), "substeps": zone0_substeps(float(props.net_length[year]), float(props.cruise_speed[fish]) * 3600),
         }
+    # нижняя граница c сети — своя у каждого вида (c̄/3), она в каждой подгонке; общей нет
     return {"waterbody": res.waterbody, "years": res.years, "species": res.species,
-            "c_lower": config.NET_C_LOWER, "c_upper": config.NET_C_UPPER, "fits": fits}
+            "c_lower": None, "c_lower_frac": config.NET_C_LOWER_FRAC, "c_upper": config.NET_C_UPPER, "fits": fits,
+            "panels": {"mode": config.NET_PANELS_MODE, "by_type": dict(config.NET_PANELS_BY_CATCH_TYPE)}}
 
 
 def stock_payload(res) -> dict:
@@ -300,7 +304,8 @@ def bayes_payload(species: str, a: dict, meta: dict, source: str) -> dict:
     keep_meta = {k: meta.get(k) for k in (
         "mode", "mode_title", "started", "finished", "seconds", "chains", "draws_per_chain", "tune", "divergences",
         "divergences_by_chain", "treedepth_hits", "step_size", "acceptance_rate", "rhat_X_max", "numpy_check",
-        "notes", "n_obs", "dropped", "m0", "m1", "m2", "fec_bounds")}
+        "notes", "n_obs", "dropped", "m0", "m1", "m2", "fec_bounds", "monotonic_violations", "monotonic_ok",
+        "cap_active_cells", "diagnostics", "config_short")}
     return {
         "species": species, "source": source, "available": True, "meta": keep_meta,
         "param_rows": meta.get("param_rows", []), "config_used": meta.get("config", {}),
@@ -308,7 +313,11 @@ def bayes_payload(species: str, a: dict, meta: dict, source: str) -> dict:
         "quantiles": jq(a["quantiles"]), "total_obs_q": jq(a["total_obs_q"]), "total_all_q": jq(a["total_all_q"]),
         "X_q": jq(X_q), "s_q": jq(a["s_q"]), "pred_q": jq(a["pred_q"]), "beta1d_q": jq(a["beta1d_q"]),
         "q_bias_q": jq(a["q_bias_q"]), "theta_q": jq(a["theta_q"]), "density_alpha_q": jq(a["density_alpha_q"]),
-        "press_base_q": jq(a["press_base_q"]), "rhat_X": jq(a["rhat_X"]) if "rhat_X" in a else None,
+        "rhat_X": jq(a["rhat_X"]) if "rhat_X" in a else None,
+        # с версии 2.0.0: поправка уловистости сети q_net, доля лет-возрастов с ограничением изъятия
+        "log_q_net_q": jq(a["log_q_net_q"]) if "log_q_net_q" in a else None,
+        "cap_active_frac": jq(a["cap_active_frac"]) if "cap_active_frac" in a else None,
+        "press_base_q": jq(a["press_base_q"]) if "press_base_q" in a else None,
         "deaths": deaths,
         "data": {
             "final_by_age": jq(a["yearly_final"]), "net_by_age": jq(a["yearly_net"]),
@@ -419,5 +428,7 @@ def catch_by_age_tables(res) -> list[tuple[str, str, list[dict], list[dict], str
            {"code": "n_sample", "title": "Рыб в пробе", "unit": "шт", "type": "number"},
            *[{"code": f"q{a}", "title": f"q, j = {a}", "type": "number"} for a in ages],
            *[{"code": f"n{a}", "title": f"проба, j = {a}", "unit": "шт", "type": "number"} for a in ages]], srows,
-          "q_ij(t) — доля возрастной группы j в пробе года t; к пробе прибавляется 1 для групп j ≤ m1.")
+          f"q_ij(t) — доля возрастной группы j в сглаженной пробе года t: к группам j ≤ m1 прибавляется в сумме "
+          f"{config.AGE_PSEUDOCOUNT_TOTAL:g} условн. рыба (поровну); если в пробе меньше {config.AGE_POOL_MIN_SAMPLE} рыб, "
+          f"к ней прибавляются пробы соседних лет (± {config.AGE_POOL_NEIGHBOURS}).")
     return [t1, t2]

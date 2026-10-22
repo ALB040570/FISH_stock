@@ -12,3 +12,5 @@ frontend/dist
 # устаревшая сборка общей библиотеки: pip install брал её вместо исходников
 libs/fishcommon/build
 **/*.egg-info
+# эталон для сверки: в образы не нужен
+legacy/fish_stock_forecast/results

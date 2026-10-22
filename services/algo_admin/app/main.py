@@ -282,15 +282,17 @@ def _check_steps(steps: list[dict]) -> list[str]:
             continue
         if s.get("version"):
             v = next((x for x in E.versions(s["algorithm"]) if x["version"] == s["version"]), None)
-            if not v:
+            if not v and not E.latest_enabled(s["algorithm"]):
                 errs.append(f"{s['algorithm']}: версии {s['version']} нет")
+            elif not v:
+                pass                                       # версия удалена из каталога — в плане запуска будет новая
             elif not v["enabled"]:
                 errs.append(f"{s['algorithm']} {s['version']}: версия отключена")
         elif not E.latest_enabled(s["algorithm"]):
             errs.append(f"{s['algorithm']}: нет включённых версий")
     known = [c for c in codes if c in STEP_ORDER]
     if known != sorted(known, key=lambda c: STEP_ORDER[c]):
-        errs.append("Шаги идут не в порядке методики (уловистость невода → запас → ПДУ по возрастам → модель → прогноз)")
+        errs.append("Шаги идут не в порядке методики (уловистость невода → запас → ПДУ по возрастам → модель → прогноз → проверки модели)")
     return errs
 
 
@@ -343,9 +345,10 @@ def delete_calc(cid: str, user: User = Depends(require("run.execute"))):
 
 
 TEMPLATES = {
-    "full": ("Полный расчёт ПДУ (этапы 1–5)", build.ORDER),
+    "full": ("Полный расчёт ПДУ (этапы 1–5)", build.ORDER[:5]),
     "stock": ("Запас по уловам и ПДУ НПЦ по возрастам (этапы 1–3)", build.ORDER[:3]),
-    "bayes_forecast": ("Байесовская модель и прогноз (этапы 1–5, модель — только выбранные виды)", build.ORDER),
+    "bayes_forecast": ("Байесовская модель и прогноз (этапы 1–5, модель — только выбранные виды)", build.ORDER[:5]),
+    "full_checks": ("Полный расчёт и проверки модели (этапы 1–5 и проверки; долго — запускать ночью)", build.ORDER),
 }
 
 
@@ -378,7 +381,12 @@ def _plan(c: dict, overrides: dict | None = None) -> tuple[dict, list[str], list
     steps = []
     need = set()
     for s in c["steps"]:
-        v = s.get("version") or E.latest_enabled(s["algorithm"])["version"]
+        v = s.get("version")
+        if v and not E.find_version(s["algorithm"], v):
+            nv = E.latest_enabled(s["algorithm"])["version"]
+            warnings.append(f"Версия {v} шага «{s['algorithm']}» удалена из каталога — используется {nv}")
+            v = nv
+        v = v or E.latest_enabled(s["algorithm"])["version"]
         m = E.manifest(s["algorithm"], v)
         need |= set(m.get("requires", {}).get("datasets", []))
         run_vals = {**(c.get("params", {}).get(s["algorithm"]) or {}), **((overrides or {}).get(s["algorithm"]) or {})}

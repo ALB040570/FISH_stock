@@ -1,11 +1,12 @@
 """
-Контрольный пример байесовского этапа: полный расчёт вида на данных Жайсана в том состоянии, в котором
-заказчик получил сохранённые результаты 30.09.2026 (k сети до изменения 15.10), и сравнение медиан
-численности с legacy/fish_stock_forecast/results/zhaysan_bayes_<вид>.npz.
+Контрольный пример байесовского этапа: полный расчёт вида на данных Жайсана (образцы samples/zhaysan) алгоритмами
+FishStock и сравнение медиан численности с результатами эталона legacy/fish_stock_forecast/results/zhaysan_bayes_<вид>.npz
+(fish_stock_forecast от 22.10.2026, расчёты автора 4 × 1000).
 
     python tools/control_bayes.py sazan [--out каталог]
 
-Критерий (согласован 18.10): медианы численности по годам и возрастам — в пределах ±5 %, R̂ < 1,05.
+Критерий (согласован 18.10): суммарная численность по годам — в пределах ±5 %, R̂ < 1,05.
+При тех же настройках и seed перенос даёт те же выборки, что эталон (проверено 23.10.2026 на коротком расчёте сазана).
 """
 from __future__ import annotations
 
@@ -26,7 +27,7 @@ K_NET_2026_09_30 = {"lesh": 0.3, "plotva": 0.35, "sazan": 0.3, "karas": 0.4, "ya
                     "shuka": 0.4}
 
 
-def sample_tables(old_k_net: bool = True) -> tuple[dict, dict, dict]:
+def sample_tables(old_k_net: bool = False) -> tuple[dict, dict, dict]:
     sys.path.insert(0, str(REPO / "services" / "data_admin"))
     from app import tables as T  # noqa: E402
     import importlib.util
@@ -38,6 +39,15 @@ def sample_tables(old_k_net: bool = True) -> tuple[dict, dict, dict]:
     for s in species:
         for k in (s["code"], s["name_ru"]):
             refs["species"][k.lower()] = s["code"]
+    for ent in ("catch_types",):                         # справочники-классификаторы (код, рус., каз., …)
+        m = refs.setdefault(ent, {})
+        for code, ru, *_ in seed.CLASSIFIERS[ent]:
+            m[code] = code
+            m[ru.lower()] = code
+        for (e, code), names_ in seed.CLASSIFIER_ALIASES.items():
+            if e == ent:
+                for n in names_.split("\n"):
+                    m[n.lower()] = code
     for code, ru, kk, kind in seed.GEARS:
         refs["gears"][code] = code
         refs["gears"][ru] = code

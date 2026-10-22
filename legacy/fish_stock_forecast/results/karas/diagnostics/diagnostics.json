@@ -1,0 +1,140 @@
+{
+ "species": "карась",
+ "rhat_max_params": 1.0049249950123098,
+ "ess_bulk_min_params": 1730.998210904282,
+ "ess_tail_min_params": 1326.2610412845922,
+ "rhat_max_X": 1.004661611371627,
+ "ess_bulk_min_X": 1730.998210904282,
+ "ess_tail_min_X": 2219.5683136440484,
+ "divergences": 0,
+ "divergences_by_chain": [
+  0,
+  0,
+  0,
+  0
+ ],
+ "ebfmi_by_chain": [
+  0.9624782491075151,
+  0.8385354167629656,
+  0.9963791172582157,
+  0.8494595778990298
+ ],
+ "ebfmi_min": 0.8385354167629656,
+ "n_free_params": 70,
+ "n_hauls": 622,
+ "n_obs_values": 3534,
+ "likelihood": "delta",
+ "n_zero_hauls": 398,
+ "monotonicity": {
+  "violations": 0,
+  "checked": 504000,
+  "rel_tol": 1e-09,
+  "ok": true
+ },
+ "worst_rhat": [
+  {
+   "name": "beta_1d",
+   "index": 2020,
+   "rhat": 1.0049249950123098,
+   "ess_bulk": 7320.924404577214,
+   "ess_tail": 2418.7280136132886
+  },
+  {
+   "name": "X_initial_older_raw",
+   "index": 14,
+   "rhat": 1.0043541540796268,
+   "ess_bulk": 4976.106908513094,
+   "ess_tail": 2643.8285693343737
+  },
+  {
+   "name": "X_initial_older_raw",
+   "index": 3,
+   "rhat": 1.0040724387359072,
+   "ess_bulk": 4749.045727838344,
+   "ess_tail": 3262.6733864393345
+  },
+  {
+   "name": "q_raw",
+   "index": 1,
+   "rhat": 1.0032943385836604,
+   "ess_bulk": 6094.8220026748595,
+   "ess_tail": 3102.154310550063
+  },
+  {
+   "name": "density_alpha",
+   "index": 2019,
+   "rhat": 1.0031555390222913,
+   "ess_bulk": 6293.711006701118,
+   "ess_tail": 2664.514951583691
+  },
+  {
+   "name": "density_alpha",
+   "index": 2018,
+   "rhat": 1.0031364718179079,
+   "ess_bulk": 7642.616342950583,
+   "ess_tail": 3188.934972291136
+  },
+  {
+   "name": "s_year_fluct",
+   "index": 2016,
+   "rhat": 1.0025280512328887,
+   "ess_bulk": 3511.5715116985175,
+   "ess_tail": 2212.633315438027
+  },
+  {
+   "name": "s_year_fluct",
+   "index": 2018,
+   "rhat": 1.0024418296395141,
+   "ess_bulk": 6722.057491355508,
+   "ess_tail": 3419.278674136739
+  },
+  {
+   "name": "X_initial_older_raw",
+   "index": 11,
+   "rhat": 1.0023606478274976,
+   "ess_bulk": 3508.3225897208868,
+   "ess_tail": 1700.438739501036
+  },
+  {
+   "name": "X_initial_older_raw",
+   "index": 13,
+   "rhat": 1.0021124981486673,
+   "ess_bulk": 5781.521375062281,
+   "ess_tail": 2506.706414302935
+  }
+ ],
+ "cap_active_cells": 18,
+ "cap_active_any": 19,
+ "plots": [
+  "trace_density_alpha.png",
+  "trace_s_base.png",
+  "trace_s_juvenile_steep.png",
+  "trace_s_aging_slow.png",
+  "trace_s_year_fluct.png",
+  "trace_beta_1d.png",
+  "trace_q_raw.png",
+  "trace_egg_survival_base.png",
+  "trace_fec_at_m0.png",
+  "trace_fec_at_m1.png",
+  "trace_X_initial_older_raw.png",
+  "trace_log_q_net.png",
+  "trace_sigma_stock.png",
+  "trace_zero_c.png",
+  "trace_zero_b.png",
+  "prior_posterior_density_alpha.png",
+  "prior_posterior_s_base.png",
+  "prior_posterior_s_juvenile_steep.png",
+  "prior_posterior_s_aging_slow.png",
+  "prior_posterior_s_year_fluct.png",
+  "prior_posterior_beta_1d.png",
+  "prior_posterior_q_raw.png",
+  "prior_posterior_egg_survival_base.png",
+  "prior_posterior_fec_at_m0.png",
+  "prior_posterior_fec_at_m1.png",
+  "prior_posterior_X_initial_older_raw.png",
+  "prior_posterior_log_q_net.png",
+  "prior_posterior_sigma_stock.png",
+  "prior_posterior_zero_c.png",
+  "prior_posterior_zero_b.png"
+ ]
+}

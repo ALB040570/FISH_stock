@@ -37,6 +37,7 @@ DEFAULT_CLASSIFICATION = {
     "pdu_by_age": {"model_type": "deterministic", "stock_methods": []},
     "bayes_cohort": {"model_type": "stochastic", "stock_methods": ["model"]},
     "forecast_pdu": {"model_type": "stochastic", "stock_methods": ["model"]},
+    "bayes_checks": {"model_type": "stochastic", "stock_methods": ["model"]},
 }
 
 # какое значение распределения задаёт параметр профиля — по окончанию ключа

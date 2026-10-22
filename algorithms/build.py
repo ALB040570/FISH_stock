@@ -18,7 +18,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PACKAGES = HERE / "packages"
-ORDER = ["seine_catchability", "stock_by_catch", "pdu_by_age", "bayes_cohort", "forecast_pdu"]
+ORDER = ["seine_catchability", "stock_by_catch", "pdu_by_age", "bayes_cohort", "forecast_pdu", "bayes_checks"]
 
 
 def _profile_files() -> dict[str, bytes]:

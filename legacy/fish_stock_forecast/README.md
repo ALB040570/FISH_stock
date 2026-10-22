@@ -136,7 +136,18 @@ python -m scripts.run_bayes --species окунь   & rem этап 4 для од�
 python -m scripts.run_bayes --species все     & rem все 8 видов подряд — можно оставить на ночь
 python -m scripts.run_bayes --species лещ --mode check   & rem сверка со старым скриптом
 python -m scripts.run_bayes --species все --mode prior   & rem априорная проверка, секунды
+python -m scripts.run_bayes --species все --mode retro --year-max 2021   & rem ретроспектива: прогноз 2022–2024
+python -m scripts.run_bayes --species все --mode prior_sens --factor 2   & rem σ смертности и β × 2
+python -m scripts.run_bayes --species лещ --mode pad --pads 0.1 1 10     & rem добавка к оценкам по ловам
+python -m scripts.run_bayes --species лещ --mode recovery                & rem восстановление параметров
+python -m scripts.run_bayes --mode diag_summary   & rem сводка диагностики → results\bayes_diagnostics_summary.csv
+python -m scripts.run_bayes --mode appendix       & rem таблицы A1–A8 → results\appendix\
+python -m scripts.run_bayes --mode balance        & rem чувствительность модели баланса сети (без MCMC)
 ```
+
+Диагностика каждого расчёта (R̂, ESS, E-BFMI, трассы, априорное и апостериорное, таблица параметров,
+монотонность когорт, где действует ограничение изъятия) — в `results\<вид>\diagnostics\`
+(вид латиницей: lesh, sudak, …). Короткие цепи для пробы: `--chains 2 --draws 200 --tune 200`.
 
 ## Тесты
 
@@ -146,6 +157,7 @@ python -m tests.test_stage2
 python -m tests.test_pdu
 python -m tests.test_bayes     & rem уравнения модели против независимой записи, настройки, входные данные
 python -m tests.test_forecast  & rem прогноз = продолжение модели, Баранов, скользящее β
+python -m tests.test_bayes_pipeline  & rem короткие цепи PyMC: диагностика, ретроспектива, приложение
 ```
 
 ## Структура
@@ -158,6 +170,7 @@ core/
   catch.py                улов по каждому лову и возрастной группе
   catchability_net.py     уловистость сети — парабола (22)–(24)
   net_model.py            модель баланса 12 колец, формула (28)
+  net_sensitivity.py      чувствительность запаса по сетям к V, k, времени стоянки, p_to_net
   stock.py                запас по ловам, годовой и окончательный запас (сеть+невод)
   pdu_npc.py              ПДУ НПЦ по возрастам (раздел 5 статьи)
   ages.py                 подписи возрастов «1–2», «2–3», …
@@ -170,6 +183,8 @@ core/
     dynamics.py           уравнения (16)-(17) — одни и те же для PyMC и numpy
     model.py              модель PyMC и выборка NUTS
     run.py                расчёт вида, сводки, R̂, запись .npz и .nc, априорная проверка
+    diagnostics.py        R̂, ESS, E-BFMI, графики, таблица параметров, монотонность когорт, сводка видов
+    analyses.py           ретроспектива, чувствительность к априорным и к obs_pad, восстановление параметров
     jobfiles.py           состояние и журнал фонового расчёта
 app/
   main.py                 FastAPI: страницы и API

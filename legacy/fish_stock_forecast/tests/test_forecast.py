@@ -33,7 +33,6 @@ def _setup(cfg, m0=3, m1=9, m2=5, Y=6, H=4, D=2, fry=2.0, area=1000.0):
         p = prior_means(c, cfg)
         p["s_base"] *= 1 + 0.1 * i
         p["density_alpha"] = np.full(total, 0.8 + 0.1 * i)
-        p["press_base"] = np.full(total, 0.4)
         p["beta_1d"] = np.full(total, 1.05)
         p["s_year_fluct"] = np.zeros(total)
         out = simulate(NumpyOps, p, c, cfg)

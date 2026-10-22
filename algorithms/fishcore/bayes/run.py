@@ -4,11 +4,16 @@
 Режимы:
     "new"   — входные данные этапов 2–3, настройки со страницы (NUTS, PyMC; 15 мин – 2 ч на вид);
     "check" — входные данные и настройки старого скрипта (NUTS) — сверка со старыми .nc из data_stock;
-    "prior" — только априорные распределения (numpy, секунды): что модель допускает до учёта данных.
+    "prior" — только априорные распределения (numpy, секунды): что модель допускает до учёта данных;
+    "legacy" — модель старой программы (config.LEGACY, пока только карась) на входных данных этапов 2–3.
 
 Результаты (results/):
     zhaysan_bayes_{вид}[_check|_prior].npz — сводки и 500 выборок параметров (для страницы и прогноза);
-    zhaysan_bayes_{вид}[_check].nc         — тот же набор переменных, что в старых .nc (+ интервалы 95 %).
+    zhaysan_bayes_{вид}[_check].nc         — тот же набор переменных, что в старых .nc (+ интервалы 95 %);
+    {вид}/diagnostics[_check|_prior]/      — R̂, ESS, E-BFMI, графики, таблица параметров, монотонность когорт
+                                             (core.bayes.diagnostics).
+Анализы чувствительности (core.bayes.analyses) вызывают run() с изменёнными настройками (cfg_changes),
+обрезанными (year_max) или синтетическими (inputs) данными и пишут результаты в свою папку (results_dir, tag).
 """
 from __future__ import annotations
 
@@ -27,20 +32,21 @@ from .inputs import BayesInputs, build_inputs
 
 QUANTILES = (0.025, 0.25, 0.5, 0.75, 0.975)
 N_KEEP = 500           # выборок для страницы и прогноза
-MODES = ("new", "check", "prior")
-MODE_TITLES = {"new": "новый расчёт", "check": "сверка с исходным расчётом", "prior": "априорная проверка"}
+MODES = ("new", "check", "prior", "legacy")
+MODE_TITLES = {"new": "новый расчёт", "check": "сверка с исходным расчётом", "prior": "априорная проверка",
+               "legacy": "старая модель на новых данных"}
 
 
 # ---------------------------------------------------------------- файлы
 
 
-def result_stem(species: str, mode: str) -> str:
-    suffix = {"new": "", "check": "_check", "prior": "_prior"}[mode]
-    return f"{app_config.WATERBODY}_bayes_{TOKENS.get(species, species)}{suffix}"
+def result_stem(species: str, mode: str, tag: str = "") -> str:
+    suffix = {"new": "", "check": "_check", "prior": "_prior", "legacy": "_legacy"}[mode]
+    return f"{app_config.WATERBODY}_bayes_{TOKENS.get(species, species)}{suffix}{tag}"
 
 
-def result_path(species: str, mode: str, ext: str = "npz", results_dir: Path | None = None) -> Path:
-    return Path(results_dir or app_config.RESULTS_DIR) / f"{result_stem(species, mode)}.{ext}"
+def result_path(species: str, mode: str, ext: str = "npz", results_dir: Path | None = None, tag: str = "") -> Path:
+    return Path(results_dir or app_config.RESULTS_DIR) / f"{result_stem(species, mode, tag)}.{ext}"
 
 
 def old_result_path(species: str) -> Path:
@@ -48,10 +54,19 @@ def old_result_path(species: str) -> Path:
 
 
 def mode_config(species: str, mode: str) -> SpeciesConfig:
-    """Сверка — значения и параметры выборки старого скрипта; иначе — настройки со страницы."""
+    """Сверка — значения и параметры выборки старого скрипта (вариант (17) старого скрипта, без поправки
+    уловистости сети, логнормальное правдоподобие с добавкой obs_pad); иначе — настройки со страницы."""
     if mode == "check":
         d = DEFAULTS[species]
-        return replace(d, draws=d.script_draws, tune=d.script_tune, target_accept=d.script_target_accept)
+        return replace(d, draws=d.script_draws, tune=d.script_tune, target_accept=d.script_target_accept,
+                       catch_mode=d.script_catch_mode or d.catch_mode, gear_effect=False,
+                       likelihood="pad")
+    if mode == "legacy":
+        from .config import LEGACY
+        if species not in LEGACY:
+            raise ValueError(f"режим legacy: для вида {species} настройки старой программы не заданы (есть: "
+                             + ", ".join(LEGACY) + ")")
+        return replace(DEFAULTS[species], **LEGACY[species])
     return get_config(species)
 
 
@@ -97,12 +112,10 @@ def _q(flat: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------- априорные выборки (numpy)
 
 
-def sample_prior(inp: BayesInputs, cfg: SpeciesConfig, n: int = N_KEEP, seed: int | None = None) -> dict:
-    """Выборка из априорных распределений и динамика по ним; массивы (1, n, …)."""
+def sample_prior_params(c, cfg: SpeciesConfig, n: int, rng) -> dict:
+    """Выборка параметров из априорных распределений (без динамики); массивы (n, …)."""
     from scipy.stats import truncnorm
 
-    rng = np.random.default_rng(cfg.seed if seed is None else seed)
-    c = inp.consts
     Y, A = c.n_years, c.m1
     lo0, hi0, lo1, hi1 = c.fec_limits(cfg)
     a = (cfg.beta_lower - cfg.beta_mu) / cfg.beta_sigma
@@ -113,7 +126,6 @@ def sample_prior(inp: BayesInputs, cfg: SpeciesConfig, n: int = N_KEEP, seed: in
         "s_juvenile_steep": rng.lognormal(cfg.s_juv_mu, cfg.s_juv_sigma, n),
         "s_aging_slow": rng.lognormal(cfg.s_age_mu, cfg.s_age_sigma, n),
         "s_year_fluct": rng.normal(0.0, cfg.s_year_sigma, (n, Y)),
-        "press_base": rng.lognormal(cfg.press_mu, cfg.press_sigma, (n, Y)),
         "beta_1d": truncnorm.rvs(a, b, loc=cfg.beta_mu, scale=cfg.beta_sigma, size=(n, Y), random_state=rng),
         "q_raw": rng.normal(0.0, cfg.q_sigma, (n, A)),
         "egg_survival_base": rng.beta(cfg.egg_alpha, cfg.egg_beta, n),
@@ -123,6 +135,25 @@ def sample_prior(inp: BayesInputs, cfg: SpeciesConfig, n: int = N_KEEP, seed: in
         "sigma_stock": np.abs(rng.normal(0.0, cfg.sigma_stock_sd, n)),
     }
     p["q_bias"] = np.exp(p["q_raw"])
+    if cfg.gear_effect:
+        p["log_q_net"] = rng.normal(0.0, cfg.q_net_sigma, n)
+    if cfg.likelihood == "delta":
+        p["zero_c"] = rng.normal(0.0, cfg.zero_c_sigma, (n, 2))
+        p["zero_b"] = rng.normal(cfg.zero_b_mu, cfg.zero_b_sigma, n)
+    if cfg.unused_q_year_dev:
+        p["q_year_dev"] = rng.normal(0.0, 0.1, (n, Y, A))
+    if cfg.noncentered:
+        p["s_year_fluct_z"] = p["s_year_fluct"] / cfg.s_year_sigma
+        p["beta_1d_z"] = (p["beta_1d"] - cfg.beta_mu) / cfg.beta_sigma
+    return p
+
+
+def sample_prior(inp: BayesInputs, cfg: SpeciesConfig, n: int = N_KEEP, seed: int | None = None) -> dict:
+    """Выборка из априорных распределений и динамика по ним; массивы (1, n, …)."""
+    rng = np.random.default_rng(cfg.seed if seed is None else seed)
+    c = inp.consts
+    p = sample_prior_params(c, cfg, n, rng)
+    p.pop("q_year_dev", None)
     det = recompute(p, c, cfg)
     return {k: v[None] for k, v in {**p, **det}.items()}
 
@@ -130,11 +161,11 @@ def sample_prior(inp: BayesInputs, cfg: SpeciesConfig, n: int = N_KEEP, seed: in
 def recompute(p: dict, c, cfg: SpeciesConfig) -> dict:
     """Динамика (numpy) для каждой выборки параметров p (массивы с первой осью — выборки)."""
     n = len(p["s_base"])
-    keys = ("s", "pred_press_cube", "beta", "theta_dyn", "X_estimated", "egg_survival")
+    keys = ("s", "pred_press_cube", "beta", "theta_dyn", "X_estimated", "egg_survival", "removal_ratio")
     out = {k: [] for k in keys}
     for i in range(n):
         one = {k: p[k][i] for k in ("density_alpha", "s_base", "s_juvenile_steep", "s_aging_slow", "s_year_fluct",
-                                    "press_base", "beta_1d", "egg_survival_base", "fec_at_m0", "fec_at_m1",
+                                    "beta_1d", "egg_survival_base", "fec_at_m0", "fec_at_m1",
                                     "X_initial_older_raw")}
         r = simulate(NumpyOps, one, c, cfg)
         for k in keys:
@@ -154,8 +185,10 @@ PARAM_ROWS = [
     ("fec_at_m0", "плодовитость в m0, икринок", None),
     ("fec_at_m1", "плодовитость в m1, икринок", None),
     ("sigma_stock", "шум наблюдений σ", None),
+    ("log_q_net", "ln q_net — поправка уловистости сети", None),
+    ("zero_b", "b — наклон вероятности пустого лова по ln N", None),
+    ("zero_c", "c — уровень вероятности пустого лова (сеть, невод)", "gear"),
     ("beta_1d", "β", "year"),
-    ("press_base", "база давления хищников", "year"),
     ("density_alpha", "множитель ёмкости", "year"),
     ("s_year_fluct", "годовое отклонение s", "year"),
     ("q_bias", "поправка уловистости q", "age"),
@@ -180,8 +213,13 @@ def summarize(draws: dict, inp: BayesInputs, cfg: SpeciesConfig, with_rhat: bool
         "q_bias_q": _q(flat("q_bias")),
         "theta_q": _q(flat("theta_dyn")),
         "density_alpha_q": _q(flat("density_alpha")),
-        "press_base_q": _q(flat("press_base")),
     }
+    if "removal_ratio" in draws:
+        # доля выборок, где запрошенное изъятие больше removal_cap · выживших (ограничение действует)
+        from .diagnostics import cap_active_fraction
+        out["cap_active_frac"] = cap_active_fraction(draws["removal_ratio"], cfg.removal_cap)
+    if "log_q_net" in draws:
+        out["log_q_net_q"] = _q(flat("log_q_net"))
     X_med = out["X_q"][2]
     s_med = out["s_q"][2]
     pred_med = out["pred_q"][2]
@@ -202,7 +240,8 @@ def summarize(draws: dict, inp: BayesInputs, cfg: SpeciesConfig, with_rhat: bool
         if axis is None:
             rows.append({"name": name, "label": label, "index": None, "q": qs.tolist(), "rhat": _f(rh)})
         else:
-            labels = inp.years if axis == "year" else [int(a) for a in inp.model_ages]
+            labels = (inp.years if axis == "year" else ["сеть", "невод"] if axis == "gear"
+                      else [int(a) for a in inp.model_ages])
             for i, lab in enumerate(labels):
                 rows.append({"name": name, "label": label, "index": lab, "q": qs[:, i].tolist(), "rhat": _f(rh[i])})
     out["_param_rows"] = rows
@@ -244,7 +283,7 @@ def save_npz(path: Path, summary: dict, kept: dict, inp: BayesInputs, cfg: Speci
         "yearly_seine": inp.yearly_seine if inp.yearly_seine is not None else nan,
         "npc_total": inp.npc_total if inp.npc_total is not None else np.full(c.n_years, np.nan),
         "obs_year_idx": inp.year_idx, "obs_gear": inp.gear,
-        "obs_stock_mean": _obs_mean(inp),
+        "obs_stock_mean": _obs_mean(inp, cfg.obs_pad),
     })
     meta = {**meta, "species": inp.species, "m0": c.m0, "m1": c.m1, "m2": c.m2,
             "fec_bounds": [float(v) for v in c.fec_bounds], "config": asdict(cfg),
@@ -257,15 +296,15 @@ def save_npz(path: Path, summary: dict, kept: dict, inp: BayesInputs, cfg: Speci
     tmp.replace(path)
 
 
-def _obs_mean(inp: BayesInputs) -> np.ndarray:
-    """(2, годы, m1 − 1) — среднее оценок по ловам (−0,1) по орудиям: как видит их модель."""
+def _obs_mean(inp: BayesInputs, pad: float = 0.1) -> np.ndarray:
+    """(2, годы, m1 − 1) — среднее оценок по ловам (− obs_pad) по орудиям: как видит их модель."""
     Y = inp.consts.n_years
     out = np.full((2, Y, inp.stock.shape[1]), np.nan)
     for g in (0, 1):
         for t in range(Y):
             sel = (inp.gear == g) & (inp.year_idx == t)
             if sel.any():
-                out[g, t] = inp.stock[sel].mean(axis=0) - 0.1
+                out[g, t] = inp.stock[sel].mean(axis=0) - pad
     return out
 
 
@@ -358,32 +397,53 @@ def compare_with_old(summary: dict, species: str, years: list[int]) -> dict | No
 
 
 def run(species: str, mode: str = "new", progress=None, log=print, results_dir: Path | None = None,
-        stage23=None) -> dict:
-    """Рассчитать модель вида и сохранить результаты. progress(dict) — ход выборки для страницы."""
+        stage23=None, cfg_changes: dict | None = None, year_max: int | None = None,
+        inputs: BayesInputs | None = None, tag: str = "", plots: bool = True) -> dict:
+    """Рассчитать модель вида и сохранить результаты. progress(dict) — ход выборки для страницы.
+
+    cfg_changes — изменения настроек (анализы чувствительности, короткие цепи в тестах);
+    year_max — только годы до year_max включительно (ретроспективная проверка);
+    inputs — готовые входные данные (проверка восстановления параметров по синтетическим данным);
+    tag — добавка к имени файлов результатов и папки диагностики; plots — строить ли графики диагностики.
+    """
     if mode not in MODES:
         raise ValueError(f"режим {mode}: ожидается {MODES}")
     t0 = time.time()
     cfg = mode_config(species, mode)
+    if cfg_changes:
+        cfg = replace(cfg, **cfg_changes)
     report = progress or (lambda d: None)
+    rdir = Path(results_dir or app_config.RESULTS_DIR)
 
     report({"phase": "inputs"})
-    log(f"[{species}] {MODE_TITLES[mode]}: подготовка входных данных")
-    kw = {}
-    if mode != "check" and stage23 is not None:
-        kw = dict(zip(("res", "pdu", "props"), stage23))
-    inp = build_inputs(species, cfg, "check" if mode == "check" else "new", **kw)
+    log(f"[{species}] {MODE_TITLES[mode]}{tag}: подготовка входных данных")
+    if inputs is not None:
+        inp = inputs
+    else:
+        kw = {}
+        if mode != "check" and stage23 is not None:
+            kw = dict(zip(("res", "pdu", "props"), stage23))
+        inp = build_inputs(species, cfg, "check" if mode == "check" else "new", **kw)
+    if year_max is not None:
+        from .inputs import truncate_inputs
+        inp = truncate_inputs(inp, year_max)
     for n in inp.notes:
         log(f"  {n}")
     c = inp.consts
     log(f"  годы {inp.years[0]}–{inp.years[-1]}, возрасты 1..{c.m1}, ловов в правдоподобии: {len(inp.stock)}")
 
-    meta = {"mode": mode, "mode_title": MODE_TITLES[mode], "started": datetime.now().isoformat(timespec="seconds")}
+    meta = {"mode": mode, "mode_title": MODE_TITLES[mode], "started": datetime.now().isoformat(timespec="seconds"),
+            "tag": tag, "year_max": year_max}
+    from .diagnostics import diag_dir, monotonicity, run_diagnostics
+
+    ddir = diag_dir(TOKENS[species], rdir, mode, tag)
+    diag = None
     if mode == "prior":
         draws = sample_prior(inp, cfg)
         stats = {"divergences": None}
         numpy_check = None
     else:
-        from .model import build_model, extract_draws, sample
+        from .model import build_model, extract_draws, free_names, sample
 
         report({"phase": "compile"})
         log(f"  сборка модели PyMC; выборка: {cfg.draws} выборок, {cfg.tune} шагов настройки, "
@@ -396,9 +456,20 @@ def run(species: str, mode: str = "new", progress=None, log=print, results_dir: 
         log(f"  выборка закончена за {_hms(time.time() - t0)}; расходимостей: {stats.get('divergences')}")
         numpy_check = _numpy_check(draws, c, cfg)
         log(f"  сверка уравнений numpy и PyMC: наибольшее относительное отличие X = {numpy_check:.2e}")
+        report({"phase": "diagnostics"})
+        prior = sample_prior_params(c, cfg, 4000, np.random.default_rng(cfg.seed + 1))
+        diag = run_diagnostics(idata, free_names(model), draws["X_estimated"], draws.get("removal_ratio"), prior,
+                               inp, cfg, ddir, plots=plots, log=log)
+        log(f"  диагностика: R̂ max {diag['rhat_max_params']}, ESS bulk min {diag['ess_bulk_min_params']}, "
+            f"ESS tail min {diag['ess_tail_min_params']}, E-BFMI {diag['ebfmi_by_chain']}; файлы: {ddir}")
+
+    mono = diag["monotonicity"] if diag else monotonicity(draws["X_estimated"])
+    if not mono["ok"]:
+        log(f"  ВНИМАНИЕ: нарушена монотонность когорт X_j(t+1) ≤ X_(j−1)(t): {mono['violations']} "
+            f"из {mono['checked']} (наибольшее превышение {mono.get('worst_rel_excess', 0):.2e})")
 
     summary = summarize(draws, inp, cfg, with_rhat=(mode != "prior"))
-    kept = thin({k: v for k, v in draws.items() if k not in ("s", "pred_press_cube", "beta")})
+    kept = thin({k: v for k, v in draws.items() if k not in ("s", "pred_press_cube", "beta", "removal_ratio")})
     rh = summary.get("rhat_X")
     meta.update({
         "finished": datetime.now().isoformat(timespec="seconds"), "seconds": round(time.time() - t0, 1),
@@ -406,6 +477,11 @@ def run(species: str, mode: str = "new", progress=None, log=print, results_dir: 
         "tune": cfg.tune if mode != "prior" else 0, **stats,
         "rhat_X_max": None if rh is None else _f(np.nanmax(rh)),
         "numpy_check": numpy_check,
+        "monotonic_violations": mono["violations"], "monotonic_ok": mono["ok"],
+        "cap_active_cells": int((summary["cap_active_frac"] > 0.5).sum()) if "cap_active_frac" in summary else None,
+        "diagnostics": None if diag is None else {k: v for k, v in diag.items()
+                                                   if k not in ("monotonicity", "plots", "worst_rhat")},
+        "diagnostics_dir": None if diag is None else str(ddir),
         "config_short": {k: v for k, v in asdict(cfg).items() if not k.startswith("script") and k != "old_flag"},
     })
     if mode == "check":
@@ -415,11 +491,11 @@ def run(species: str, mode: str = "new", progress=None, log=print, results_dir: 
             log(f"  сравнение со старым {cmp_['file']}: наибольшее отличие суммарной численности "
                 f"{100 * cmp_['max_rel']:.1f} %")
 
-    npz = result_path(species, mode, "npz", results_dir)
+    npz = result_path(species, mode, "npz", rdir, tag)
     save_npz(npz, summary, kept, inp, cfg, meta)
     log(f"  сохранено: {npz}")
     if mode != "prior":
-        err = save_nc(result_path(species, mode, "nc", results_dir), summary, inp, meta)
+        err = save_nc(result_path(species, mode, "nc", rdir, tag), summary, inp, meta)
         log("  .nc: " + (f"не записан — {err}" if err else "записан"))
     report({"phase": "done"})
     return meta

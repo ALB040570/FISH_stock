@@ -3,6 +3,7 @@
 
 Режим "new" — из результатов этапов 2–3 этого приложения:
     правдоподобие — оценки запаса по каждому лову (сеть, затем невод) с учётом возрастов, возрасты 2..m1;
+    орудие каждого лова (gear) известно — по нему в модели применяется поправка уловистости сети q_net;
     вылов A_j(t) — ПДУ НПЦ по возрастам в штуках (этап 3);
     начальный запас — окончательный годовой запас по возрастам за первый год (средневзвешенное сети
     и невода по числу ловов, «по запасам»); сеголетки 0–1 рассчитываются внутри модели, как в старом коде.
@@ -21,7 +22,7 @@ import pandas as pd
 
 from .. import config as app_config
 from .config import SpeciesConfig
-from .dynamics import Constants, maturity
+from .dynamics import Constants, maturity, zero_log_ref
 
 GEAR_NAMES = ("сеть", "невод")
 
@@ -32,9 +33,12 @@ class BayesInputs:
     mode: str                         # "new" | "check"
     years: list[int]
     consts: Constants
-    stock: np.ndarray                 # (ловы, m1 − 1) оценки запаса по ловам, возрасты 2..m1, +0,1
+    stock: np.ndarray                 # (ловы, m1 − 1) оценки запаса по ловам, возрасты 2..m1, + obs_pad
     year_idx: np.ndarray              # (ловы,) номер года лова
-    gear: np.ndarray                  # (ловы,) 0 — сеть, 1 — невод
+    gear: np.ndarray                  # (ловы,) 0 — сеть, 1 — невод (для поправки уловистости сети q_net)
+    zero: np.ndarray | None = None    # (ловы,) True — в лове нет рыбы вида (все оценки 0 до добавки obs_pad)
+    zero_ref: float | None = None     # ln N̄ для вероятности пустого лова — константа исходных данных (не меняется
+                                      # при отсечении лет и в синтетических данных проверки восстановления)
     dropped: int = 0                  # ловов исключено (вид не учитывался)
     # для графиков: данные, по которым оценивалась модель (NaN — нет оценки)
     yearly_final: np.ndarray | None = None    # (годы, m1 − 1) окончательный запас по возрастам
@@ -43,6 +47,16 @@ class BayesInputs:
     npc_total: np.ndarray | None = None       # (годы,) оценка НПЦ, штук
     pdu_raw: np.ndarray | None = None         # (годы, m1 − 1) ПДУ без +0,1
     notes: list[str] = field(default_factory=list)
+
+    @property
+    def zero_mask(self) -> np.ndarray:
+        """Пустые ловы; если не заданы — восстанавливаются по добавке obs_pad (все оценки ≤ добавки)."""
+        if self.zero is not None:
+            return np.asarray(self.zero, bool)
+        return np.all(self.stock <= self.stock.min() * (1 + 1e-9), axis=1)
+
+    def log_ref(self, cfg) -> float:
+        return float(self.zero_ref) if self.zero_ref is not None else zero_log_ref(self.stock, self.zero_mask, cfg)
 
     @property
     def obs_ages(self) -> np.ndarray:
@@ -101,7 +115,9 @@ def build_new_inputs(species: str, cfg: SpeciesConfig, res=None, pdu=None, props
             notes.append(f"исключено ловов, где вид не учитывался: {dropped}")
     elif unrecorded.any():
         notes.append(f"ловов, где вид не учитывался, считаются нулевыми: {int(unrecorded.sum())}")
-    stock = np.nan_to_num(stock, nan=0.0) + 0.1
+    stock = np.nan_to_num(stock, nan=0.0)
+    zero = stock.sum(axis=1) <= 0
+    stock = stock + cfg.obs_pad
 
     # вылов: ПДУ НПЦ в штуках по возрастам 2..m1
     pdu_raw = np.nan_to_num(pdu.pieces[:, si, :][:, sel], nan=0.0)
@@ -125,7 +141,7 @@ def build_new_inputs(species: str, cfg: SpeciesConfig, res=None, pdu=None, props
                        fec_bounds=tuple(props.fecundity[species]))
     npc_total = res.npc_stock[:, si] if res.npc_stock is not None else None
     return BayesInputs(species=species, mode="new", years=years, consts=consts, stock=stock, year_idx=year_idx,
-                       gear=gear, dropped=dropped, yearly_final=yearly_final, yearly_net=yearly_net,
+                       gear=gear, zero=zero, zero_ref=zero_log_ref(stock, zero, cfg), dropped=dropped, yearly_final=yearly_final, yearly_net=yearly_net,
                        yearly_seine=yearly_seine, npc_total=npc_total, pdu_raw=pdu_raw, notes=notes)
 
 
@@ -164,7 +180,9 @@ def build_check_inputs(species: str, cfg: SpeciesConfig) -> BayesInputs:
     pdu_clean = (pdu_raw + 0.1) * cfg.pdu_scale
 
     st = d["stock_by_date_fish"].transpose("Id", "age")
-    stock = np.nan_to_num(st.values, nan=0.0) + 0.1
+    stock = np.nan_to_num(st.values, nan=0.0)
+    zero = stock.sum(axis=1) <= 0
+    stock = stock + cfg.obs_pad
     dates = pd.to_datetime(st.Date.values, dayfirst=True)
     y_to_idx = {yr: i for i, yr in enumerate(years)}
     year_idx = np.array([y_to_idx[dt.year] for dt in dates])
@@ -180,9 +198,29 @@ def build_check_inputs(species: str, cfg: SpeciesConfig) -> BayesInputs:
         return None if da is None else np.asarray(da.transpose("Year", "age").values, float)
 
     return BayesInputs(species=species, mode="check", years=years, consts=consts, stock=stock,
-                       year_idx=year_idx, gear=gear, yearly_net=yearly("yearly_stock_net_fish"),
+                       year_idx=year_idx, gear=gear, zero=zero, zero_ref=zero_log_ref(stock, zero, cfg), yearly_net=yearly("yearly_stock_net_fish"),
                        yearly_seine=yearly("yearly_stock_seine_fish"), pdu_raw=pdu_raw,
                        notes=[f"входные данные старого проекта: {cfg.script}.prepare_data_for_bayes"])
+
+
+def truncate_inputs(inp: BayesInputs, year_max: int) -> BayesInputs:
+    """Входные данные только за годы ≤ year_max (ретроспективная проверка): ловы, ПДУ, ёмкость."""
+    from dataclasses import replace
+
+    n = sum(1 for y in inp.years if y <= year_max)
+    if n < 3:
+        raise ValueError(f"до {year_max} года меньше трёх лет данных")
+    c = inp.consts
+    consts = replace(c, n_years=n, K=np.asarray(c.K)[:n], pdu=np.asarray(c.pdu)[:n])
+    keep = inp.year_idx < n
+
+    def cut(a):
+        return None if a is None else np.asarray(a)[:n]
+
+    return replace(inp, years=list(inp.years[:n]), consts=consts, stock=inp.stock[keep], year_idx=inp.year_idx[keep],
+                   gear=inp.gear[keep], zero=inp.zero_mask[keep], yearly_final=cut(inp.yearly_final), yearly_net=cut(inp.yearly_net),
+                   yearly_seine=cut(inp.yearly_seine), npc_total=cut(inp.npc_total), pdu_raw=cut(inp.pdu_raw),
+                   notes=inp.notes + [f"только годы до {year_max} включительно"])
 
 
 def build_inputs(species: str, cfg: SpeciesConfig, mode: str = "new", **kw) -> BayesInputs:

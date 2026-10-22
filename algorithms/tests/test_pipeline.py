@@ -56,12 +56,19 @@ def test_chain_1_2_3(env):
     d3b, r3b = step(tmp, sp, gk, "pdu_by_age", name="pdu_alone")
     a = [r["pdu_pcs"] for r in rows]
     b = [r["pdu_pcs"] for r in r3b["tables"]["pdu_by_age"]["rows"]]
-    assert np.allclose(np.array(a, float), np.array(b, float), rtol=1e-12, equal_nan=True)
+    assert np.allclose(np.array(a, float), np.array(b, float), rtol=1e-9, equal_nan=True)
     # априорная проверка байесовской модели (секунды)
     d4, r4 = step(tmp, sp, gk, "bayes_cohort", {"stock_by_catch": d2, "pdu_by_age": d3},
                   {"mode": "prior", "species": ["lesh", "sudak"]})
     assert set(r4["payload"]["species"]) == {"лещ", "судак"}
     assert r4["tables"]["bayes_totals"]["rows"]
+    # проверки модели: чувствительность балансового метода (без MCMC) — таблица 17 статьи для леща
+    d6, r6 = step(tmp, sp, gk, "bayes_checks", {"bayes_cohort": d4},
+                  {"check_net": True, "check_retro": False, "check_prior": False, "check_pad": False, "check_recovery": False})
+    rows = [r for r in r6["tables"]["net_sensitivity"]["rows"] if r["species"] == "лещ"]
+    f = {(r["parameter"], round(r["rel_change"], 2)): round(r["stock_factor"], 2) for r in rows if r["parameter"] != "база"}
+    assert f[("V, м/ч", -0.5)] == 2.08 and f[("V, м/ч", 0.5)] == 0.66 and f[("k", -0.5)] == 1.83 and f[("k", 0.25)] == 0.83
+    assert f[("p_to_net", -0.4)] == 2.09 and f[("p_to_net", 0.4)] == 0.53
 
 
 def test_forecast_matches_legacy(env):

@@ -10,8 +10,9 @@ from .bundle import Bundle
 # Неизменяемые параметры методики: имя в манифесте → атрибут fishcore.config
 FIXED_CONFIG = (
     "SEINE_MIN_AGE", "SEINE_C_LOWER", "SEINE_C_LOWER_FIRST", "SEINE_C_UPPER", "SEINE_MIN_SAMPLE",
-    "NET_MIN_AGE", "NET_END_LEFT", "NET_END_RIGHT", "NET_C_LOWER", "NET_C_UPPER", "NET_MIN_SAMPLE",
+    "NET_MIN_AGE", "NET_END_LEFT_FRAC", "NET_END_RIGHT_FRAC", "NET_C_LOWER_FRAC", "NET_C_UPPER", "NET_MIN_SAMPLE",
     "HECTARE_M2", "KM2_M2", "NPC_STOCK_MULTIPLIER", "NET_STOCK_FORMULA", "COMBINE_GEARS",
+    "NET_ZONE0_SUBSTEPS", "NET_PANELS_MODE", "AGE_PSEUDOCOUNT_TOTAL", "AGE_POOL_MIN_SAMPLE", "AGE_POOL_NEIGHBOURS",
     "PDU_CAP", "PDU_MAX_ITER", "PDU_TOL_G", "PDU_FREE_STOCK_TOL_G",
 )
 
@@ -25,7 +26,20 @@ def apply_fixed(params: dict) -> None:
         if k in params and params[k] is not None:
             cur = getattr(config, k)
             v = params[k]
-            setattr(config, k, type(cur)(v) if not isinstance(cur, str) else str(v))
+            if isinstance(cur, str):
+                v = str(v)
+            elif isinstance(cur, bool) or cur is None:
+                pass
+            elif isinstance(cur, int):
+                v = int(v)
+            else:
+                v = float(v)
+            setattr(config, k, v)
+    # число сетей одной ячеи по типу лова (научный, промысловый) — в манифесте двумя параметрами
+    for k, types in (("NET_PANELS_SCIENTIFIC", ("научный", "scientific")), ("NET_PANELS_COMMERCIAL", ("промысловый", "commercial"))):
+        if params.get(k) is not None:
+            for t in types:
+                config.NET_PANELS_BY_CATCH_TYPE[t] = int(params[k])
 
 
 def bundle(ctx, *required: str) -> Bundle:

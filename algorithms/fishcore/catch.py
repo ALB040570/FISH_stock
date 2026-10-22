@@ -4,7 +4,8 @@
 Возрастная группа j (less_j) — рыбы в возрасте от j−1 до j лет; группа 2 — двухлетки.
 
 Улов лова d по возрастам: Y_ij(d) = Y_i(d) · q_ij(t), где q_ij(t) — доли возрастной
-пробы года (к пробе прибавляется 1 для групп <= m1, формула (20) статьи).
+пробы года, сглаженной smooth_age_sample: к группам <= m1 прибавляется в сумме одна условная рыба
+(1/J на группу), малые пробы дополняются пробами соседних лет (config.AGE_POOL_MIN_SAMPLE).
 
 Пропуск (NaN) в исходной таблице означает, что вид в этом лове не учитывался;
 он сохраняется как NaN и исключается из средних (как в исходном проекте через xarray),
@@ -19,9 +20,11 @@ import numpy as np
 import pandas as pd
 
 from . import config
-from .data_source import FishProps, list_catch_years, load_fish_props, load_year
+from .data_source import (FishProps, list_catch_years, load_fish_props, load_samples, load_year,
+                          neighbour_samples, smooth_age_sample)
 
-META_COLUMNS = ["Date", "Place", "Instrument", "Instrument_size", "CatchType", "Year", "Area"]
+META_COLUMNS = ["Date", "Place", "Instrument", "Instrument_raw", "NetPanels", "Instrument_size", "CatchType",
+                "Year", "Area"]
 
 
 @dataclass
@@ -75,6 +78,7 @@ def build_haul_catch(
     species = props.species
     years = list_catch_years(waterbody, data_dir)
 
+    samples = load_samples(waterbody, data_dir)
     metas, blocks, shares_all, samples_all = [], [], [], []
     ages = None
     for year in years:
@@ -91,7 +95,7 @@ def build_haul_catch(
             if fish not in sample.columns:
                 continue
             r = sample[fish].to_numpy(dtype=float)
-            smoothed = r + (ages <= props.m1[fish]).astype(float)
+            smoothed = smooth_age_sample(r, ages, props.m1[fish], neighbour_samples(samples, year, fish, ages))
             raw[s] = r
             shares[s] = smoothed / smoothed.sum() if smoothed.sum() > 0 else 0.0
         shares_all.append(shares)
@@ -110,7 +114,7 @@ def build_haul_catch(
     if not metas:
         # FishStock: у водоёма нет ни одного лова этим орудием (например, только сети) — пустой набор;
         # в окончательном запасе берётся оценка другого орудия (combine_gears). Формулы не меняются.
-        metas = [pd.DataFrame({c: pd.Series(dtype=float if c in ("Year", "Area", "Instrument_size") else object)
+        metas = [pd.DataFrame({c: pd.Series(dtype=float if c in ("Year", "Area", "Instrument_size", "NetPanels") else object)
                                for c in META_COLUMNS})]
         blocks = [np.zeros((0, len(species), len(ages)))]
     meta = pd.concat(metas, ignore_index=True)

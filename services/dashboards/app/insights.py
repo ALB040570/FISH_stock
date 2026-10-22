@@ -1384,17 +1384,17 @@ def explain_haul(D, where: dict, opt: dict) -> dict:
         y = rec.get(f"a{a}")
         if not qq and not y:
             continue
-        out.append({"age": a, "n": n, "plus1": (m1 is not None and a <= m1), "q": qq, "Y": rec.get("total"), "Yj": y})
+        out.append({"age": a, "n": n, "q": qq, "Y": rec.get("total"), "Yj": y})
     lang = D.lang
     title = (f"{D.sp_name(sp).capitalize()}, лов №{haul}: {_ru_date(rec['_iso'])}, "
              f"{D.place(rec.get('place')) or '—'}, {rec['gear']}")
     return {
         "columns": [col("age", tt("age", lang), "integer"), col("n", "В пробе, шт" if lang != "kk" else "Сынамада, дана", "number"),
-                    col("plus1", "+1 (j ≤ m1)", "boolean"), col("q", "Доля q_ij" if lang != "kk" else "Үлес q_ij", "number"),
+                    col("q", "Доля q_ij" if lang != "kk" else "Үлес q_ij", "number"),
                     col("Y", "Y_id, шт", "number"), col("Yj", "Y_ijd = Y_id · q_ij, шт", "number")],
         "rows": out, "total": len(out), "title": title,
-        "formula": f"Y_ijd = Y_id · q_ij(t_d); Y_id = {rec.get('total'):g} шт; q_ij — доли пробы {rec['year']} года "
-                   f"(к пробе прибавлено 1 для групп j ≤ m1{f' = {m1}' if m1 else ''}); сумма по возрастам = {sum(r['Yj'] or 0 for r in out):.4g} шт",
+        "formula": f"Y_ijd = Y_id · q_ij(t_d); Y_id = {rec.get('total'):g} шт; q_ij — доли сглаженной пробы {rec['year']} года "
+                   f"(группы j ≤ m1{f' = {m1}' if m1 else ''}; см. справку «Улов по возрастам»); сумма по возрастам = {sum(r['Yj'] or 0 for r in out):.4g} шт",
         "dataset_id": None, "meta": meta, "help": HOW_20,
     }
 

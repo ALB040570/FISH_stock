@@ -1,0 +1,140 @@
+{
+ "species": "судак",
+ "rhat_max_params": 1.0161043103118992,
+ "ess_bulk_min_params": 287.14332505076396,
+ "ess_tail_min_params": 249.49156792218113,
+ "rhat_max_X": 1.0169407133622401,
+ "ess_bulk_min_X": 284.23909435785384,
+ "ess_tail_min_X": 249.49156792218113,
+ "divergences": 0,
+ "divergences_by_chain": [
+  0,
+  0,
+  0,
+  0
+ ],
+ "ebfmi_by_chain": [
+  0.9810391114438797,
+  0.7882688901726177,
+  0.8996003005491139,
+  0.9274720392755151
+ ],
+ "ebfmi_min": 0.7882688901726177,
+ "n_free_params": 62,
+ "n_hauls": 690,
+ "n_obs_values": 6063,
+ "likelihood": "delta",
+ "n_zero_hauls": 93,
+ "monotonicity": {
+  "violations": 0,
+  "checked": 360000,
+  "rel_tol": 1e-09,
+  "ok": true
+ },
+ "worst_rhat": [
+  {
+   "name": "egg_survival_base",
+   "index": null,
+   "rhat": 1.0161043103118992,
+   "ess_bulk": 287.14332505076396,
+   "ess_tail": 320.6864956603685
+  },
+  {
+   "name": "s_year_fluct",
+   "index": 2015,
+   "rhat": 1.0131942230571842,
+   "ess_bulk": 315.5005342520045,
+   "ess_tail": 349.64705059633553
+  },
+  {
+   "name": "s_juvenile_steep",
+   "index": null,
+   "rhat": 1.0131405537407265,
+   "ess_bulk": 482.6622605728707,
+   "ess_tail": 961.1676542033453
+  },
+  {
+   "name": "s_year_fluct",
+   "index": 2017,
+   "rhat": 1.0128930953825417,
+   "ess_bulk": 311.7520206554967,
+   "ess_tail": 495.1345016340692
+  },
+  {
+   "name": "X_initial_older_raw",
+   "index": 2,
+   "rhat": 1.0120835640304922,
+   "ess_bulk": 293.0778349327864,
+   "ess_tail": 396.9047800372752
+  },
+  {
+   "name": "s_year_fluct",
+   "index": 2019,
+   "rhat": 1.01111529752617,
+   "ess_bulk": 404.87414753004344,
+   "ess_tail": 836.2596941930386
+  },
+  {
+   "name": "beta_1d",
+   "index": 2017,
+   "rhat": 1.0107560765694699,
+   "ess_bulk": 439.65210074132887,
+   "ess_tail": 552.2199073071995
+  },
+  {
+   "name": "X_initial_older_raw",
+   "index": 6,
+   "rhat": 1.0093395610108653,
+   "ess_bulk": 385.65588889601844,
+   "ess_tail": 613.9998831842947
+  },
+  {
+   "name": "s_year_fluct",
+   "index": 2022,
+   "rhat": 1.0092986748796327,
+   "ess_bulk": 417.416226276448,
+   "ess_tail": 737.1516628446984
+  },
+  {
+   "name": "X_initial_older_raw",
+   "index": 10,
+   "rhat": 1.0073739557285049,
+   "ess_bulk": 1101.277189115803,
+   "ess_tail": 988.9787490548201
+  }
+ ],
+ "cap_active_cells": 20,
+ "cap_active_any": 22,
+ "plots": [
+  "trace_density_alpha.png",
+  "trace_s_base.png",
+  "trace_s_juvenile_steep.png",
+  "trace_s_aging_slow.png",
+  "trace_s_year_fluct.png",
+  "trace_beta_1d.png",
+  "trace_q_raw.png",
+  "trace_egg_survival_base.png",
+  "trace_fec_at_m0.png",
+  "trace_fec_at_m1.png",
+  "trace_X_initial_older_raw.png",
+  "trace_log_q_net.png",
+  "trace_sigma_stock.png",
+  "trace_zero_c.png",
+  "trace_zero_b.png",
+  "prior_posterior_density_alpha.png",
+  "prior_posterior_s_base.png",
+  "prior_posterior_s_juvenile_steep.png",
+  "prior_posterior_s_aging_slow.png",
+  "prior_posterior_s_year_fluct.png",
+  "prior_posterior_beta_1d.png",
+  "prior_posterior_q_raw.png",
+  "prior_posterior_egg_survival_base.png",
+  "prior_posterior_fec_at_m0.png",
+  "prior_posterior_fec_at_m1.png",
+  "prior_posterior_X_initial_older_raw.png",
+  "prior_posterior_log_q_net.png",
+  "prior_posterior_sigma_stock.png",
+  "prior_posterior_zero_c.png",
+  "prior_posterior_zero_b.png"
+ ]
+}

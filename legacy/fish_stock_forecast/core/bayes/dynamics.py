@@ -124,7 +124,7 @@ def maturity(m0: int, m1: int) -> np.ndarray:
 # ---------------------------------------------------------------- модель
 
 
-PARAMS = ("density_alpha", "s_base", "s_juvenile_steep", "s_aging_slow", "s_year_fluct", "press_base",
+PARAMS = ("density_alpha", "s_base", "s_juvenile_steep", "s_aging_slow", "s_year_fluct",
           "beta_1d", "egg_survival_base", "fec_at_m0", "fec_at_m1", "X_initial_older_raw")
 
 
@@ -153,13 +153,14 @@ def mortality_matrix(ops, p: dict, fluct, m0: int, m1: int, cfg: SpeciesConfig):
     return ops.clip(s_final_normalized, cfg.s_clip_lo, cfg.s_clip_hi)
 
 
-def predation_matrix(ops, press_base, m2: int, n_ages: int, cfg: SpeciesConfig):
-    """Давление хищников γ (годы × возрасты): ~ 1/j до возраста m2, нормировка на максимум года."""
-    ages_grid_2d = np.arange(1, n_ages + 1)[None, :]
-    h_mask_flat = np.where(ages_grid_2d <= m2, 1.0, 0.0)
-    press_raw = (press_base[:, None] / np.arange(1, n_ages + 1)[None, :]) * h_mask_flat
-    press_max_per_year = ops.row_max(press_raw) + 1e-6
-    return press_raw, (press_raw / press_max_per_year) * cfg.press_max
+def predation_matrix(m2: int, n_ages: int, cfg: SpeciesConfig, n_years: int = 1) -> np.ndarray:
+    """Давление хищников γ (годы × возрасты): γ_j = γ_max · χ(j ≤ m2) / j — постоянная, без параметров.
+
+    Раньше γ = (b/j)·χ / (b + 10⁻⁶) · γ_max со случайным b = press_base по годам: b сокращается, поэтому
+    b не определялся данными; новое γ отличается от прежнего лишь на 10⁻⁶/b (≈ 3·10⁻⁶ относительно)."""
+    ages = np.arange(1, n_ages + 1)
+    row = np.where(ages <= m2, 1.0, 0.0) / ages * cfg.press_max
+    return np.repeat(row[None, :], n_years, axis=0)
 
 
 def fecundity(ops, fec_at_m0, fec_at_m1, m0: int, m1: int, cfg: SpeciesConfig):
@@ -179,6 +180,11 @@ def predator_mask(ops, m2: int, n_ages: int, cfg: SpeciesConfig):
     if cfg.h_mask_mode == "step":
         return np.where(older_grid <= m2, 1.0, 0.0)
     return 1.0 / (1.0 + ops.exp(5.0 * (older_grid - m2)))
+
+
+def removal_ratio(X_prev, s_t1, beta_older, A_older):
+    """Запрошенное изъятие β·A как доля выживших (1 − s)·X (+1 рыба), возрасты 2..m1 − 1 → 3..m1."""
+    return (beta_older * A_older) / ((1.0 - s_t1[1:-1]) * X_prev[1:-1] + 1.0)
 
 
 def step(ops, X_prev, s_t1, pp, beta_older, A_older, K_t, alpha_t, theta, eps, egg_survival, h_mask,
@@ -217,7 +223,14 @@ def step(ops, X_prev, s_t1, pp, beta_older, A_older, K_t, alpha_t, theta, eps, e
     s_prev_m1 = s_t1[1:-1]
     beta_curr_older = beta_older
     A_curr_older = A_older
-    if cfg.catch_mode == "max":
+    if cfg.catch_mode == "cap":
+        # плавный минимум из запрошенной доли и removal_cap: изъятие никогда не превышает cap·выживших
+        available_pop = (1.0 - s_prev_m1) * X_prev_m1
+        ratio = removal_ratio(X_prev, s_t1, beta_curr_older, A_curr_older)
+        k = cfg.removal_sharp
+        rate = cfg.removal_cap - ops.softplus(k * (cfg.removal_cap - ratio)) / k
+        num_older = available_pop * (1.0 - rate)
+    elif cfg.catch_mode == "max":
         num_older_raw = ((1.0 - s_prev_m1) * X_prev_m1) - (beta_curr_older * A_curr_older)
         num_older = ops.maximum(num_older_raw, 1)
     elif cfg.catch_mode == "softplus":
@@ -248,9 +261,11 @@ def simulate(ops, p: dict, c: Constants, cfg: SpeciesConfig) -> dict:
     """Динамика численности по уравнениям (16)-(17).
 
     p — параметры (имена как у случайных величин PyMC): density_alpha (годы), s_base, s_juvenile_steep,
-    s_aging_slow, s_year_fluct (годы), press_base (годы), beta_1d (годы), egg_survival_base, fec_at_m0,
+    s_aging_slow, s_year_fluct (годы), beta_1d (годы), egg_survival_base, fec_at_m0,
     fec_at_m1, X_initial_older_raw (m1 − 1).
-    Возвращает промежуточные величины с именами старых скриптов.
+    Возвращает промежуточные величины с именами старых скриптов и removal_ratio (годы × возрасты) — запрошенное
+    изъятие β·A как доля выживших (возрасты 3..m1, годы 2-й и далее; иначе 0): где > removal_cap, ограничение
+    изъятия действует.
     """
     n_years, n_ages = c.n_years, c.n_ages
     m0, m1, m2 = c.m0, c.m1, c.m2
@@ -258,7 +273,7 @@ def simulate(ops, p: dict, c: Constants, cfg: SpeciesConfig) -> dict:
     is_age_alive = ages_grid_2d <= m1
 
     s = mortality_matrix(ops, p, p["s_year_fluct"], m0, m1, cfg)
-    press_raw, pred = predation_matrix(ops, p["press_base"], m2, n_ages, cfg)
+    pred = predation_matrix(m2, n_ages, cfg, n_years)
     beta = ops.where(is_age_alive, p["beta_1d"][:, None] + np.zeros((1, n_ages)), 0.0)
     theta = fecundity(ops, p["fec_at_m0"], p["fec_at_m1"], m0, m1, cfg)
     egg_survival = p["egg_survival_base"] * cfg.egg_scale
@@ -285,28 +300,34 @@ def simulate(ops, p: dict, c: Constants, cfg: SpeciesConfig) -> dict:
 
     h_mask = predator_mask(ops, m2, n_ages, cfg)
     X_list = [X_initial]
+    ratio_list = [np.zeros(n_ages)]
     for t in range(1, n_years):
         X_curr, _ = step(ops, X_list[t - 1], s[t, :], pred[t, :], beta[t, 1:-1], c.pdu[t, :-1],
                          K[t], density_alpha[t], theta, eps, egg_survival, h_mask, cfg)
+        ratio_list.append(ops.concat([np.zeros(2), removal_ratio(X_list[t - 1], s[t, :], beta[t, 1:-1],
+                                                                 c.pdu[t, :-1])]))
         X_list.append(X_curr)
 
     return {
-        "s": s, "press_raw": press_raw, "pred_press_cube": pred, "beta": beta, "theta_dyn": theta,
+        "s": s, "pred_press_cube": pred, "beta": beta, "theta_dyn": theta,
         "egg_survival": egg_survival, "X_initial_older": X_initial_older, "X_initial": X_initial,
-        "X_estimated": ops.stack(X_list),
+        "X_estimated": ops.stack(X_list), "removal_ratio": ops.stack(ratio_list),
     }
 
 
-def expected_observations(X_estimated, q_bias, year_idx: np.ndarray, cfg: SpeciesConfig):
-    """Ожидаемые оценки запаса по ловам (numpy): X(год лова, возраст) · q(возраст).
+def expected_observations(X_estimated, q_bias, year_idx: np.ndarray, cfg: SpeciesConfig, gear=None,
+                          log_q_net: float = 0.0):
+    """Ожидаемые оценки запаса по ловам (numpy): X(год лова, возраст) · q(возраст) · q_net (только сеть).
 
-    Возвращает (ожидание, срез столбцов наблюдений): при likelihood_from = 3 — возрасты 3..m1,
-    при likelihood_from = 2 — возрасты 2..m1. В модели PyMC то же самое записано в model.py.
+    Возвращает (ожидание, срез столбцов наблюдений): возрасты likelihood_from..m1 (оценки по ловам хранятся
+    для возрастов 2..m1). В модели PyMC то же самое записано в model.py.
+    gear — орудие лова (0 — сеть, 1 — невод); без gear поправка сети не применяется.
     """
     obs = np.asarray(X_estimated)[:, 1:][year_idx]     # возрасты 2..m1
-    if cfg.likelihood_from == 2:
-        return obs * q_bias[1:], slice(0, None)
-    return obs[:, 1:] * q_bias[2:], slice(1, None)
+    if gear is not None and cfg.gear_effect:
+        obs = obs * np.exp(log_q_net * (np.asarray(gear) == 0))[:, None]
+    k = cfg.likelihood_from - 2
+    return obs[:, k:] * q_bias[k + 1:], slice(k, None)
 
 
 def mu_floor(ops, expected, cfg: SpeciesConfig):
@@ -315,13 +336,58 @@ def mu_floor(ops, expected, cfg: SpeciesConfig):
     return ops.softplus(expected - 10.0) + 10.0
 
 
-def log_likelihood_np(X_estimated, q_bias, sigma_stock, stock, year_idx, cfg) -> float:
-    """Логнормальное правдоподобие оценок по ловам (numpy, для проверки)."""
-    exp_, sl = expected_observations(X_estimated, q_bias, year_idx, cfg)
-    mu = np.log(mu_floor(NumpyOps, exp_, cfg))
-    y = stock[:, sl]
-    ly = np.log(y)
-    return float(np.sum(-ly - np.log(sigma_stock) - 0.5 * np.log(2 * np.pi) - (ly - mu) ** 2 / (2 * sigma_stock ** 2)))
+def obs_slice(cfg: SpeciesConfig) -> slice:
+    """Столбцы оценок по ловам (возрасты 2..m1), входящие в правдоподобие."""
+    return slice(cfg.likelihood_from - 2, None)
+
+
+def zero_log_ref(stock: np.ndarray, zero: np.ndarray, cfg: SpeciesConfig) -> float:
+    """ln N̄ — средний логарифм суммы оценок по ненулевым ловам (точка отсчёта наклона b, константа данных)."""
+    vals = np.asarray(stock)[~np.asarray(zero, bool)][:, obs_slice(cfg)] - cfg.obs_pad
+    tot = np.maximum(vals.sum(axis=1), 1e-9)
+    return float(np.mean(np.log(tot))) if len(tot) else 0.0
+
+
+def zero_log_lambda(log_total, gear, zero_c, zero_b, log_ref: float):
+    """ln λ_h = c_орудия + b · (ln N_h − ln N̄); вероятность пустого лова p0 = exp(−λ).
+
+    log_total — ln суммы ожидаемых оценок лова по возрастам правдоподобия (с поправками уловистости).
+    Работает и с numpy, и с pytensor (индексирование zero_c[gear]).
+    """
+    return zero_c[gear] + zero_b * (log_total - log_ref)
+
+
+def log_likelihood_np(X_estimated, q_bias, sigma_stock, stock, year_idx, cfg, gear=None,
+                      log_q_net: float = 0.0, zero=None, zero_c=None, zero_b: float = 1.0) -> float:
+    """Правдоподобие оценок по ловам (numpy, для проверки): логнормальное с добавкой ("pad")
+    или дельта-логнормальное ("delta": пустые ловы — exp(−λ), ненулевые — (1 − exp(−λ)) · логнормальное)."""
+    exp_, sl = expected_observations(X_estimated, q_bias, year_idx, cfg, gear, log_q_net)
+    safe = mu_floor(NumpyOps, exp_, cfg)
+    mu = np.log(safe)
+    y = np.asarray(stock)[:, sl]
+    if cfg.likelihood != "delta":
+        ly = np.log(y)
+        return float(np.sum(-ly - np.log(sigma_stock) - 0.5 * np.log(2 * np.pi) - (ly - mu) ** 2 / (2 * sigma_stock ** 2)))
+    zero = np.asarray(zero, bool)
+    pos = ~zero
+    yp = np.maximum(y[pos] - cfg.obs_pad, cfg.obs_pad)
+    if cfg.delta_pos == "gamma":
+        from scipy.special import gammaln
+        a = 1.0 / sigma_stock ** 2
+        rate = a / safe[pos]
+        ll = np.sum(a * np.log(rate) - gammaln(a) + (a - 1) * np.log(yp) - rate * yp)
+    else:
+        if cfg.delta_pos == "lognormal_total":
+            ly, m = np.log(yp.sum(axis=1)), np.log(safe[pos].sum(axis=1))
+        else:
+            ly, m = np.log(yp), mu[pos]
+        ll = np.sum(-ly - np.log(sigma_stock) - 0.5 * np.log(2 * np.pi) - (ly - m) ** 2 / (2 * sigma_stock ** 2))
+    g = np.zeros(len(y), int) if gear is None else np.asarray(gear, int)
+    lam = np.exp(zero_log_lambda(np.log(safe.sum(axis=1)), g, np.asarray(zero_c, float), zero_b,
+                                 zero_log_ref(stock, zero, cfg)))
+    p_present = np.clip(-np.expm1(-lam), 1e-12, 1.0 - 1e-12)     # как в model.py
+    ll += np.sum(np.log1p(-p_present[zero])) + np.sum(np.log(p_present[pos]))
+    return float(ll)
 
 
 def prior_means(c: Constants, cfg: SpeciesConfig) -> dict:
@@ -334,10 +400,12 @@ def prior_means(c: Constants, cfg: SpeciesConfig) -> dict:
         "s_juvenile_steep": float(np.exp(cfg.s_juv_mu)),
         "s_aging_slow": float(np.exp(cfg.s_age_mu)),
         "s_year_fluct": np.zeros(Y),
-        "press_base": np.full(Y, np.exp(cfg.press_mu)),
         "beta_1d": np.full(Y, min(max(cfg.beta_mu, cfg.beta_lower), cfg.beta_upper)),
         "egg_survival_base": (cfg.egg_alpha - 1) / (cfg.egg_alpha + cfg.egg_beta - 2),
         "fec_at_m0": (low0 + high0) / 2,
         "fec_at_m1": (low1 + high1) / 2,
         "X_initial_older_raw": np.asarray(c.x0, float).copy(),
+        "log_q_net": 0.0,
+        "zero_c": np.zeros(2),
+        "zero_b": float(cfg.zero_b_mu),
     }
