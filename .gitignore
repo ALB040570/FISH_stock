@@ -11,6 +11,9 @@ node_modules/
 /.fishstock_seeded
 deploy/data/
 # служебное
+# результаты сборки пакетов (pip берёт их вместо исходников — устаревший код в образах)
+build/
+*.egg-info/
 __pycache__/
 *.pyc
 .pytest_cache/

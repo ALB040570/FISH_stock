@@ -1,0 +1,14 @@
+# Не передавать в сборку образов: секреты, данные, окружения и результаты прежних сборок.
+.git
+.env
+.venv
+venv
+data
+backups
+**/node_modules
+frontend/dist
+**/__pycache__
+**/*.pyc
+# устаревшая сборка общей библиотеки: pip install брал её вместо исходников
+libs/fishcommon/build
+**/*.egg-info
