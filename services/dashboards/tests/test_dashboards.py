@@ -29,7 +29,7 @@ def test_dashboards(calc_stack, tmp_path, monkeypatch):
         j = r.json()
         if w["source"].get("algorithm") in ("bayes_cohort", "forecast_pdu"):
             assert j.get("empty") and j["reason"] == "no_step", w["id"]
-        elif str(w["source"].get("view", "")).startswith("by_"):      # байесовская модель: в расчёте «stock» шага нет
+        elif str(w["source"].get("view", "")).startswith(("by_", "fc_")):   # модель и прогноз: в расчёте «stock» шагов нет
             assert j.get("empty") and "полный расчёт" in j["message"], w["id"]
         else:
             assert not j.get("empty"), (w["id"], j)
