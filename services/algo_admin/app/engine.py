@@ -50,12 +50,11 @@ class Engine:
                                      obj_id=code)
             if not self.find_version(code, manifest["version"]):
                 self.publish(manifest, files, actor="system", source="builtin",
-                             report={"status": "passed", "note": "эталонный алгоритм, перенесён из fish_stock_forecast; "
-                                     "сверка — algorithms/tests (этапы 1–3, 5) и tools/control_bayes.py (этап 4)"})
+                             report={"status": "passed", "note": "эталонный алгоритм; проверен на контрольных примерах оз. Жайсан"})
             prof = files.get("profiles/zhaysan.json")
             if prof and not self.profiles.exists(f"{code}__zhaysan"):
                 self.save_profile(code, "zhaysan", {"species_profiles": json.loads(prof)}, "system",
-                                  "значения последних версий скриптов calc_stock_bayes_2g1p_*.py (оз. Жайсан)")
+                                  "значения расчётов заказчика для оз. Жайсан")
 
     def publish(self, manifest: dict, files: dict[str, bytes], actor: str, source: str, report: dict | None = None) -> dict:
         code = manifest["code"]

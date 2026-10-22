@@ -97,7 +97,7 @@ class NetFitResult:
         notes = []
         if self.source != SOURCE_CATCH:
             notes.append(self.source)
-        notes += [f"нарушено (24): {v}" for v in self.violations]
+        notes += [f"нарушено ограничение: {v}" for v in self.violations]
         return "; ".join(notes) if notes else "ок"
 
 

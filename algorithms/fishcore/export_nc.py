@@ -127,7 +127,7 @@ def save_pdu(pdu, results_dir: Path | None = None) -> dict[str, str]:
     try:
         name = f"{pdu.waterbody}_pdu_pieces_3d.nc"
         da.attrs.update({"units": "штук",
-                         "method": "раздел 5 статьи; окончательный запас (сеть+невод); итерации до исчерпания квоты"})
+                         "method": "окончательный запас (сеть+невод); итерации до исчерпания квоты"})
         da.to_netcdf(results_dir / name, engine="netcdf4")
         saved["nc_files"] = "1"
     except Exception as e:

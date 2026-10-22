@@ -21,6 +21,6 @@ def run(ctx):
     ctx.set_payload(views.seine_payload(res))
     bad = int(res.params_frame()["статус"].astype(str).str.contains("нарушено").sum()) if "статус" in res.params_frame() else 0
     ctx.metric("fits", len(res.fits), "Подогнано сигмоид")
-    ctx.metric("violations", bad, "Нарушений ограничений (26)")
+    ctx.metric("violations", bad, "Нарушений ограничений")
     ctx.save_state({"seine_c": res})
     return {"species": res.species, "years": res.years}

@@ -402,7 +402,7 @@ def catch_by_age_tables(res) -> list[tuple[str, str, list[dict], list[dict], str
            {"code": "species", "title": "Вид"}, {"code": "total", "title": "Улов вида в лове", "unit": "шт", "type": "number"},
            *age_cols], rows,
           "Y_ijd = Y_id · q_ij(t_d): улов вида в лове, разложенный по возрастным группам по долям возрастной пробы "
-          "года лова (формула (20)).")
+          "года лова.")
     hc = res.catches[GEARS[0]]
     srows = []
     for yi, y in enumerate(hc.years):
@@ -419,5 +419,5 @@ def catch_by_age_tables(res) -> list[tuple[str, str, list[dict], list[dict], str
            {"code": "n_sample", "title": "Рыб в пробе", "unit": "шт", "type": "number"},
            *[{"code": f"q{a}", "title": f"q, j = {a}", "type": "number"} for a in ages],
            *[{"code": f"n{a}", "title": f"проба, j = {a}", "unit": "шт", "type": "number"} for a in ages]], srows,
-          "q_ij(t) — доля возрастной группы j в пробе года t; к пробе прибавляется 1 для групп j ≤ m1 (формула (20)).")
+          "q_ij(t) — доля возрастной группы j в пробе года t; к пробе прибавляется 1 для групп j ≤ m1.")
     return [t1, t2]

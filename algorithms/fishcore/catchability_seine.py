@@ -296,7 +296,7 @@ class SeineCatchability:
             c = r.catchability
             rows.append({
                 "вид": fish, "год": year,
-                "a (крутизна)": r.fit.a, "j50 (МНК)": r.fit.j50, "j50 (правило статьи)": r.j50_rule,
+                "a (крутизна)": r.fit.a, "j50 (МНК)": r.fit.j50, "j50 (по правилу)": r.j50_rule,
                 "b": r.fit.b, "Z (общая смертность)": r.fit.Z,
                 f"c({age_label(r.ages[0])})": c[0], "c(m1)": c[-1], "среднее c": c.mean(), "c̄ задано": r.c_mean,
                 "R² (лог)": r.fit.r2, "рыб в пробе": r.n_sample, "улов неводом, шт": r.total_catch,
@@ -385,7 +385,7 @@ def to_dataarray(res: SeineCatchability):
         dims=["Year", "FishType", "LessAge"],
         name=CUBE_NAME,
         attrs={
-            "method": "МНК: сигмоида уловистости + кривая улова, ограничения (25)-(26)",
+            "method": "МНК: сигмоида уловистости + кривая улова, средняя и границы уловистости",
             "c_lower": config.SEINE_C_LOWER,
             "c_lower_age2": config.SEINE_C_LOWER_FIRST,
             "c_upper": config.SEINE_C_UPPER,

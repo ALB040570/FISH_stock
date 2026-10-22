@@ -8,7 +8,7 @@
       <el-radio-group v-if="sections.length" v-model="section" size="small" class="secs">
         <el-radio-button v-for="s in sections" :key="s.code" :value="s.code">{{ tr(s, 'title') }}</el-radio-button>
       </el-radio-group>
-      <!-- год результатов расчёта: стрелками, как в прежнем приложении; общий для всех слайдов раздела -->
+      <!-- год результатов расчёта: стрелками; общий для всех слайдов раздела -->
       <div v-if="curTab?.year_picker && calcYears.length && showYear" class="ystep" :aria-label="$t('mon.year')">
         <span class="muted small">{{ $t('mon.year') }}</span>
         <el-button size="small" :disabled="yIdx <= 0" :title="$t('mon.prev_year')" @click="stepYear(-1)"><el-icon><ArrowLeft /></el-icon></el-button>

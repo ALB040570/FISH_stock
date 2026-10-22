@@ -28,7 +28,7 @@ from .inputs import BayesInputs, build_inputs
 QUANTILES = (0.025, 0.25, 0.5, 0.75, 0.975)
 N_KEEP = 500           # выборок для страницы и прогноза
 MODES = ("new", "check", "prior")
-MODE_TITLES = {"new": "новый расчёт", "check": "сверка со старым скриптом", "prior": "априорная проверка"}
+MODE_TITLES = {"new": "новый расчёт", "check": "сверка с исходным расчётом", "prior": "априорная проверка"}
 
 
 # ---------------------------------------------------------------- файлы
@@ -318,7 +318,7 @@ def save_nc(path: Path, summary: dict, inp: BayesInputs, meta: dict) -> str | No
             data[key] = ((["age"] if key == "rhat_q_bias" else ["Year", "age"]), summary[key])
     attrs = {"waterbody": app_config.WATERBODY,
              "model_type": f"Two-Gear Bayesian Cohort Assessment fish = {inp.species}",
-             "description": "fish_stock_forecast, этап 4: " + MODE_TITLES[meta["mode"]],
+             "description": "FishStock, этап 4: " + MODE_TITLES[meta["mode"]],
              "total_divergences": int(meta.get("divergences", 0) or 0),
              "config": json.dumps(meta.get("config_short", {}), ensure_ascii=False)}
     ds = xr.Dataset({k: (dims, np.asarray(v, float)) for k, (dims, v) in data.items()},

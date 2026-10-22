@@ -97,9 +97,8 @@ def _sections(run: dict, results: dict, wb: dict) -> list[tuple[str, list]]:
             if k.startswith(("rhat_", "divergences_")) and m.get("value") is not None:
                 notes.append(f"{m['title']}: {_fmt(m['value'], 3 if k.startswith('rhat') else 0)}")
     notes += [w for w in run.get("warnings", [])]
-    notes.append("Расчёт выполнен по методике статьи «Многовидовые когортные математические модели оценки запасов "
-                 "рыбных ресурсов с применением байесовского вывода» (Габбасов М. и др.) алгоритмами, перенесёнными "
-                 "из fish_stock_forecast без изменения формул.")
+    notes.append("Методика расчёта: «Многовидовые когортные математические модели оценки запасов рыбных ресурсов "
+                 "с применением байесовского вывода» (Габбасов М. и др.).")
     out.append(("5. Диагностика и примечания", notes))
     return out
 
