@@ -530,8 +530,8 @@ def v_age_heatmap(D, opt):
         "rows": out_rows,
         "chart": _heat(ages, years, cells, tt("age", lang), tt("year", lang),
                        tt("share", lang) if share else tt("count", lang), "pct" if share else "int", y_is_year=True),
-        "notes": [n for n in [note, "Возраст j — рыбы от j−1 до j лет. Урожайное поколение видно как яркая диагональ: "
-                                    "с каждым годом оно на год старше."] if n],
+        "notes": [n for n in [note, "Возраст j — рыбы от j−1 до j лет. Урожайное поколение видно как яркая диагональ снизу-слева "
+                                    "вверх-вправо: с каждым годом (строкой выше) оно на год старше (столбцом правее)."] if n],
         "sources": _sources(D, "age_samples"),
         "drill": {"dataset_type": "age_samples", "x": "age", "y": "year"},
         "species_shown": sp,
