@@ -61,6 +61,8 @@ case "$FISH_HTTP_PORT" in *:*) LOCAL_URL="http://${FISH_HTTP_PORT}" ;; *) LOCAL_
 
 say "Сборка и запуск контейнеров (первый раз — 10–20 минут)"
 docker compose up -d --build
+# шлюз (nginx в web) узнаёт адреса сервисов только при запуске: после пересоздания сервисов — перезапуск
+docker compose restart web
 
 say "Жду готовности всех сервисов"
 # shellcheck source=deploy/server/lib.sh

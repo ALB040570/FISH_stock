@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Общие функции скриптов deploy/server (подключается через «.»).
 
 # Сервисы за шлюзом: /api/<имя>/health

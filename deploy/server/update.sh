@@ -48,6 +48,8 @@ if ! docker compose up -d --build; then
   echo "Сборка не удалась — работают прежние контейнеры. Журнал выше."
   exit 1
 fi
+# шлюз (nginx в web) узнаёт адреса сервисов только при запуске: после пересоздания сервисов — перезапуск
+docker compose restart web
 
 echo "== Проверка всех сервисов"
 # shellcheck source=deploy/server/lib.sh
