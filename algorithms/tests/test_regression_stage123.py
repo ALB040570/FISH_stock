@@ -65,6 +65,8 @@ def test_inputs_identical(bundle):
         cn, sn = new.load_year(y, "zhaysan", bundle)
         assert list(co.columns[:7]) == list(cn.columns[:7]) and set(co.columns) == set(cn.columns), y
         for c in co.columns:
+            if c == "Instrument_raw":  # исходное название орудия в файле — справочно, в расчёте не участвует
+                continue
             if c == "CatchType":     # с 21.10.2026 — коды справочника «Типы вылова» вместо слов
                 assert [LEGACY_CATCH_TYPE.get(x, x) for x in co[c]] == cn[c].tolist(), (y, c)
             elif not pd.api.types.is_numeric_dtype(co[c]):
@@ -105,17 +107,9 @@ def test_stages_identical(bundle):
     _close(po.pdu_t, pn.pdu_t, "ПДУ НПЦ, т")
 
 
-# Средние коэффициенты уловистости сети, с которыми заказчик получил сохранённые результаты (30.09.2026,
-# results/cache/stage23.pkl); 15.10.2026 в zhaysan_fish_prop.py они изменены. Остальные данные те же.
-K_NET_2026_09_30 = {"lesh": 0.3, "plotva": 0.35, "sazan": 0.3, "karas": 0.4, "yaz": 0.4, "sudak": 0.25, "okun": 0.35,
-                    "shuka": 0.4}
-
-
 def test_matches_saved_results(bundle, tmp_path):
-    """Контрольный пример: результаты совпадают с файлами, сохранёнными заказчиком
-    (legacy/fish_stock_forecast/results, расчёт 30.09.2026) при тогдашних k сети."""
-    for r in bundle.tables["species_props"]["rows"]:
-        r["k_net"] = K_NET_2026_09_30[r["species"]]
+    """Контрольный пример: результаты этапов 1–3 совпадают с файлами эталона
+    (legacy/fish_stock_forecast/results, эталон 22.10.2026, см. legacy/ETALON.md)."""
     xr = pytest.importorskip("xarray")
     from fishcore import config as fc
     from fishcore.catchability_seine import compute_seine_catchability, save_results

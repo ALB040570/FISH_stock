@@ -1,0 +1,196 @@
+{
+ "version": "2.0.0",
+ "author": "FishStock",
+ "entrypoint": "algorithm:run",
+ "language": "python",
+ "runtime": {
+  "python": ">=3.11",
+  "timeout_minutes": 2400,
+  "long": true
+ },
+ "code": "bayes_checks",
+ "title_ru": "Проверки байесовской модели",
+ "title_kk": "Байестік модельді тексеру",
+ "description": "Ретроспективный прогноз, чувствительность к априорным распределениям и к учёту пустых ловов, восстановление параметров на синтетических данных, чувствительность балансового метода к его параметрам. Кроме последней, каждая проверка — полный расчёт модели (долго: запускать ночью).",
+ "requires": {
+  "datasets": [
+   "catches",
+   "age_samples",
+   "species_props",
+   "yearly_conditions",
+   "mean_weights",
+   "npc_pdu"
+  ],
+  "steps": [
+   "bayes_cohort"
+  ]
+ },
+ "parameters": [
+  {
+   "code": "check_net",
+   "title_ru": "Чувствительность балансового метода (±25 %, ±50 %; секунды)",
+   "title_kk": "Баланс әдісінің сезімталдығы",
+   "type": "boolean",
+   "default": true,
+   "category": "run"
+  },
+  {
+   "code": "check_retro",
+   "title_ru": "Ретроспективный прогноз",
+   "title_kk": "Ретроспективті болжам",
+   "type": "boolean",
+   "default": true,
+   "category": "run"
+  },
+  {
+   "code": "year_max",
+   "title_ru": "Ретроспектива: подгонка по год включительно",
+   "type": "integer",
+   "default": 2021,
+   "category": "run",
+   "min": 2000,
+   "max": 2100
+  },
+  {
+   "code": "retro_species",
+   "title_ru": "Ретроспектива: виды",
+   "type": "species_list",
+   "default": null,
+   "category": "run",
+   "description": "пусто — все виды с расчётом модели"
+  },
+  {
+   "code": "check_prior",
+   "title_ru": "Чувствительность к априорным распределениям",
+   "title_kk": "Априорлық үлестірімдерге сезімталдық",
+   "type": "boolean",
+   "default": true,
+   "category": "run"
+  },
+  {
+   "code": "prior_factor",
+   "title_ru": "Множитель σ смертности и β",
+   "type": "number",
+   "default": 2.0,
+   "category": "run",
+   "min": 1,
+   "max": 10
+  },
+  {
+   "code": "prior_species",
+   "title_ru": "Априорные: виды",
+   "type": "species_list",
+   "default": null,
+   "category": "run",
+   "description": "пусто — все виды с расчётом модели"
+  },
+  {
+   "code": "check_pad",
+   "title_ru": "Учёт пустых ловов (логнормальное с константой)",
+   "title_kk": "Бос аулауларды есепке алу",
+   "type": "boolean",
+   "default": true,
+   "category": "run"
+  },
+  {
+   "code": "pad_species",
+   "title_ru": "Пустые ловы: виды",
+   "type": "species_list",
+   "default": null,
+   "category": "run",
+   "description": "пусто — лещ, судак, плотва, сазан"
+  },
+  {
+   "code": "check_recovery",
+   "title_ru": "Восстановление на синтетических данных",
+   "title_kk": "Синтетикалық деректерде қалпына келтіру",
+   "type": "boolean",
+   "default": true,
+   "category": "run"
+  },
+  {
+   "code": "recovery_species",
+   "title_ru": "Синтетические данные: виды",
+   "type": "species_list",
+   "default": null,
+   "category": "run",
+   "description": "пусто — лещ и судак"
+  },
+  {
+   "code": "draws",
+   "title_ru": "Выборок на цепь (пусто — из профиля)",
+   "type": "integer",
+   "default": null,
+   "category": "run",
+   "min": 10
+  },
+  {
+   "code": "tune",
+   "title_ru": "Шагов настройки (пусто — из профиля)",
+   "type": "integer",
+   "default": null,
+   "category": "run",
+   "min": 0
+  },
+  {
+   "code": "chains",
+   "title_ru": "Цепей (пусто — из профиля)",
+   "type": "integer",
+   "default": null,
+   "category": "run",
+   "min": 1
+  },
+  {
+   "code": "target_accept",
+   "title_ru": "target_accept (пусто — из профиля)",
+   "type": "number",
+   "default": null,
+   "category": "run",
+   "min": 0.5,
+   "max": 0.999
+  },
+  {
+   "code": "max_treedepth",
+   "title_ru": "max_treedepth (пусто — из профиля)",
+   "type": "integer",
+   "default": null,
+   "category": "run",
+   "min": 5
+  },
+  {
+   "code": "seed",
+   "title_ru": "seed (пусто — из профиля)",
+   "type": "integer",
+   "default": null,
+   "category": "run"
+  }
+ ],
+ "outputs": [
+  {
+   "code": "net_sensitivity",
+   "title_ru": "Чувствительность балансового метода",
+   "format": "table"
+  },
+  {
+   "code": "retro",
+   "title_ru": "Ретроспективный прогноз",
+   "format": "table"
+  },
+  {
+   "code": "prior_sensitivity",
+   "title_ru": "Чувствительность к априорным",
+   "format": "table"
+  },
+  {
+   "code": "pad_sensitivity",
+   "title_ru": "Учёт пустых ловов",
+   "format": "table"
+  },
+  {
+   "code": "recovery",
+   "title_ru": "Восстановление на синтетических данных",
+   "format": "table"
+  }
+ ],
+ "changes": "2.0.0 (23.10.2026): первая версия — проверки модели эталона от 22.10.2026"
+}

@@ -72,7 +72,9 @@ def run(ctx):
                 frac = (i + min(1.0, done / d["total"])) / n
             ctx.progress(frac if frac is not None else i / n, species=ru, **d)
         ctx.log(f"вид {ru} ({i + 1} из {n}), режим {mode}")
-        meta = R.run(ru, mode, progress=progress, log=ctx.log, results_dir=ctx.out_dir, stage23=(res, pdu, props))
+        # графики диагностики (PNG) не строятся: FishStock показывает диагностику своими графиками и таблицами
+        meta = R.run(ru, mode, progress=progress, log=ctx.log, results_dir=ctx.out_dir, stage23=(res, pdu, props),
+                     plots=False)
         loaded = R.load_npz(R.result_path(ru, mode, "npz", ctx.out_dir))
         a, m = loaded
         payload[ru] = views.bayes_payload(ru, a, m, mode)
@@ -80,12 +82,29 @@ def run(ctx):
         per_species[ru] = (a, m)
         ctx.metric(f"divergences_{code_by_ru.get(ru, ru)}", meta.get("divergences"), f"Расходимости: {ru}")
         ctx.metric(f"rhat_{code_by_ru.get(ru, ru)}", meta.get("rhat_X_max"), f"R̂ max: {ru}")
-        if meta.get("rhat_X_max") and meta["rhat_X_max"] > 1.05:
-            ctx.note(f"{ru}: R̂ = {meta['rhat_X_max']:.3f} > 1,05 — цепи не сошлись, увеличьте число шагов настройки")
+        dg = meta.get("diagnostics") or {}
+        for k, t in (("ess_bulk_min_params", "ESS bulk min"), ("ess_tail_min_params", "ESS tail min"), ("ebfmi_min", "E-BFMI min")):
+            if dg.get(k) is not None:
+                ctx.metric(f"{k}_{code_by_ru.get(ru, ru)}", dg[k], f"{t}: {ru}")
+        # критерии сходимости методики: R̂ ≤ 1,01; ESS bulk и tail ≥ 400; нет расходимостей; E-BFMI > 0,3
+        bad = []
+        rh = max([v for v in (dg.get("rhat_max_params"), dg.get("rhat_max_X"), meta.get("rhat_X_max")) if v is not None], default=None)
+        if rh is not None and rh > 1.01:
+            bad.append(f"R̂ {rh:.3f} > 1,01")
+        ess = min([v for v in (dg.get("ess_bulk_min_params"), dg.get("ess_tail_min_params")) if v is not None], default=None)
+        if ess is not None and ess < 400:
+            bad.append(f"ESS {ess:.0f} < 400")
+        if meta.get("divergences"):
+            bad.append(f"расходимостей {meta['divergences']}")
+        if dg.get("ebfmi_min") is not None and dg["ebfmi_min"] <= 0.3:
+            bad.append(f"E-BFMI {dg['ebfmi_min']:.2f} ≤ 0,3")
+        if bad:
+            ctx.note(f"{ru}: критерии сходимости не выполнены — " + ", ".join(bad) +
+                     "; медианы можно использовать осторожно, интервалы приближённые")
     for f in sorted(ctx.out_dir.glob("*_bayes_*")):
         ctx.result["files"].append({"name": f.name, "title": f.stem, "format": f.suffix[1:]})
     ctx.add_file("bayes_cohort.xlsx", "Байесовская модель (Excel)").write_bytes(views.bayes_excel(per_species))
     ctx.add_table("bayes_totals", "Численность 1–2+ по байесовской модели", views.BAYES_COLUMNS, rows)
     ctx.set_payload({"mode": mode, "species": payload})
-    ctx.save_state({"res": res, "props": props, "pdu": pdu, "mode": mode, "species": list(runtime)})
+    ctx.save_state({"res": res, "props": props, "pdu": pdu, "mode": mode, "species": list(runtime), "runtime": runtime})
     return {"species": list(runtime), "mode": mode}

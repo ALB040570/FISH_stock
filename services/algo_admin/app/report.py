@@ -15,7 +15,7 @@ from pathlib import Path
 FONT_DIR = Path(__file__).parent / "fonts"
 STEP_TITLES = {"seine_catchability": "Уловистость невода", "stock_by_catch": "Уловистость сети и запас по уловам",
                "pdu_by_age": "ПДУ НПЦ по возрастам", "bayes_cohort": "Байесовская когортная модель",
-               "forecast_pdu": "Прогноз и ПДУ"}
+               "forecast_pdu": "Прогноз и ПДУ", "bayes_checks": "Проверки модели"}
 
 
 def _fmt(v, digits=0):

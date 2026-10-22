@@ -353,6 +353,12 @@
   "routes": []
  },
  {
+  "id": "method-checks",
+  "section": "methodology",
+  "order": 8,
+  "routes": []
+ },
+ {
   "id": "method-priors",
   "section": "methodology",
   "order": 9,

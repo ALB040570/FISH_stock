@@ -31,6 +31,8 @@ def test_dashboards(calc_stack, tmp_path, monkeypatch):
             assert j.get("empty") and j["reason"] == "no_step", w["id"]
         elif str(w["source"].get("view", "")).startswith(("by_", "fc_")):   # модель и прогноз: в расчёте «stock» шагов нет
             assert j.get("empty") and "полный расчёт" in j["message"], w["id"]
+        elif str(w["source"].get("view", "")).startswith("bc_"):            # проверки модели — отдельный шаг
+            assert j.get("empty") and "Проверки байесовской модели" in j["message"], w["id"]
         else:
             assert not j.get("empty"), (w["id"], j)
     j = db.post("/widgets/data", headers=H(), json={"source": {"kind": "dataset", "dataset_type": "npc_pdu"}, "filters": f,
@@ -57,7 +59,8 @@ def test_dashboards(calc_stack, tmp_path, monkeypatch):
 
 
 def test_catch_by_age_formula20(calc_stack, tmp_path, monkeypatch):
-    """Улов по ловам и возрастам: Y_ijd = Y_id · q_ij(t_d), q — доли пробы года (+1 для j ≤ m1)."""
+    """Улов по ловам и возрастам: Y_ijd = Y_id · q_ij(t_d), q — доли сглаженной пробы года (эталон 22.10.2026:
+    в сумме одна условная рыба на группы j ≤ m1; пробы меньше 30 рыб — вместе с соседними годами ± 1)."""
     dm, da, aa, aa_mod = calc_stack
     c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "stock"}).json()
     aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"), json={})
@@ -82,8 +85,15 @@ def test_catch_by_age_formula20(calc_stack, tmp_path, monkeypatch):
     props = da.get(f"/datasets/{da.get('/datasets', params={'water_body': 'zhaysan', 'dataset_type': 'species_props'}, headers=H()).json()[0]['id']}/data",
                    headers=H()).json()["table"]["rows"]
     m1 = next(p["m1"] for p in props if p["species"] == "sudak")
-    n = {r["age"]: (r.get("sudak") or 0) for r in ages if r["year"] == 2019}
-    sm = {a: v + (1 if a <= m1 else 0) for a, v in n.items()}
+    def year_sample(y):
+        return {r["age"]: (r.get("sudak") or 0) for r in ages if r["year"] == y}
+    n = year_sample(2019)
+    if sum(n.values()) < 30:
+        for y in (2018, 2020):
+            for a, v in year_sample(y).items():
+                n[a] = n.get(a, 0) + v
+    J = sum(1 for a in n if a <= m1)
+    sm = {a: v + (1 / J if a <= m1 else 0) for a, v in n.items()}
     tot = sum(sm.values())
     for r in e["rows"]:
         assert abs(r["q"] - sm[r["age"]] / tot) < 1e-6
@@ -116,12 +126,12 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     net = db.post("/widgets/data", headers=H("viewer"), json={"source": {"kind": "payload", "algorithm": "stock_by_catch"},
                                                               "filters": {"water_body": "zhaysan"}, "options": {}}).json()["payload"]["net"]
     f = seine["fits"]["лещ"]["2024"]
-    # контрольные числа прежнего приложения (лещ, 2024): j50 ≈ 3,1; a = 3,97; c = 0,01…0,67; Z = 0,43; R² = 0,79; 574 рыбы
-    assert round(f["j50"], 1) == 3.1 and round(f["a"], 2) == 3.97 and round(f["Z"], 2) == 0.43 and f["n_sample"] == 574
+    # контрольные числа эталона 22.10.2026 (лещ, 2024): j50 ≈ 3,1; a = 3,91; c = 0,01…0,67; Z = 0,45; R² = 0,78; 574 рыбы
+    assert round(f["j50"], 1) == 3.1 and round(f["a"], 2) == 3.91 and round(f["Z"], 2) == 0.45 and f["n_sample"] == 574
     t = view("ca_seine_tiles", "lesh")
     vals = {x["label"]: x["value"] for x in t["tiles"]}
-    assert vals["Точка перегиба j50"] == "3,1" and vals["Крутизна a"] == "3,97" and vals["Уловистость по возрастам"] == "0,01 … 0,67"
-    assert vals["Общая смертность Z"] == "0,43" and vals["Качество подгонки R²"] == "0,79" and vals["Данные года"] == "574 рыб"
+    assert vals["Точка перегиба j50"] == "3,1" and vals["Крутизна a"] == "3,91" and vals["Уловистость по возрастам"] == "0,01 … 0,67"
+    assert vals["Общая смертность Z"] == "0,45" and vals["Качество подгонки R²"] == "0,78" and vals["Данные года"] == "574 рыб"
     assert t["year"] == 2024 and t["calc_year"] and t["warnings"] and "двухлеток" in t["warnings"][0]["text"]
     # улов и кривая — те же ряды, что в результате
     ch = view("ca_seine_catch", "lesh")["chart"]
@@ -163,12 +173,12 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     assert ages[:3] == ["1–2", "2–3", "3–4"] and ages.index("10–11") > ages.index("9–10")
     hl = view("st_hauls", "lesh")
     assert hl["chart"]["kind"] == "dots" and sum(len(d["points"]) for d in hl["chart"]["dots"]) == len(hl["rows"])
-    # ---- ПДУ НПЦ (официальный): числа результата этапа 3; лещ 2024 — 11 302 439 шт
+    # ---- ПДУ НПЦ (официальный): числа результата этапа 3; лещ 2024 — 11 968 214 шт (эталон 22.10.2026)
     pdu = db.post("/widgets/data", headers=H("viewer"), json={"source": {"kind": "payload", "algorithm": "pdu_by_age"},
                                                               "filters": {"water_body": "zhaysan"}, "options": {}}).json()["payload"]
     pl = pdu["species"]["лещ"]
     pt = view("pn_tiles", "lesh")
-    assert pt["values"]["pcs"] == pl["pieces_total"][-1] == 11302439 and pt["values"]["pdu_t"] == pl["pdu_t"][-1]
+    assert pt["values"]["pcs"] == pl["pieces_total"][-1] == 11968214 and pt["values"]["pdu_t"] == pl["pdu_t"][-1]
     pa = view("pn_ages", "lesh", year=2020)
     assert [r["pcs"] for r in pa["rows"]] == pl["by_year"][pdu["years"].index(2020)]["pieces"]
     assert all(r["expl"] is None for r, a in zip(pa["rows"], pl["ages"]) if a < pl["m0"])
@@ -176,26 +186,30 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     assert {r["_code"] for r in ps["rows"]} >= {"lesh", "sudak"} and "F = k·M" not in str(ps["columns"])
     # байесовская модель и ПДУ приложения: в расчёте «stock» их нет — понятное сообщение, а не ошибка
     assert "полный расчёт" in view("by_total", "lesh")["message"] and "полный расчёт" in view("fc_tiles", "lesh")["message"]
-    # ---- «Можно ли верить запасу» (спецификация catchability_trust, контрольный пример Жайсан 2024)
+    # ---- «Можно ли верить запасу»: контрольный пример Жайсан 2024 по эталону 22.10.2026 (независимый пересчёт
+    # по файлам legacy/fish_stock_forecast/results — tools/control_trust.py)
     tr = view("ca_trust")
     T = {r["species"]: r for r in tr["trust"]["rows"]}
     assert tr["year"] == 2024 and tr["default_view"] == "trust" and len(T) == 8
-    assert tr["trust"]["head"].startswith("Проверки пройдены у 2 из 8 видов")
-    ctl = {  # вид: (запас на границах %, невод/сеть, k, n, наибольший рост, рыб, R², уровень)
-        "лещ": (4.3, 1.99, 5, 14, 43.6, 574, 0.79, "warning"), "плотва": (34.0, 1.33, 1, 8, 8.3, 352, 0.84, "warning"),
-        "сазан": (35.0, 6.19, 5, 8, 37.6, 30, 0.82, "warning"), "карась": (0, 0.43, 3, 13, 2.8, 36, 0.84, "warning"),
-        "язь": (7.2, 1.46, 7, 11, 7.5, 11, 0.72, "warning"), "судак": (0, 1.26, 2, 9, 4.4, 363, 0.74, "ok"),
-        "окунь": (29.0, 2.65, 2, 11, 14.6, 297, 0.84, "warning"), "щука": (2.2, 0.90, 2, 8, 16.8, 71, 0.74, "ok")}
-    for s, (b, rt, k, n, x, ns, r2, lv) in ctl.items():
-        r = T[s]
-        assert round(r["bounds"]["pct"], 1) == b and round(r["gears"]["ratio"], 2) == rt, s
-        assert (r["cohorts"]["k"], r["cohorts"]["n"]) == (k, n) and round(r["cohorts"]["best"]["x"], 1) == x, s
-        assert r["sample"]["n"] == ns and round(r["sample"]["r2"], 2) == r2 and r["verdict"]["level"] == lv, s
+    assert [r["species"] for r in tr["trust"]["rows"]] == ["лещ", "судак", "окунь", "плотва", "сазан", "щука", "карась", "язь"]
+    assert tr["trust"]["head"].startswith("Проверки пройдены у 0 из 8 видов")
+    ctl = {  # вид: (запас на границах %, невод/сеть, k, n, наибольший рост, рыб, R²)
+        "лещ": (0.5, 9.84, 3, 14, 476.8, 574, 0.78), "судак": (54.5, 5.65, 1, 9, 3.5, 363, 0.69),
+        "окунь": (31.7, 11.73, 1, 11, 173.3, 297, 0.79), "плотва": (43.4, 6.78, 1, 8, 54.3, 352, 0.83),
+        "сазан": (7.7, 39.20, 4, 8, 103.8, 30, 0.79), "щука": (2.5, 3.43, 2, 8, 135.4, 71, 0.65),
+        "карась": (27.6, 2.81, 4, 13, 32.4, 36, 0.65), "язь": (3.1, 6.07, 1, 11, 71.6, 11, 0.72)}
+    for s_, (b, rt, k, n, x, ns, r2) in ctl.items():
+        r = T[s_]
+        assert round(r["bounds"]["pct"], 1) == b and round(r["gears"]["ratio"], 2) == rt, s_
+        assert (r["cohorts"]["k"], r["cohorts"]["n"]) == (k, n) and round(r["cohorts"]["best"]["x"], 1) == x, s_
+        assert r["sample"]["n"] == ns and round(r["sample"]["r2"], 2) == r2 and r["verdict"]["level"] == "warning", s_
+        assert r["gears"]["hit"], s_                     # невод и сеть расходятся больше чем вдвое у всех видов
     assert T["язь"]["sample"]["pooled"] and not T["язь"]["sample"]["small"] and T["сазан"]["sample"]["small"]
     assert T["щука"]["cohorts"]["k"] / T["щука"]["cohorts"]["n"] == 0.25 and not T["щука"]["cohorts"]["hit"]   # граница: только «больше»
-    assert T["лещ"]["verdict"]["phrase"] == ("Есть вопросы: 5 из 14 поколений выросли за год больше чем вдвое "
-                                            "(наибольший рост ×43,6).")
-    assert T["сазан"]["verdict"]["label"] == "4 вопроса" and T["язь"]["verdict"]["label"] == "Проба за все годы, поколения"
+    assert T["сазан"]["cohorts"]["hit"] and not T["лещ"]["cohorts"]["hit"]
+    assert [s_ for s_, r in T.items() if r["bounds"]["hit"]] == ["судак", "окунь", "плотва", "карась"]
+    assert T["лещ"]["verdict"]["phrase"] == "Есть вопросы: невод даёт в 9,8 раза больше сети."
+    assert T["сазан"]["verdict"]["label"] == "Орудия, поколения, мало рыб" and T["язь"]["verdict"]["label"] == "Проба за все годы, орудия"
     assert "(24)" not in str(tr) and "стар" not in str(tr).lower()
     # первый год ряда — проверять поколения не с чем
     first = view("ca_trust", year=min(seine["years"]))
@@ -203,13 +217,13 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     # ---- часть Б: подробные проверки вида — те же числа, что в сводке
     by = view("ca_bounds_years", "lesh")
     r24 = next(r for r in by["rows"] if r["year"] == 2024)
-    assert round(r24["pct"], 1) == 4.3 and by["chart"]["pick_year"] and by["threshold"] == 25
+    assert round(r24["pct"], 1) == 0.5 and by["chart"]["pick_year"] and by["threshold"] == 25
     ba = view("ca_bounds_ages", "plotva")
-    assert round(ba["bounds"]["pct"], 1) == 34.0 and [r["age"] for r in ba["rows"] if r["_level"]] == ["1–2", "2–3"]
+    assert round(ba["bounds"]["pct"], 1) == 43.4 and [r["age"] for r in ba["rows"] if r["_level"]] == ["1–2", "2–3"]
     co = view("ca_cohorts", "lesh")
     last = [c for c in co["chart"]["cells"] if c[1] == len(co["chart"]["y"]) - 1]
-    assert sum(1 for c in last if c[5]) == 5 and len(last) == 14 and co["chart"]["fmt"] == "ratio"
-    assert "×43,6" in [c[3] for c in last]
+    assert sum(1 for c in last if c[5]) == 3 and len(last) == 14 and co["chart"]["fmt"] == "ratio"
+    assert "×476,8" in [c[3] for c in last]
     ga = view("ca_gears_age", "lesh")
     assert ga["chart"]["cells"] and all(len(c) == 6 for c in ga["chart"]["cells"])
     pp = view("ca_passport")
@@ -234,11 +248,12 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
         if r["code"] == "cohort_growth":
             r["enabled"] = False
         if r["code"] == "gears_disagree":
-            r["values"] = {"ratio": 7}
+            r["values"] = {"ratio": 50}
     assert db.put("/signal-rules", headers=H("ichthyologist"), json={"rules": put}).status_code == 200
     T2 = {r["species"]: r for r in view("ca_trust")["trust"]["rows"]}
     assert T2["лещ"]["verdict"]["level"] == "ok" and "отключено" in T2["лещ"]["verdict"]["phrase"]
-    assert not T2["сазан"]["gears"]["hit"] and not T2["окунь"]["gears"]["hit"] and T2["карась"]["verdict"]["level"] == "ok"
+    assert not T2["сазан"]["gears"]["hit"] and not T2["окунь"]["gears"]["hit"] and T2["щука"]["verdict"]["level"] == "ok"
+    assert T2["карась"]["verdict"]["level"] == "warning" and T2["карась"]["bounds"]["hit"]
     # одно орудие и вид без подгонки сети — без цвета и без ошибки
     import copy, importlib
     cv = importlib.import_module(mod.__package__ + ".calc_views")
@@ -262,3 +277,43 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     T3 = {r["species"]: r for r in view("ca_trust")["trust"]["rows"]}
     assert all(r["gears"]["one"] and r["gears"]["ratio"] is None and not r["gears"]["hit"] for r in T3.values())
     assert T3["лещ"]["bounds"]["pct"] is not None and T3["лещ"]["bounds"]["gear"] in ("", "невод")
+
+
+def test_model_checks_views(tmp_path, monkeypatch):
+    """Слайды «Проверки модели» по результату шага bayes_checks (форма — как у пакета; числа — таблица 17 статьи)."""
+    mod = load_service("dashboards", tmp_path, monkeypatch)
+    import importlib
+    cv = importlib.import_module(mod.__package__ + ".calc_views")
+    net_rows = [{"species": "лещ", "parameter": "база", "value": None, "rel_change": 0.0, "stock_factor": 1.0}]
+    for par, vals in (("V, м/ч", (2.08, 1.35, 0.79, 0.66)), ("k", (1.83, 1.28, 0.83, 0.72)),
+                      ("время стоянки, ч", (2.03, 1.34, 0.80, 0.66)), ("p_to_net", (2.09, 1.41, 0.73, 0.53))):
+        rels = (-0.4, -0.2, 0.2, 0.4) if par == "p_to_net" else (-0.5, -0.25, 0.25, 0.5)
+        net_rows += [{"species": "лещ", "parameter": par, "value": 1, "rel_change": r, "stock_factor": f} for r, f in zip(rels, vals)]
+    comp = [{"variant": "σ × 2", "year": y, "median": 1.0, "median_base": 1.0, "median_ratio": r, "width_ratio": 1.0}
+            for y, r in zip(range(2015, 2025), (1.0, 1.01, 1.02, 1.03, 1.04, 1.0, 1.0, 1.13, 1.57, 1.59))]
+    pl = {"species": ["лещ"], "net": {"year": 2024, "rows": net_rows}, "year_max": 2021, "prior_factor": 2.0,
+          "retro": {"лещ": {"forecast_years": [2022, 2023, 2024], "metrics": [
+              {"subset": "непустые ловы", "n": 2590, "rmse_log": 3.62, "bias_log": 1.09, "coverage95": 0.72},
+              {"subset": "доля пустых ловов", "n": 100, "zero_share_obs": 0.02, "zero_share_pred": 0.08, "zero_share_q025": 0.02, "zero_share_q975": 0.18}]}},
+          "prior": {"лещ": comp}, "pad": {}, "recovery": {"лещ": {"truth_source": "медианы", "coverage": [
+              {"quantity": "параметры", "n": 50, "coverage95": 0.88}]}},
+          "runs": {"retro": {"лещ": {"rhat": 1.005, "ess_bulk": 1020, "ess_tail": 1315, "divergences": 0, "ebfmi": 0.86}}}}
+
+    class D:
+        lang = "ru"
+        def run_payload(self, alg):
+            return (pl, {"run_id": "r1"}) if alg == "bayes_checks" else (None, None)
+        def sp_name(self, c):
+            return {"lesh": "лещ"}.get(c, c)
+    net = cv.v_bc_net(D(), {"species": "lesh"})
+    v = {r["parameter"]: [r["f0"], r["f1"], r["f2"], r["f3"]] for r in net["rows"]}
+    assert v["Скорость перемещения V"] == [2.08, 1.35, 0.79, 0.66] and v["Доля движущихся к сети"] == [2.09, 1.41, 0.73, 0.53]
+    rt = cv.v_bc_retro(D(), {})["rows"][0]
+    assert rt["n"] == 2590 and rt["cov"] == 0.72 and rt["z_pred"] == "0,08 (0,02–0,18)"
+    pr = cv.v_bc_prior(D(), {})["rows"][0]
+    assert pr["early"] == "1,00–1,04" and (pr["y0"], pr["y1"], pr["y2"]) == (1.13, 1.57, 1.59)
+    import pytest
+    with pytest.raises(cv.NoData):                         # проверка не выполнялась — понятное сообщение
+        cv.v_bc_pad(D(), {})
+    assert cv.v_bc_recovery(D(), {})["rows"][0]["cov"] == 0.88
+    assert cv.v_bc_runs(D(), {})["rows"][0]["_level"] is None

@@ -61,11 +61,66 @@ class Engine:
                                      obj_id=code)
             if not self.find_version(code, manifest["version"]):
                 self.publish(manifest, files, actor="system", source="builtin",
-                             report={"status": "passed", "note": "эталонный алгоритм; проверен на контрольных примерах оз. Жайсан"})
+                             report={"status": "passed", "note": "эталонный алгоритм; проверен на контрольных примерах оз. Жайсан (эталон 22.10.2026)"})
+            self._drop_old_builtin(code, manifest["version"])
             prof = files.get("profiles/zhaysan.json")
             if prof and not self.profiles.exists(f"{code}__zhaysan"):
                 self.save_profile(code, "zhaysan", {"species_profiles": json.loads(prof)}, "system",
                                   "значения расчётов заказчика для оз. Жайсан")
+                self.profiles.update(self.profile_id(code, "zhaysan"), {"migrated_to": f"defaults {manifest['version']}"},
+                                     actor="system")
+            elif prof and files.get("previous_defaults_1.0.json"):
+                self._migrate_profiles(code, json.loads(prof), json.loads(files["previous_defaults_1.0.json"]),
+                                       manifest["version"])
+
+    def _migrate_profiles(self, code: str, new: dict, previous: dict, version: str) -> None:
+        """Профили водоёмов после смены эталона (23.10.2026): значение, совпадающее с прежним значением по
+        умолчанию, заменяется новым значением по умолчанию; значения, изменённые пользователями, сохраняются;
+        параметров, которых больше нет в модели, в профиле не остаётся. Каждый профиль получает новую версию
+        (прежняя — в истории профиля). Выполняется один раз на версию алгоритма."""
+        tag = f"defaults {version}"
+        for p in self.profiles.list():
+            if p.get("algorithm") != code or p.get("migrated_to") == tag:
+                continue
+            cur = self.get_profile(code, p["water_body"])
+            if not cur:
+                continue
+            old_sp = (cur.get("values") or {}).get("species_profiles") or {}
+            out = {}
+            keys = set(next(iter(new.values()), {}))
+            for sp, vals in old_sp.items():
+                vals = vals or {}
+                if sp not in new:                          # вид не из эталона: только убрать исчезнувшие параметры
+                    out[sp] = {k: v for k, v in vals.items() if k in keys}
+                    continue
+                merged = dict(new[sp])
+                for k, v in vals.items():
+                    if k in merged and k in previous.get(sp, {}) and v != previous[sp][k]:
+                        merged[k] = v                      # изменено пользователем — сохраняем
+                out[sp] = merged
+            self.profiles.add_version(self.profile_id(code, p["water_body"]),
+                                      {"values.json": dumps({**(cur.get("values") or {}), "species_profiles": out}).encode()},
+                                      {"comment": f"переход на эталон 22.10.2026 (версия алгоритма {version}): новые значения "
+                                                  "по умолчанию, изменения пользователей сохранены"}, "system")
+            self.profiles.update(self.profile_id(code, p["water_body"]), {"migrated_to": tag}, actor="system")
+            print(f"[algo_admin] профиль {code} / {p['water_body']}: переведён на значения версии {version}", flush=True)
+
+    def _drop_old_builtin(self, code: str, keep: str) -> None:
+        """Прежние эталонные версии удаляются из каталога (решение заказчика 23.10.2026: новый эталон).
+        Запуски по ним остаются: в запуске хранятся версия, параметры и результаты. Версии, опубликованные
+        пользователями, не трогаются."""
+        import shutil
+        cur = self.catalog.get(code) or {}
+        st = dict(cur.get("versions_state", {}))
+        removed = []
+        for v in self.catalog.list_versions(code):
+            if v.get("source") == "builtin" and v.get("version") != keep:
+                shutil.rmtree(self.catalog.version_dir(code, v["n"]), ignore_errors=True)
+                st.pop(v.get("version"), None)
+                removed.append(v.get("version"))
+        if removed:
+            self.catalog.update(code, {"versions_state": st}, actor="system")
+            print(f"[algo_admin] {code}: удалены прежние эталонные версии {', '.join(removed)}", flush=True)
 
     def publish(self, manifest: dict, files: dict[str, bytes], actor: str, source: str, report: dict | None = None) -> dict:
         code = manifest["code"]

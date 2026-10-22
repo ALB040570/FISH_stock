@@ -126,13 +126,41 @@ def list_catch_years(waterbody: str = config.WATERBODY, data_dir: Path | None = 
     return sorted(years)
 
 
+_NET_RENAME = re.compile(r"^(\s*\w+\.loc\[.*'Instrument'\]\s*=\s*'сеть'\s*)$", re.M)
+
+
+@lru_cache(maxsize=64)
+def _raw_instruments_cached(path_str: str, mtime: float, table: str):
+    """Колонка Instrument до замены «Сети 20-80 мм» → «сеть» (строки замены в файле пропускаются)."""
+    src = Path(path_str).read_text(encoding="utf-8")
+    src = _NET_RENAME.sub(lambda m: "pass  # " + m.group(1).strip(), src)
+    try:
+        ns: dict = {}
+        exec(compile(src, path_str, "exec"), ns)
+        tbl = ns.get(table)
+        return list(tbl["Instrument"].astype(str)) if isinstance(tbl, pd.DataFrame) else None
+    except Exception:
+        return None
+
+
+def net_panel_count(catch_type) -> int:
+    """Число сетей одного размера ячеи в лове: по типу лова (config.NET_PANELS_BY_CATCH_TYPE)."""
+    return int(config.NET_PANELS_BY_CATCH_TYPE.get(str(catch_type).strip().lower(), config.NET_PANELS_DEFAULT))
+
+
 def load_year(year: int, waterbody: str = config.WATERBODY, data_dir: Path | None = None):
     """Возвращает (таблица уловов года, возрастная проба года).
 
     Проба: DataFrame, index = возраст (int), columns = виды, значения = штук рыб.
     """
     if _bundle(data_dir):
-        return data_dir.year(year)
+        # FishStock: набор данных; число сетей одной ячеи — по типу лова, как ниже
+        catches, sample = data_dir.year(year)
+        catches = catches.copy()
+        catches["Instrument_raw"] = catches["Instrument"].astype(str)
+        catches["NetPanels"] = [net_panel_count(t) if g == config.GEAR_NET else 1
+                                for t, g in zip(catches["CatchType"], catches["Instrument"])]
+        return catches, sample
     mod = _run_module(_data_catch_dir(data_dir) / f"{waterbody}_catch_{year}.py")
 
     catches = mod.get(f"{waterbody}_catch_{year}")
@@ -144,6 +172,17 @@ def load_year(year: int, waterbody: str = config.WATERBODY, data_dir: Path | Non
         sample_key = next((k for k in mod if k.startswith("qty_treated_fish_")), None)
     if sample_key is None:
         raise ValueError(f"В файле {waterbody}_catch_{year}.py нет возрастной пробы qty_treated_fish_{year}")
+
+    path = _data_catch_dir(data_dir) / f"{waterbody}_catch_{year}.py"
+    raw = _raw_instruments_cached(str(path), path.stat().st_mtime, f"{waterbody}_catch_{year}")
+    catches = catches.copy()
+    if raw is not None and len(raw) == len(catches):
+        catches["Instrument_raw"] = raw
+    else:
+        catches["Instrument_raw"] = catches["Instrument"].astype(str)
+    ctype = catches["CatchType"] if "CatchType" in catches else pd.Series([""] * len(catches))
+    catches["NetPanels"] = [net_panel_count(t) if g == config.GEAR_NET else 1
+                            for t, g in zip(ctype, catches["Instrument"])]
 
     sample = mod[sample_key].copy()
     sample = sample.drop(columns=["LessAge"]).set_index("age")
@@ -177,11 +216,45 @@ class YearlyCatchByAge:
     gear: str
     ages: np.ndarray            # все возрасты таблицы пробы (обычно 2..16)
     sample_raw: np.ndarray      # проба, штук (как в исходных данных)
-    sample_smoothed: np.ndarray # проба +1 для возрастов <= m1 (как в save_catch_3d)
+    sample_smoothed: np.ndarray # проба, сглаженная smooth_age_sample (config.AGE_PSEUDOCOUNT_TOTAL)
     shares: np.ndarray          # доли возрастов (сумма = 1)
     total_catch: float          # суммарный улов вида орудием за год, штук
     catch_by_age: np.ndarray    # Y_ij(t) = total_catch * shares, штук
     n_hauls: int                # число уловов орудием за год
+
+
+def smooth_age_sample(raw, ages, m1: int, neighbours=()) -> np.ndarray:
+    """Сглаженная возрастная проба вида за год (config.AGE_PSEUDOCOUNT_TOTAL, AGE_POOL_MIN_SAMPLE).
+
+    raw — проба года по возрастам ages; neighbours — пробы соседних лет (те же возрасты),
+    прибавляются, если в пробе года меньше AGE_POOL_MIN_SAMPLE рыб.
+    """
+    raw = np.asarray(raw, float)
+    ages = np.asarray(ages)
+    used = raw
+    if raw.sum() < config.AGE_POOL_MIN_SAMPLE and len(neighbours):
+        used = raw + np.sum([np.asarray(n, float) for n in neighbours], axis=0)
+    mask = (ages <= m1).astype(float)
+    if config.AGE_PSEUDOCOUNT_TOTAL is None:
+        return used + mask
+    n_groups = mask.sum()
+    return used + (config.AGE_PSEUDOCOUNT_TOTAL / n_groups if n_groups else 0.0) * mask
+
+
+def neighbour_samples(samples: dict, year: int, fish: str, ages) -> list:
+    """Пробы вида в соседних годах (± config.AGE_POOL_NEIGHBOURS), приведённые к возрастам ages."""
+    out = []
+    for dy in range(1, int(config.AGE_POOL_NEIGHBOURS) + 1):
+        for y in (year - dy, year + dy):
+            s = samples.get(y)
+            if s is not None and fish in s.columns:
+                out.append(s[fish].reindex(ages, fill_value=0.0).to_numpy(dtype=float))
+    return out
+
+
+def load_samples(waterbody: str = config.WATERBODY, data_dir: Path | None = None) -> dict:
+    """{год: возрастная проба года} для всех лет."""
+    return {y: load_year(y, waterbody, data_dir)[1] for y in list_catch_years(waterbody, data_dir)}
 
 
 def yearly_catch_by_age(
@@ -194,6 +267,7 @@ def yearly_catch_by_age(
     props = props or load_fish_props(waterbody, data_dir)
     result: dict[tuple[str, int], YearlyCatchByAge] = {}
 
+    samples = load_samples(waterbody, data_dir)
     for year in list_catch_years(waterbody, data_dir):
         catches, sample = load_year(year, waterbody, data_dir)
         gear_rows = catches[catches["Instrument"] == gear]
@@ -203,7 +277,7 @@ def yearly_catch_by_age(
             if fish not in sample.columns:
                 continue
             raw = sample[fish].to_numpy(dtype=float)
-            smoothed = raw + (ages <= props.m1[fish]).astype(float)
+            smoothed = smooth_age_sample(raw, ages, props.m1[fish], neighbour_samples(samples, year, fish, ages))
             total_sample = smoothed.sum()
             shares = smoothed / total_sample if total_sample > 0 else np.zeros_like(smoothed)
 

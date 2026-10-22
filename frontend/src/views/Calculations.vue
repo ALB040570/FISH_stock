@@ -10,6 +10,7 @@
             <template #dropdown><el-dropdown-menu>
               <el-dropdown-item command="full">{{ $t('calc.tpl_full') }}</el-dropdown-item>
               <el-dropdown-item command="stock">{{ $t('calc.tpl_stock') }}</el-dropdown-item>
+              <el-dropdown-item command="full_checks">{{ $t('calc.tpl_full_checks') }}</el-dropdown-item>
             </el-dropdown-menu></template>
           </el-dropdown>
         </template>

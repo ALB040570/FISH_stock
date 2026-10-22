@@ -8,7 +8,8 @@
     s     — кривая смертности выборки; если на странице задан уровень смертности половозрелых L(t),
             кривая масштабируется так, что её среднее по возрастам j ≥ m0 равно L(t); иначе — годовое
             колебание N(0, σ) из настроек модели («из истории»);
-    γ, α  — давление хищников и множитель ёмкости нерестилищ — случайный год 2015–2024 той же выборки;
+    γ     — давление хищников γ_j = γ_max / j до m2 (постоянное, как в модели);
+    α     — множитель ёмкости нерестилищ — случайный год 2015–2024 той же выборки;
     K     — ёмкость нерестилищ по площади водоёма, заданной на странице для каждого прогнозного года;
     β     — среднее за 3 предыдущих года (скользящее: с 4-го прогнозного года — по прогнозным годам);
     w     — средний вес по возрастам последнего года (недостающие — от младшего возраста, как на этапе 3).
@@ -229,7 +230,7 @@ def run_forecast(post: Posterior, settings: ForecastSettings, weights_hist: np.n
 
     # случайные величины — общие для всех сценариев, чтобы сценарии различались только выловом
     fluct = rng.normal(0.0, cfg.s_year_sigma, (D, H))
-    idx_press = rng.integers(0, Y, (D, H))
+    rng.integers(0, Y, (D, H))      # бывший случайный год γ: вызов оставлен, чтобы не менялись остальные выборки
     idx_alpha = rng.integers(0, Y, (D, H))
 
     Xh = d["X_estimated"]                                         # (D, Y, A)
@@ -254,8 +255,7 @@ def run_forecast(post: Posterior, settings: ForecastSettings, weights_hist: np.n
         s0 = mortality_matrix(ops, p, np.zeros(1), m0, m1, cfg)[0]             # кривая без колебаний
         for h in range(H):
             s_rows[i, h] = s_hist_like[h] if mort[h] is None else scale_mortality(s0, mort[h], ages, m0, cfg)
-        _, pred = predation_matrix(ops, d["press_base"][i][idx_press[i]], m2, A, cfg)
-        pp_rows[i] = pred
+        pp_rows[i] = predation_matrix(m2, A, cfg, H)
         alpha[i] = d["density_alpha"][i][idx_alpha[i]]
         beta[i] = rolling_beta(d["beta_1d"][i], H)
         theta[i] = fecundity(ops, d["fec_at_m0"][i], d["fec_at_m1"][i], m0, m1, cfg)

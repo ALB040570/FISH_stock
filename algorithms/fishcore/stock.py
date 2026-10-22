@@ -5,6 +5,8 @@
     невод, метод площадей (27):   X²_ij(d) = Y²_ij(d) · S(t) / (c²_ij(t) · s_area(d))
     сеть, балансовый метод:        X¹_ij(d) = Y¹_ij(d) · S(t) / (σ(c¹_ij(t)) · (V_i² − r0²))   (как в старом коде)
         или по формуле (28) статьи:  X¹_ij(d) = Y¹_ij(d) · S(t) / (π V_i² σ(c¹_ij(t)))       (config.NET_STOCK_FORMULA)
+        n сетей на каждую ячею (научные 2, промысловые 1; config.NET_PANELS_MODE): улов приводится к одной сети, Y / √n:
+                                       X¹_ij(d) = Y¹_ij(d) · S(t) / (√n(d) · π V_i² σ(c¹_ij(t)))
         σ — доля рыб первого круга, попавших в сеть (core.net_model), V_i — путь рыбы за час, r0 — полдлины сети.
 
 Варианты:
@@ -139,6 +141,16 @@ class StockResult:
         return pd.DataFrame(rows)
 
 
+def panel_factor(hc: HaulCatch) -> np.ndarray:
+    """(N,) — √n по каждому лову сетью (n — число полотен, config.NET_PANELS_MODE); 1 при "one"."""
+    n = hc.meta["NetPanels"].to_numpy(float) if "NetPanels" in hc.meta else np.ones(len(hc.meta))
+    if config.NET_PANELS_MODE == "one":
+        return np.ones_like(n)
+    if config.NET_PANELS_MODE == "sqrt":
+        return np.sqrt(np.maximum(n, 1.0))
+    raise ValueError(f"Неизвестный режим числа полотен: {config.NET_PANELS_MODE}")
+
+
 def compute_stock(
     waterbody: str = config.WATERBODY,
     data_dir: Path | None = None,
@@ -198,6 +210,7 @@ def compute_stock(
         yi = hc.year_index
         width = np.array([length[k] for k in yi], float)
         den = net_denominator(speed[None, :, None], width[:, None, None], sigma[v][yi])
+        den = den * panel_factor(hc)[:, None, None]
         res.per_haul[(config.GEAR_NET, v)] = _safe_div(hc.values * area[yi][:, None, None], den)
 
     # --- годовой запас ---
@@ -221,7 +234,7 @@ def compute_stock(
                     catch_sum = np.where(recorded.any(axis=0), np.nansum(vals, axis=0), np.nan)
                     on_catch[k] = _safe_div(catch_sum * area[k], catchability[(gear, v)][k] * area_sum)
                 else:
-                    mean_catch = _nanmean(vals, axis=0)
+                    mean_catch = _nanmean(vals / panel_factor(hc)[sel][:, None, None], axis=0)  # к одной сети
                     den = net_denominator(speed[:, None], length[k], sigma[v][k])
                     on_catch[k] = _safe_div(mean_catch * area[k], den)
             res.yearly[(gear, v, "on_stock")] = on_stock
