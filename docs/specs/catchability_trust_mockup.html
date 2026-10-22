@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Макет сводки уловистости</title>
+<style>
+:root{--text-primary:#1A2230;--text-secondary:#5A6472;--text-muted:#8A929C;--text-warning:#B07A00;--text-success:#2E7D4F;--bg-success:#E3F2E8;--surface-1:#EEF1F4;--border:#D8DDE3;--border-stronger:#9AA3AD;--bg:#F6F7F9}
+html.dark{--text-primary:#DDE4EC;--text-secondary:#A7B1BD;--text-muted:#7D8794;--text-warning:#E8B40C;--text-success:#6FCF97;--bg-success:#1F3A2B;--surface-1:#1B2531;--border:#2A3544;--border-stronger:#5C6878;--bg:#121A24}
+body{margin:0;padding:24px;background:var(--bg);color:var(--text-primary);font:14px Inter,system-ui,sans-serif;max-width:860px}
+.tr{display:grid;grid-template-columns:90px 1fr 1fr 1fr 100px 150px;gap:12px;align-items:center;padding:9px 4px;border-top:1px solid var(--border);font-size:13px}
+.hd{color:var(--text-secondary);font-size:12px;border-top:none}.sm{font-size:11px;color:var(--text-secondary)}
+.bar{position:relative;height:6px;background:var(--surface-1);border-radius:3px;margin:3px 0}
+.sq{display:inline-block;width:7px;height:7px;margin:0 2px 2px 0;border-radius:1px;border:1px solid var(--border)}
+</style></head><body>
+<p class="sm">Макет-образец к docs/specs/catchability_trust.md (раздел «Оформление»). Цвета здесь — приблизительные; в приложении — только из theme.js. <button onclick="document.documentElement.classList.toggle('dark')">Светлая / тёмная</button></p>
+<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:12px"><b style="font-size:15px">Можно ли верить запасу · 2024</b><span class="sm" style="font-size:13px">Проверки пройдены у 2 из 8 видов · чаще всего расходятся невод и сеть</span></div>
+<div class="tr hd"><div>Вид</div><div>Запас на границах</div><div>Невод ÷ сеть</div><div>Поколения выросли</div><div>Проба</div><div>Вывод</div></div>
+<div id="rows"></div>
+<p class="sm" style="color:var(--text-muted)">Жайсан, этапы 1–2. Пороги: 25 % · 2× · рост больше вдвое у 25 % поколений · R² 0,5 · 35 рыб. <u>Изменить пороги</u></p>
+<script>
+const D=[["Лещ",4.3,"1–2",1.99,5,14,574,0.79,0,"Поколения растут"],["Судак",0,"",1.26,2,9,363,0.74,0,""],["Окунь",29,"1–2, 2–3",2.65,2,11,297,0.84,0,"Границы, орудия"],["Плотва",34,"1–2, 2–3",1.33,1,8,352,0.84,0,"Границы"],["Щука",2.2,"2–3",0.90,2,8,71,0.74,0,""],["Сазан",35,"1–2",6.19,5,8,30,0.82,0,"4 вопроса"],["Карась",0,"",0.43,3,13,36,0.84,0,"Орудия"],["Язь",7.2,"2–3",1.46,7,11,11,0.72,1,"Проба за все годы, поколения"]];
+const W='var(--text-warning)',f=(v,d=1)=>v.toFixed(d).replace('.',',');let h='';
+for(const [s,sh,ag,ra,k,n,ns,r2,pool,vd] of D){const bF=sh>25,gF=ra>2||ra<0.5,cF=k/n>0.25,pF=pool||ns<35||r2<0.5,ok=!vd,pos=Math.max(0,Math.min(100,(Math.log10(ra)+1)/2*100));
+let sq='';for(let i=0;i<n;i++)sq+=`<span class="sq" style="background:${i<k?(cF?W:'var(--border-stronger)'):'var(--surface-1)'}"></span>`;
+h+=`<div class="tr"><div><b>${s}</b></div>
+<div><span style="color:${bF?W:'inherit'}">${f(sh,sh<10&&sh>0?1:0)} %</span><div class="bar"><div style="position:absolute;left:0;top:0;bottom:0;width:${sh}%;background:${bF?W:'var(--text-muted)'};border-radius:3px"></div><div style="position:absolute;left:25%;top:-2px;bottom:-2px;width:1px;background:var(--border-stronger)"></div></div><div class="sm">${ag?ag+' · невод':'—'}</div></div>
+<div><span style="color:${gF?W:'inherit'}">${ra>=1?f(ra)+'×':'сеть '+f(1/ra)+'×'}</span><div class="bar"><div style="position:absolute;left:35%;width:30%;top:0;bottom:0;background:var(--bg-success);border-radius:3px"></div><div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--border-stronger)"></div><div style="position:absolute;left:calc(${pos}% - 5px);top:-2px;width:10px;height:10px;border-radius:50%;background:${gF?W:'var(--text-secondary)'}"></div></div><div class="sm">0,1 · 1 · 10</div></div>
+<div><div>${sq}</div><div class="sm" style="color:${cF?W:''}">${k} из ${n}</div></div>
+<div><span style="color:${pF?W:'inherit'}">${ns} рыб</span><div class="sm">${pool?'за все годы':'R² '+f(r2,2)}</div></div>
+<div style="font-size:12px;color:${ok?'var(--text-success)':'inherit'}"><span style="color:${ok?'var(--text-success)':W}">${ok?'✔':'▲'}</span> ${ok?'Проверки пройдены':vd}</div></div>`}
+document.getElementById('rows').innerHTML=h;
+</script></body></html>
