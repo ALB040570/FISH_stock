@@ -83,7 +83,7 @@
       </div>
     </el-dialog>
     <el-drawer v-model="sideOpen" :title="fullTitle" size="440px" append-to-body>
-      <ExplainPanel v-if="data?.explain" :what="subtitle" :explain="data.explain" @go="(w) => { sideOpen = false; board?.goWidget(w) }" />
+      <ExplainPanel v-if="data?.explain" :explain="data.explain" @go="(w) => { sideOpen = false; board?.goWidget(w) }" />
       <div ref="cmAnchor" />
       <CommentsPanel :board-id="board?.boardId" :widget-id="widget.id" :water-body="filters?.water_body" :species="cmSpecies"
                      :years="board?.yearList?.value || []" @changed="board?.reloadCounts()" />

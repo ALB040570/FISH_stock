@@ -34,7 +34,7 @@
                   :filters="wfilters" :species="species" big />
         </div>
         <aside class="slide-side card">
-          <ExplainPanel :what="tr(cur, 'subtitle')" :explain="dataById[cur.id]?.explain" @go="goWidget" />
+          <ExplainPanel :explain="dataById[cur.id]?.explain" @go="goWidget" />
           <CommentsPanel :board-id="board?.id" :widget-id="cur.id" :water-body="filters?.water_body"
                          :species="['species', 'both'].includes(cur.scope || '') ? filters?.species || null : null"
                          :years="yearList" @changed="reloadCounts" />

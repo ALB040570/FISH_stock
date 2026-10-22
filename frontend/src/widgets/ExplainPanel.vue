@@ -1,20 +1,17 @@
 <template>
+  <!-- значок слева — вместо заголовка; подпись — во всплывающей подсказке (подзаголовок виджета не повторяем) -->
   <div class="ex">
-    <div v-if="what" class="ex-s">
-      <div class="ex-h">{{ $t('mon.what') }}</div>
-      <div class="ex-t">{{ what }}</div>
-    </div>
     <div v-if="explain?.how?.length" class="ex-s">
-      <div class="ex-h">{{ $t('mon.how') }}</div>
-      <ul><li v-for="(h, i) in explain.how" :key="i"><Termed :text="h" /></li></ul>
+      <el-tooltip :content="$t('mon.how')" placement="left"><span class="ex-i" :aria-label="$t('mon.how')"><el-icon><Reading /></el-icon></span></el-tooltip>
+      <ul class="ex-b"><li v-for="(h, i) in explain.how" :key="i"><Termed :text="h" /></li></ul>
     </div>
     <div v-if="explain?.now?.length" class="ex-s now">
-      <div class="ex-h"><el-icon><View /></el-icon>&nbsp;{{ $t('mon.now') }}</div>
-      <p v-for="(h, i) in explain.now" :key="i"><Termed :text="h" /></p>
+      <el-tooltip :content="$t('mon.now')" placement="left"><span class="ex-i" :aria-label="$t('mon.now')"><el-icon><View /></el-icon></span></el-tooltip>
+      <div class="ex-b"><p v-for="(h, i) in explain.now" :key="i"><Termed :text="h" /></p></div>
     </div>
     <div v-if="explain?.next?.length" class="ex-s">
-      <div class="ex-h">{{ $t('mon.check') }}</div>
-      <div v-for="x in explain.next" :key="x.widget" class="ex-l"><a href="#" @click.prevent="$emit('go', x.widget)">{{ x.label }} →</a></div>
+      <el-tooltip :content="$t('mon.check')" placement="left"><span class="ex-i" :aria-label="$t('mon.check')"><el-icon><Guide /></el-icon></span></el-tooltip>
+      <div class="ex-b"><div v-for="x in explain.next" :key="x.widget" class="ex-l"><a href="#" @click.prevent="$emit('go', x.widget)">{{ x.label }} →</a></div></div>
     </div>
   </div>
 </template>
@@ -22,7 +19,7 @@
 import { defineComponent, h } from 'vue'
 import { ElTooltip } from 'element-plus'
 import i18n from '../i18n'
-defineProps({ what: String, explain: Object })
+defineProps({ explain: Object })
 defineEmits(['go'])
 
 // термины с подсказкой из глоссария (подчёркнуты пунктиром)
@@ -69,13 +66,14 @@ const Termed = defineComponent({
 </script>
 <style scoped>
 .ex { font-size: 13.5px; line-height: 1.5; }
-.ex-s { margin-bottom: 14px; }
-.ex-h { font-weight: 600; font-size: 12.5px; text-transform: uppercase; letter-spacing: .02em; color: var(--fs-muted); margin-bottom: 4px;
-  display: flex; align-items: center; }
-.ex-t { color: var(--fs-text); }
-ul { margin: 0; padding-left: 18px; }
-li { margin: 3px 0; }
-.now { background: var(--fs-selected); border-radius: 8px; padding: 10px 12px; }
+.ex-s { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
+.ex-i { flex: none; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--fs-hover); color: var(--fs-primary-2); font-size: 15px; cursor: help; margin-top: 1px; }
+.ex-b { min-width: 0; flex: 1; color: var(--fs-text); }
+ul.ex-b { margin: 0; padding-left: 16px; }
+li { margin: 0 0 3px; }
+.now .ex-b { background: var(--fs-selected); border-radius: 8px; padding: 8px 10px; }
+.now .ex-i { background: var(--fs-selected); }
 .now p { margin: 0 0 6px; }
 .now p:last-child { margin: 0; }
 .ex-l { margin: 3px 0; }

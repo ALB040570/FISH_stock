@@ -1,6 +1,6 @@
 <template>
   <div class="cm">
-    <div class="cm-h"><el-icon><ChatDotRound /></el-icon>&nbsp;{{ $t('mon.comments') }} <span class="muted">· {{ items.length }}</span></div>
+    <div class="cm-h"><el-tooltip :content="$t('mon.comments')" placement="left"><span class="cm-ic" :aria-label="$t('mon.comments')"><el-icon><ChatDotRound /></el-icon></span></el-tooltip><b>{{ items.length }}</b></div>
     <div v-if="auth.can('dashboard.edit')" class="cm-new">
       <el-input v-model="text" type="textarea" :autosize="{ minRows: 2, maxRows: 6 }" maxlength="2000" :placeholder="$t('mon.write')" />
       <div class="row" style="justify-content:space-between; margin-top:6px">
@@ -63,7 +63,9 @@ function when(s) {
 }
 </script>
 <style scoped>
-.cm-h { font-weight: 600; display: flex; align-items: center; margin-bottom: 8px; }
+.cm-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-top: 10px; border-top: 1px solid var(--fs-line-soft); }
+.cm-ic { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--fs-hover); color: var(--fs-primary-2); font-size: 15px; cursor: help; }
 .cm-new { margin-bottom: 10px; }
 .cm-i { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--fs-line-soft); }
 .av { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--fs-primary-2); color: var(--fs-on-primary);
