@@ -8,6 +8,7 @@ node_modules/
 /data/
 /backups/
 /.fishstock_deployed
+/.fishstock_seeded
 deploy/data/
 # служебное
 __pycache__/

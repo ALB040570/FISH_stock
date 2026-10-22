@@ -49,15 +49,13 @@ if ! docker compose up -d --build; then
   exit 1
 fi
 
-echo "== Проверка"
-for _ in $(seq 1 60); do
-  if curl -fsS "$LOCAL_URL/api/users/health" >/dev/null 2>&1 \
-     && curl -fsS "$LOCAL_URL/api/dashboards/health" >/dev/null 2>&1; then
-    git rev-parse HEAD > "$STAMP"
-    echo "Готово: $(git log -1 --format='%h %s')"
-    exit 0
-  fi
-  sleep 5
-done
-echo "Приложение не ответило за 5 минут: docker compose ps; docker compose logs --tail 50"
+echo "== Проверка всех сервисов"
+# shellcheck source=deploy/server/lib.sh
+. "$DIR/deploy/server/lib.sh"
+if wait_ready "$LOCAL_URL" 60; then
+  git rev-parse HEAD > "$STAMP"
+  echo "Готово: $(git log -1 --format='%h %s')"
+  exit 0
+fi
+echo "Сервисы не ответили за 5 минут: docker compose ps; docker compose logs --tail 50"
 exit 1

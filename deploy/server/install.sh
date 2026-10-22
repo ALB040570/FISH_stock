@@ -62,23 +62,27 @@ case "$FISH_HTTP_PORT" in *:*) LOCAL_URL="http://${FISH_HTTP_PORT}" ;; *) LOCAL_
 say "Сборка и запуск контейнеров (первый раз — 10–20 минут)"
 docker compose up -d --build
 
-say "Жду готовности приложения"
-ok=0
-for _ in $(seq 1 90); do
-  if curl -fsS "${LOCAL_URL}/api/users/health" >/dev/null 2>&1 \
-     && curl -fsS "${LOCAL_URL}/api/dashboards/health" >/dev/null 2>&1; then ok=1; break; fi
-  sleep 5
-done
-[ "$ok" = 1 ] || die "приложение не ответило за 7,5 минут; журнал: docker compose logs --tail 50"
+say "Жду готовности всех сервисов"
+# shellcheck source=deploy/server/lib.sh
+. "$DIR/deploy/server/lib.sh"
+wait_ready "$LOCAL_URL" 90 || die "сервисы не ответили за 7,5 минут; журнал: docker compose ps; docker compose logs --tail 50"
 echo "Приложение отвечает: ${LOCAL_URL}"
 git rev-parse HEAD > .fishstock_deployed
 
-if [ "$FIRST" = 1 ] && [ "$SEED" != "none" ]; then
+SEED_OK=1
+if [ ! -f .fishstock_seeded ] && [ "$SEED" != "none" ]; then
   say "Загрузка образцов данных (samples/) и расчёт: ${SEED}"
-  docker compose run --rm --no-deps -T \
-    -v "$DIR/tools:/repo/tools:ro" -v "$DIR/samples:/repo/samples:ro" -w /repo \
-    users python tools/seed_samples.py --url http://web --login "$FISH_ADMIN_LOGIN" \
-      --password "$FISH_ADMIN_PASSWORD" --run "$SEED"
+  SEED_OK=0
+  for attempt in 1 2 3; do
+    if docker compose run --rm --no-deps -T \
+         -v "$DIR/tools:/repo/tools:ro" -v "$DIR/samples:/repo/samples:ro" -w /repo \
+         users python tools/seed_samples.py --url http://web --login "$FISH_ADMIN_LOGIN" \
+           --password "$FISH_ADMIN_PASSWORD" --run "$SEED"; then
+      date '+%Y-%m-%d %H:%M' > .fishstock_seeded; SEED_OK=1; break
+    fi
+    [ "$attempt" = 3 ] || { echo "Повтор через 30 секунд (попытка $((attempt + 1)) из 3)"; sleep 30; wait_ready "$LOCAL_URL" 24 || true; }
+  done
+  [ "$SEED_OK" = 1 ] || echo "Образцы загрузить не удалось — повторите позже: $DIR/deploy/server/install.sh"
 fi
 
 say "Ежедневная резервная копия (cron, 03:17, хранятся 7)"
@@ -96,8 +100,9 @@ echo "Внутри сервера: ${LOCAL_URL}"
 echo "Логин администратора: ${FISH_ADMIN_LOGIN}"
 if [ "$FIRST" = 1 ]; then
   echo "Пароль администратора: ${FISH_ADMIN_PASSWORD}"
-  echo "  (сохранён в $DIR/.env; после первого входа смените его в приложении)"
 fi
+echo "Начальный пароль администратора хранится в $DIR/.env (строка FISH_ADMIN_PASSWORD); после входа смените его в приложении."
+[ "$SEED_OK" = 1 ] || echo "ВНИМАНИЕ: образцы данных не загружены — запустите install.sh ещё раз."
 echo
 echo "Дальше — открыть адрес снаружи через nginx (нужен пароль sudo):"
 echo "  $DIR/deploy/server/nginx_site.sh"

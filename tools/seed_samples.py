@@ -32,16 +32,28 @@ def main():
         sys.exit(f"Вход не выполнен: {r.text}")
     c.headers["Authorization"] = "Bearer " + r.json()["access_token"]
     wbs = sorted(p.name for p in (REPO / "samples").iterdir() if p.is_dir()) if a.water_body == "all" else [a.water_body]
+    errors = 0
     for wb in wbs:
         print(f"== {wb}")
         for f in sorted((REPO / "samples" / wb).glob("*.xlsx")):
             r = c.post("/data-admin/upload", data={"water_body": wb, "dataset_type": f.stem, "mode": "replace",
                                                     "comment": "данные заказчика (legacy/data_catch)"},
                        files={"file": (f.name, f.read_bytes())})
-            j = r.json()
+            try:
+                j = r.json()
+            except ValueError:
+                j = {"status": r.status_code, "text": r.text[:200]}
+            errors += not j.get("ok")
             print(f"{f.stem:20s} {'загружен, версия ' + str(j.get('version')) if j.get('ok') else 'ОШИБКА: ' + str(j)[:300]}")
+        if errors:
+            continue  # расчёты — только для водоёмов с полностью загруженными данными
         prefix = {"full": "Полный расчёт ПДУ", "stock": "Запас по уловам"}
-        ids = {tpl: x["id"] for x in c.get("/algo-admin/calculations", params={"water_body": wb}).json()
+        r = c.get("/algo-admin/calculations", params={"water_body": wb})
+        if r.status_code != 200:
+            errors += 1
+            print(f"ОШИБКА: список расчётов недоступен ({r.status_code})")
+            continue
+        ids = {tpl: x["id"] for x in r.json()
                for tpl, p in prefix.items() if x["title"].startswith(p)}
         for tpl in ("full", "stock"):
             if tpl in ids:
@@ -53,6 +65,8 @@ def main():
         if a.run != "none" and a.run in ids:
             r = c.post(f"/algo-admin/calculations/{ids[a.run]}/run", json={})
             print("запуск поставлен в очередь:", r.json().get("id") if r.status_code == 201 else r.text)
+    if errors:
+        sys.exit(f"Ошибок: {errors}. Повторный запуск загрузит данные заново (новой версией).")
 
 
 if __name__ == "__main__":
