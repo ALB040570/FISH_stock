@@ -256,6 +256,77 @@ export function dotsChart(spec, ctype) {
   }
 }
 
+// Полосы интервалов (модель: 95 % и 50 %), медиана, точки оценок и вертикальные интервалы; x — категории (годы или возрасты).
+// Полосы и интервалы рисуются своими фигурами, поэтому работают и в логарифмической шкале. ctype linear | log
+export function bandChart(spec, ctype) {
+  const x = spec.x.map(String)
+  const log = ctype === 'log'
+  const ok = (v) => (v == null || (log && v <= 0) ? null : v)
+  const col = (c) => PALETTE[(c || 0) % PALETTE.length]
+  const series = []
+  for (const b of spec.bands || []) {
+    const lo = b.lo.map(ok), hi = b.hi.map(ok)
+    series.push({ type: 'custom', name: b.name, silent: true, z: 1, data: x.slice(0, -1).map((_, i) => i), itemStyle: { color: b.c != null ? col(b.c) : CHART.main, opacity: 0.5 },
+      renderItem: (params, api) => {
+        const i = api.value(0)
+        if (lo[i] == null || hi[i] == null || lo[i + 1] == null || hi[i + 1] == null) return null
+        const pts = [api.coord([i, lo[i]]), api.coord([i + 1, lo[i + 1]]), api.coord([i + 1, hi[i + 1]]), api.coord([i, hi[i]])]
+        return { type: 'polygon', shape: { points: pts }, style: { fill: b.c != null ? col(b.c) : CHART.main, opacity: b.op || 0.2 } }
+      }, encode: { x: 0 }, tooltip: { show: false } })
+  }
+  for (const it of spec.intervals || []) {
+    const lo = it.lo.map(ok), hi = it.hi.map(ok), mid = it.mid.map(ok)
+    const c = col(it.c), dx = it.dx || 0
+    series.push({ type: 'custom', name: it.name, z: 4, data: x.map((_, i) => [i, lo[i], hi[i], mid[i]]),
+      renderItem: (params, api) => {
+        const i = api.value(0), l = api.value(1), h = api.value(2), m = api.value(3)
+        if (l == null || h == null || Number.isNaN(l) || Number.isNaN(h)) return null
+        const bw = api.size([1, 0])[0] * 0.18
+        const p1 = api.coord([i, l]), p2 = api.coord([i, h]), pm = m == null || Number.isNaN(m) ? null : api.coord([i, m])
+        const sh = api.size([1, 0])[0] * dx
+        const kids = [
+          { type: 'line', shape: { x1: p1[0] + sh, y1: p1[1], x2: p2[0] + sh, y2: p2[1] }, style: { stroke: c, lineWidth: 2 } },
+          { type: 'line', shape: { x1: p1[0] + sh - bw / 2, y1: p1[1], x2: p1[0] + sh + bw / 2, y2: p1[1] }, style: { stroke: c, lineWidth: 2 } },
+          { type: 'line', shape: { x1: p2[0] + sh - bw / 2, y1: p2[1], x2: p2[0] + sh + bw / 2, y2: p2[1] }, style: { stroke: c, lineWidth: 2 } },
+        ]
+        if (pm) kids.push({ type: 'circle', shape: { cx: pm[0] + sh, cy: pm[1], r: 4 }, style: { fill: c } })
+        return { type: 'group', children: kids }
+      }, encode: { x: 0, y: [1, 2] },
+      tooltip: { formatter: (p) => `${p.seriesName}, ${x[p.value[0]]}<br>${fmt(p.value[3], 'auto')} (${fmt(p.value[1], 'auto')} – ${fmt(p.value[2], 'auto')})` } })
+  }
+  for (const l of spec.lines || []) {
+    series.push({ type: 'line', name: l.name, data: l.values.map(ok), symbol: 'circle', symbolSize: l.bold ? 6 : 4, z: 5,
+      lineStyle: { width: l.bold ? 2.8 : 2, color: col(l.c), type: l.dash ? 'dashed' : 'solid' }, itemStyle: { color: col(l.c) } })
+  }
+  for (const pt of spec.points || []) {
+    series.push({ type: 'custom', name: pt.name, z: 6, data: x.map((_, i) => [i, ok(pt.values[i])]),
+      renderItem: (params, api) => {
+        const v = api.value(1)
+        if (v == null || Number.isNaN(v)) return null
+        const c = api.coord([api.value(0), v]), sh = api.size([1, 0])[0] * (pt.dx || 0)
+        return pt.symbol === 'diamond'
+          ? { type: 'polygon', shape: { points: [[c[0] + sh, c[1] - 6], [c[0] + sh + 6, c[1]], [c[0] + sh, c[1] + 6], [c[0] + sh - 6, c[1]]] }, style: { fill: col(pt.c) } }
+          : { type: 'circle', shape: { cx: c[0] + sh, cy: c[1], r: 5 }, style: { fill: col(pt.c), stroke: CHART.label, lineWidth: 0.5 } }
+      }, encode: { x: 0, y: 1 }, itemStyle: { color: col(pt.c) },
+      tooltip: { formatter: (p) => `${p.seriesName}, ${x[p.value[0]]}: <b>${fmt(p.value[1], 'auto')}</b>` } })
+  }
+  const ml = [
+    ...(spec.hrefs || []).map((r) => ({ yAxis: r.y, name: r.label, lineStyle: { type: 'dashed', color: CHART.limit }, label: { formatter: r.label, position: 'insideEndTop', color: CHART.label, textBorderWidth: 0 } })),
+    ...(spec.vrefs || []).map((r) => ({ xAxis: String(r.x), name: r.label, lineStyle: { type: 'dashed', color: CHART.highlight }, label: { formatter: r.label, position: 'insideEndTop', color: CHART.label, textBorderWidth: 0 } })),
+  ]
+  // опорная невидимая линия: даёт оси данные и несёт отметки
+  series.push({ type: 'line', name: '_', data: x.map(() => null), silent: true, legendHoverLink: false, tooltip: { show: false },
+    markLine: ml.length ? { silent: true, symbol: 'none', data: ml } : undefined })
+  return {
+    grid: { left: 70, right: 24, top: 44, bottom: 42 },
+    tooltip: { trigger: 'item' },
+    legend: { top: 0, type: 'scroll', data: series.filter((q) => q.name && q.name !== '_').map((q) => q.name) },
+    xAxis: { type: 'category', data: x, name: spec.x_title || '', nameLocation: 'middle', nameGap: 26 },
+    yAxis: axisY(spec.y_title || '', log ? { type: 'log', logBase: 10 } : spec.y_max ? { max: spec.y_max, min: 0 } : {}),
+    series,
+  }
+}
+
 // Кривая по возрастам (коэффициент уловистости): горизонтальные границы и вертикальные отметки на дробном возрасте
 export function curveChart(spec) {
   const xs = spec.x_num || spec.x
@@ -288,6 +359,7 @@ export function buildChart(spec, ctype, opts) {
   if (spec.kind === 'fit') return fitChart(spec, ctype || spec.default)
   if (spec.kind === 'curve') return curveChart(spec)
   if (spec.kind === 'dots') return dotsChart(spec, ctype || spec.default)
+  if (spec.kind === 'band') return bandChart(spec, ctype || spec.default)
   if (spec.kind === 'series') return seriesChart(spec, ctype || spec.default || 'line', opts)
   if (spec.kind === 'heatmap') return heatmapChart(spec, opts)
   if (spec.kind === 'box') return boxChart(spec, opts)

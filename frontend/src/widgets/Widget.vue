@@ -204,7 +204,7 @@ const mode = computed({
 })
 const ctypes = computed(() => (p.widget.type === 'view' ? data.value?.chart?.allowed || [] : ['line', 'bar'].includes(p.widget.type) ? ['line', 'bar'] : []))
 const ctype = ref(null)
-const isScale = computed(() => ['fit', 'dots'].includes(data.value?.chart?.kind) && ctypes.value.length > 1)
+const isScale = computed(() => ['fit', 'dots', 'band'].includes(data.value?.chart?.kind) && ctypes.value.length > 1)
 const curCtype = computed(() => (ctype.value && ctypes.value.includes(ctype.value) ? ctype.value
   : p.widget.type === 'view' ? data.value?.chart?.default : p.widget.type))
 const canExport = computed(() => data.value && !data.value.empty && p.widget.type !== 'text')

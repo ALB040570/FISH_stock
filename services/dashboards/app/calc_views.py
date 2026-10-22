@@ -620,3 +620,818 @@ def v_st_table(D, opt):
 
 VIEWS.update({"st_species": v_st_species, "st_tiles": v_st_tiles, "st_yearly": v_st_yearly, "st_hauls": v_st_hauls,
               "st_ages": v_st_ages, "st_table": v_st_table})
+
+
+# ================================================================== Байесовская модель (этап 4)
+def num(v):
+    """Число для параметров модели: точность по величине."""
+    if v is None:
+        return "—"
+    a = abs(v)
+    d = 0 if a >= 100 else 1 if a >= 10 else 2 if a >= 1 else 3 if a >= 0.01 else 5
+    return nf(v, d)
+
+
+def hms(sec):
+    if sec is None:
+        return "—"
+    sec = int(round(sec))
+    h, m, s = sec // 3600, sec % 3600 // 60, sec % 60
+    return f"{h} ч {m:02d} мин" if h else f"{m} мин {s:02d} с"
+
+
+def _bayes(D):
+    pl, meta = D.run_payload("bayes_cohort")
+    if pl is None or not pl.get("species"):
+        if meta is None:
+            raise NoData(L(D.lang, "Для водоёма ещё нет полного расчёта с байесовской моделью (этапы 1–5) — запустите его в разделе «Расчёты»",
+                           "Су айдыны үшін байестік модельмен толық есеп (1–5 кезеңдер) әлі жоқ — «Есептеулер» бөлімінде іске қосыңыз"))
+        raise NoData(L(D.lang, "В запуске нет шага «Байесовская когортная модель» — нужен полный расчёт (этапы 1–5)",
+                       "Іске қосуда «Байестік когорттық модель» қадамы жоқ — толық есеп қажет (1–5 кезеңдер)"))
+    return pl, meta
+
+
+def _bayes_species(D, opt):
+    pl, meta = _bayes(D)
+    code = opt.get("species")
+    if not code:
+        raise NoData(L(D.lang, "Выберите вид кнопкой под шапкой", "Тақырыптың астындағы түймемен түрді таңдаңыз"))
+    key = _key_for(D, {"fits": pl["species"]}, code)
+    if key is None:
+        raise NoData(L(D.lang, f"Для вида «{D.sp_name(code)}» байесовская модель в этом запуске не считалась",
+                       f"«{D.sp_name(code)}» түрі үшін байестік модель бұл іске қосуда есептелмеген"))
+    R = pl["species"][key]
+    y, years = _year({"years": R["years"]}, opt)
+    return R, meta, code, y, years
+
+
+def _btoggles(D, opt, ages=True, data=True):
+    lang = D.lang
+    a = opt.get("bages") if opt.get("bages") in ("obs", "all") else "obs"
+    d = opt.get("bdata") if opt.get("bdata") in ("raw", "q") else "raw"
+    t = []
+    if ages:
+        t.append({"key": "bages", "title": L(lang, "Возрасты", "Жастар"), "value": a,
+                  "options": [{"value": "obs", "label": L(lang, "1–2 и старше", "1–2 және үлкен")},
+                              {"value": "all", "label": L(lang, "с сеголетками", "шабақтармен")}]})
+    if data:
+        t.append({"key": "bdata", "title": L(lang, "Оценки по уловам", "Ауланым бойынша бағалар"), "value": d,
+                  "options": [{"value": "raw", "label": L(lang, "как есть", "сол күйінде")},
+                              {"value": "q", "label": L(lang, "оценки / q", "бағалар / q")}]})
+    return a, d, t
+
+
+def _bcommon(D, meta, years, y, code, R):
+    m = R.get("meta") or {}
+    lab = [D.sp_name(code) if code else None, str(y) if y else None,
+           f"{m.get('chains')} × {m.get('draws_per_chain')} " + L(D.lang, "выборок", "таңдама") if m.get("chains") else None]
+    return {"meta": meta, "year": y, "year_choices": years, "calc_year": True, "help": "method-bayes", "species_shown": code,
+            "filter_label": " · ".join(x for x in lab if x)}
+
+
+def _qage(R, j):
+    """Поправка уловистости q для возраста j (медиана); 1, если не оценена."""
+    q = R["q_bias_q"][2]
+    k = j - 1
+    v = q[k] if 0 <= k < len(q) else None
+    return v if v and v > 0 else 1
+
+
+def _data_total(R, by_age, mode):
+    out = []
+    for r in by_age:
+        if not r:
+            out.append(None)
+            continue
+        s, anyv = 0.0, False
+        for k, v in enumerate(r):
+            if v is not None:
+                s += v / _qage(R, k + 2) if mode == "q" else v
+                anyv = True
+        out.append(s if anyv else None)
+    return out
+
+
+def v_by_species(D, opt):
+    pl, meta = _bayes(D)
+    names = _names(D)
+    lang = D.lang
+    rows = []
+    year = None
+    for key, R in pl["species"].items():
+        if not R.get("available"):
+            continue
+        m = R.get("meta") or {}
+        tot = R["total_obs_q"]
+        last = len(R["years"]) - 1
+        year = R["years"][last]
+        beta = R["beta1d_q"][2]
+        code = names.get(key.strip().lower(), key)
+        rows.append({"_code": code, "species": D.sp_name(code), "median": tot[2][last], "lo": tot[0][last], "hi": tot[4][last],
+                     "recruits": R["X_q"][2][last][0], "beta": sum(beta) / len(beta) if beta else None,
+                     "div": m.get("divergences"), "rhat": m.get("rhat_X_max"), "time": hms(m.get("seconds")),
+                     "status": L(lang, "есть замечания", "ескертулер бар") if (m.get("divergences") or (m.get("rhat_X_max") or 0) > 1.01)
+                     else L(lang, "сошлась", "жинақталды")})
+    rows.sort(key=lambda r: -(r["median"] or 0))
+    cols = [col("species", L(lang, "Вид", "Түр")), col("median", L(lang, f"Численность {year}, медиана", f"Саны {year}, медиана"), "integer"),
+            col("lo", "2,5 %", "integer"), col("hi", "97,5 %", "integer"), col("recruits", L(lang, "Пополнение 0–1", "Толықтыру 0–1"), "integer"),
+            col("beta", L(lang, "β в среднем", "Орташа β"), "number"), col("div", L(lang, "Расходимостей", "Алшақтықтар"), "integer"),
+            col("rhat", "R̂ max", "number"), col("time", L(lang, "Время", "Уақыт")), col("status", L(lang, "Сходимость", "Жинақталу"))]
+    return {"columns": cols, "rows": rows, "default_view": "table", "row_action": "species", "chart": None,
+            "notes": [L(lang, "Численность возрастов 1–2 и старше, штук. Щелчок по строке — все данные по виду.",
+                        "1–2 және үлкен жастардың саны, дана. Жолды басу — түр бойынша барлық деректер.")],
+            "meta": meta, "help": "method-bayes", "filter_label": str(year) if year else ""}
+
+
+def v_by_tiles(D, opt):
+    R, meta, code, y, years = _bayes_species(D, opt)
+    a, _, toggles = _btoggles(D, opt, data=False)
+    lang = D.lang
+    m = R.get("meta") or {}
+    tot = R["total_all_q"] if a == "all" else R["total_obs_q"]
+    last = len(years) - 1
+    beta = R["beta1d_q"][2]
+    tiles = [
+        {"label": L(lang, f"Численность, {years[last]}", f"Саны, {years[last]}"), "value": pieces(tot[2][last], lang),
+         "hint": f"95 %: {pieces(tot[0][last], lang)} – {pieces(tot[4][last], lang)}"},
+        {"label": L(lang, f"Численность, {years[0]}", f"Саны, {years[0]}"), "value": pieces(tot[2][0], lang),
+         "hint": f"95 %: {pieces(tot[0][0], lang)} – {pieces(tot[4][0], lang)}"},
+        {"label": L(lang, f"Пополнение 0–1, {years[last]}", f"Толықтыру 0–1, {years[last]}"), "value": pieces(R["X_q"][2][last][0], lang), "hint": L(lang, "медиана", "медиана")},
+        {"label": L(lang, "β в среднем", "Орташа β"), "value": nf(sum(beta) / len(beta), 2) if beta else "—",
+         "hint": L(lang, f"по годам {nf(min(beta), 2)} – {nf(max(beta), 2)}", f"жылдар бойынша {nf(min(beta), 2)} – {nf(max(beta), 2)}") if beta else None},
+        {"label": L(lang, "Расходимостей", "Алшақтықтар"), "value": nf(m.get("divergences"), 0) if m.get("divergences") is not None else "—",
+         "hint": f"R̂ max: {nf(m.get('rhat_X_max'), 3)}", "level": "warning" if m.get("divergences") else None},
+        {"label": L(lang, "Время расчёта", "Есептеу уақыты"), "value": hms(m.get("seconds")),
+         "hint": L(lang, f"{m.get('chains')} цепи × {m.get('draws_per_chain')} выборок", f"{m.get('chains')} тізбек × {m.get('draws_per_chain')} таңдама")},
+    ]
+    warn = []
+    if m.get("divergences"):
+        warn.append(L(lang, f"{m['divergences']} расходимостей NUTS: результаты в этих областях ненадёжны; помогают больший target_accept или более узкие априорные распределения",
+                      f"NUTS {m['divergences']} алшақтығы: бұл аймақтардағы нәтижелер сенімсіз; үлкенірек target_accept немесе тарлау априорлық үлестірімдер көмектеседі"))
+    if (m.get("rhat_X_max") or 0) > 1.01:
+        warn.append(L(lang, f"R̂ численности до {nf(m['rhat_X_max'], 3)} (> 1,01): цепи не сошлись, нужно больше выборок или шагов настройки",
+                      f"Сан R̂ {nf(m['rhat_X_max'], 3)} дейін (> 1,01): тізбектер жинақталмады, көбірек таңдама немесе баптау қадамы қажет"))
+    if m.get("numpy_check") is not None and m["numpy_check"] > 1e-6:
+        warn.append(L(lang, f"численность из PyMC и пересчёт на numpy отличаются на {num(m['numpy_check'] * 100)} % — сообщите разработчику",
+                      f"PyMC және numpy бойынша сан {num(m['numpy_check'] * 100)} %-ға ерекшеленеді — әзірлеушіге хабарлаңыз"))
+    for n in m.get("notes") or []:
+        warn.append(str(n))
+    return {"tiles": tiles, "warnings": [{"level": "warning", "text": w} for w in warn], "default_view": "tiles", "chart": None,
+            "toggles": toggles, "columns": [col("label", L(lang, "Показатель", "Көрсеткіш")), col("value", L(lang, "Значение", "Мәні")), col("hint", L(lang, "Пояснение", "Түсініктеме"))],
+            "rows": [{"label": t["label"], "value": t["value"], "hint": t.get("hint")} for t in tiles],
+            "values": {"median": tot[2][last], "lo": tot[0][last], "hi": tot[4][last], "first": tot[2][0], "div": m.get("divergences"), "rhat": m.get("rhat_X_max")},
+            **_bcommon(D, meta, years, y, code, R)}
+
+
+def _bands(q, name95, name50=None):
+    out = [{"name": name95, "lo": q[0], "hi": q[4], "op": 0.16}]
+    if name50:
+        out.append({"name": name50, "lo": q[1], "hi": q[3], "op": 0.32})
+    return out
+
+
+def v_by_total(D, opt):
+    R, meta, code, y, years = _bayes_species(D, opt)
+    a, dm, toggles = _btoggles(D, opt)
+    lang = D.lang
+    tot = R["total_all_q"] if a == "all" else R["total_obs_q"]
+    d = R["data"]
+    points = []
+    fin = _data_total(R, d.get("final_by_age") or [], dm)
+    if any(v is not None for v in fin):
+        points.append({"name": L(lang, "Окончательный запас по уловам / q", "Ауланым бойынша түпкілікті қор / q") if dm == "q"
+                       else L(lang, "Окончательный запас по уловам", "Ауланым бойынша түпкілікті қор"), "values": fin, "c": 1, "dx": -0.12})
+    if d.get("npc_total") and any(v is not None for v in d["npc_total"]):
+        points.append({"name": L(lang, "Оценка НПЦ", "ҒӨО бағасы"), "values": d["npc_total"], "c": 3, "symbol": "diamond", "dx": 0.12})
+    rows = [{"year": yy, "median": tot[2][i], "lo95": tot[0][i], "hi95": tot[4][i], "lo50": tot[1][i], "hi50": tot[3][i],
+             "by_catch": fin[i] if i < len(fin) else None, "npc": (d.get("npc_total") or [None] * len(years))[i], "_current": yy == y}
+            for i, yy in enumerate(years)]
+    return {"chart": {"kind": "band", "x": years, "bands": _bands(tot, L(lang, "95 % интервал", "95 % аралық"), L(lang, "50 % интервал", "50 % аралық")),
+                      "lines": [{"name": L(lang, "Модель, медиана", "Модель, медиана"), "values": tot[2], "c": 0, "bold": True}], "points": points,
+                      "vrefs": [{"x": str(y), "label": str(y)}], "pick_year": True,
+                      "x_title": L(lang, "Год", "Жыл"), "y_title": L(lang, "штук", "дана"), "allowed": ["log", "linear"], "default": "log"},
+            "columns": [col("year", L(lang, "Год", "Жыл"), "integer"), col("median", L(lang, "Медиана", "Медиана"), "integer"),
+                        col("lo95", "2,5 %", "integer"), col("hi95", "97,5 %", "integer"), col("lo50", "25 %", "integer"), col("hi50", "75 %", "integer"),
+                        col("by_catch", L(lang, "По уловам", "Ауланым бойынша"), "integer"), col("npc", L(lang, "НПЦ", "ҒӨО"), "integer")],
+            "rows": rows, "toggles": toggles, "row_action": "year",
+            "notes": [(L(lang, "Все возрасты, включая сеголетки 0–1.", "Барлық жастар, шабақтарды қоса.") if a == "all"
+                       else L(lang, "Возрасты 1–2 и старше (как в уловах).", "1–2 және үлкен жастар (ауланымдағыдай).")) + " " +
+                      L(lang, "Полосы — 50 % и 95 % интервалы модели.", "Жолақтар — модельдің 50 % және 95 % аралықтары.")],
+            **_bcommon(D, meta, years, y, code, R)}
+
+
+def _col_at(Xq, yi):
+    return [q[yi] for q in Xq]
+
+
+def v_by_ages(D, opt):
+    R, meta, code, y, years = _bayes_species(D, opt)
+    _, dm, toggles = _btoggles(D, opt, ages=False)
+    lang = D.lang
+    yi = years.index(y)
+    ages = R["model_ages"]
+    X = _col_at(R["X_q"], yi)
+    fin = (R["data"].get("final_by_age") or [None] * len(years))[yi]
+    fv = None
+    if fin:
+        full = [None] + list(fin)
+        fv = [None if v is None else (v / _qage(R, ages[k]) if dm == "q" and k > 0 else v) for k, v in enumerate(full[:len(ages)])]
+    points = [{"name": L(lang, "Оценки по уловам / q", "Ауланым бойынша бағалар / q") if dm == "q" else L(lang, "Оценки по уловам", "Ауланым бойынша бағалар"),
+               "values": fv, "c": 1, "dx": 0.14}] if fv and any(v is not None for v in fv) else []
+    rows = [{"age": age_label(a), "median": X[2][k], "lo": X[0][k], "hi": X[4][k], "by_catch": fv[k] if fv else None} for k, a in enumerate(ages)]
+    return {"chart": {"kind": "band", "x": [age_label(a) for a in ages], "intervals": [{"name": L(lang, "Модель (95 %)", "Модель (95 %)"), "lo": X[0], "hi": X[4], "mid": X[2], "c": 0, "dx": -0.1}],
+                      "points": points, "x_title": L(lang, "Возраст, лет", "Жасы, жыл"), "y_title": L(lang, "штук", "дана"), "allowed": ["log", "linear"], "default": "log"},
+            "columns": [col("age", L(lang, "Возраст, лет", "Жасы, жыл")), col("median", L(lang, "Медиана", "Медиана"), "integer"), col("lo", "2,5 %", "integer"),
+                        col("hi", "97,5 %", "integer"), col("by_catch", L(lang, "По уловам", "Ауланым бойынша"), "integer")],
+            "rows": rows, "toggles": toggles,
+            "notes": [L(lang, "Модель: медиана и 95 % интервал. Оценки по уловам — окончательный запас (сеть и невод).",
+                        "Модель: медиана және 95 % аралық. Ауланым бойынша бағалар — түпкілікті қор (ау мен сүзекі).")],
+            **_bcommon(D, meta, years, y, code, R)}
+
+
+def _by_years_band(D, opt, q, title_y, note, hline=None, fmt_int=True):
+    R, meta, code, y, years = _bayes_species(D, opt)
+    lang = D.lang
+    qq = q(R)
+    rows = [{"year": yy, "median": qq[2][i], "lo": qq[0][i], "hi": qq[4][i], "_current": yy == y} for i, yy in enumerate(years)]
+    t = "integer" if fmt_int else "number"
+    return {"chart": {"kind": "band", "x": years, "bands": _bands(qq, "95 %", "50 %"), "lines": [{"name": L(lang, "Медиана", "Медиана"), "values": qq[2], "c": 0, "bold": True}],
+                      "hrefs": [{"y": hline, "label": f"{title_y} = {nf(hline, 0)}"}] if hline is not None else [],
+                      "vrefs": [{"x": str(y), "label": str(y)}], "pick_year": True, "x_title": L(lang, "Год", "Жыл"), "y_title": title_y,
+                      **({"allowed": ["log", "linear"], "default": "log"} if fmt_int else {})},
+            "columns": [col("year", L(lang, "Год", "Жыл"), "integer"), col("median", L(lang, "Медиана", "Медиана"), t), col("lo", "2,5 %", t), col("hi", "97,5 %", t)],
+            "rows": rows, "row_action": "year", "notes": [note], **_bcommon(D, meta, years, y, code, R)}
+
+
+def v_by_recruits(D, opt):
+    lang = D.lang
+    return _by_years_band(D, opt, lambda R: [[r[0] for r in q] for q in R["X_q"]], L(lang, "штук", "дана"),
+                          L(lang, "Сеголетки: икра × выживаемость, ограниченная ёмкостью нерестилищ, × (1 − s)² / (1 + γ).",
+                            "Шабақтар: уылдырық × тіршілік, уылдырық шашу орындарының сыйымдылығымен шектелген, × (1 − s)² / (1 + γ)."))
+
+
+def v_by_beta(D, opt):
+    lang = D.lang
+    return _by_years_band(D, opt, lambda R: R["beta1d_q"], "β",
+                          L(lang, "Фактический вылов / ПДУ: β > 1 — неучтённый вылов (браконьерство).",
+                            "Нақты аулау / ШРА: β > 1 — есепке алынбаған аулау (браконьерлік)."), hline=1, fmt_int=False)
+
+
+def _by_ages_band(D, opt, key, title_y, note, vref):
+    R, meta, code, y, years = _bayes_species(D, opt)
+    lang = D.lang
+    yi = years.index(y)
+    ages = R["model_ages"]
+    qq = _col_at(R[key], yi)
+    rows = [{"age": age_label(a), "median": qq[2][k], "lo": qq[0][k], "hi": qq[4][k]} for k, a in enumerate(ages)]
+    return {"chart": {"kind": "band", "x": [age_label(a) for a in ages], "x_num": ages, "bands": _bands(qq, "95 %"),
+                      "lines": [{"name": L(lang, "Медиана", "Медиана"), "values": qq[2], "c": 0, "bold": True}],
+                      "vrefs": [v for v in [vref(R)] if v], "x_title": L(lang, "Возраст, лет", "Жасы, жыл"), "y_title": title_y},
+            "columns": [col("age", L(lang, "Возраст, лет", "Жасы, жыл")), col("median", L(lang, "Медиана", "Медиана"), "number"),
+                        col("lo", "2,5 %", "number"), col("hi", "97,5 %", "number")],
+            "rows": rows, "notes": [note], **_bcommon(D, meta, years, y, code, R)}
+
+
+def v_by_s(D, opt):
+    lang = D.lang
+
+    def vr(R):
+        m0 = (R.get("meta") or {}).get("m0")
+        return {"x": age_label(m0 + 1), "label": "m0 + 1"} if m0 is not None else None
+    return _by_ages_band(D, opt, "s_q", L(lang, "доля за год", "жылдағы үлес"),
+                         L(lang, "Естественная смертность s — доля рыб возраста, погибающих за год. Медиана и 95 % интервал.",
+                           "Табиғи өлім-жітім s — жыл ішінде өлетін жас балықтарының үлесі. Медиана және 95 % аралық."), vr)
+
+
+def v_by_pred(D, opt):
+    lang = D.lang
+
+    def vr(R):
+        m2 = (R.get("meta") or {}).get("m2")
+        ages = R["model_ages"]
+        return {"x": age_label(m2), "label": "m2"} if m2 is not None and m2 < ages[-1] else None
+    return _by_ages_band(D, opt, "pred_q", "γ",
+                         L(lang, "Давление хищников γ убывает как 1/j до возраста m2; в уравнении (17) — знаменатель 1 + γ.",
+                           "Жыртқыштар қысымы γ m2 жасына дейін 1/j ретінде кемиді; (17) теңдеуде — 1 + γ бөлімі."), vr)
+
+
+def v_by_q(D, opt):
+    R, meta, code, y, years = _bayes_species(D, opt)
+    lang = D.lang
+    ages = R["model_ages"]
+    q = R["q_bias_q"]
+    n = min(len(ages), len(q[2]))
+    frm = (R.get("config_used") or {}).get("likelihood_from") or 3
+    rows = [{"age": age_label(ages[k]), "median": q[2][k], "lo": q[0][k], "hi": q[4][k]} for k in range(n)]
+    return {"chart": {"kind": "band", "x": [age_label(a) for a in ages[:n]], "intervals": [{"name": "q (95 %)", "lo": q[0][:n], "hi": q[4][:n], "mid": q[2][:n], "c": 0}],
+                      "hrefs": [{"y": 1, "label": "q = 1"}], "vrefs": [{"x": age_label(frm), "label": L(lang, "в правдоподобии →", "шынайылықта →")}],
+                      "x_title": L(lang, "Возраст, лет", "Жасы, жыл"), "y_title": "q", "allowed": ["log", "linear"], "default": "log"},
+            "columns": [col("age", L(lang, "Возраст, лет", "Жасы, жыл")), col("median", L(lang, "Медиана", "Медиана"), "number"),
+                        col("lo", "2,5 %", "number"), col("hi", "97,5 %", "number")],
+            "rows": rows,
+            "notes": [L(lang, f"Оценка по лову ≈ q · численность модели. В правдоподобии — возрасты с {age_label(frm)}; для младших q не оценивается по данным.",
+                        f"Аулау бағасы ≈ q · модель саны. Шынайылықта — {age_label(frm)} бастап жастар; кішілер үшін q деректермен бағаланбайды.")],
+            **_bcommon(D, meta, years, y, code, R)}
+
+
+def v_by_deaths(D, opt):
+    R, meta, code, y, years = _bayes_species(D, opt)
+    lang = D.lang
+    dd = R["deaths"]
+    poach = [v if v and v > 0 else None for v in dd["poaching"]]
+    series = [{"name": L(lang, "Естественная гибель", "Табиғи өлім"), "values": dd["natural"], "type": "bar", "c": 0},
+              {"name": L(lang, "Хищники", "Жыртқыштар"), "values": dd["predators"], "type": "bar", "c": 1},
+              {"name": L(lang, "ПДУ", "ШРА"), "values": dd["catch"], "type": "bar", "c": 2},
+              {"name": L(lang, "Браконьерство", "Браконьерлік"), "values": poach, "type": "bar", "c": 3}]
+    rows = [{"year": yy, "natural": dd["natural"][i], "predators": dd["predators"][i], "catch": dd["catch"][i], "poaching": poach[i],
+             "_current": yy == y} for i, yy in enumerate(years)]
+    return {"chart": {"kind": "fit", "x": years, "series": series, "x_title": L(lang, "Год", "Жыл"), "y_title": L(lang, "штук", "дана"),
+                      "allowed": ["log", "linear"], "default": "log", "pick_year": True},
+            "columns": [col("year", L(lang, "Год", "Жыл"), "integer")] + [col(k, s["name"], "integer") for k, s in zip(("natural", "predators", "catch", "poaching"), series)],
+            "rows": rows, "row_action": "year",
+            "notes": [L(lang, "Медианы, штук, сумма по возрастам: естественная гибель s·X, хищники γ·X, ПДУ, браконьерство (β − 1)·ПДУ.",
+                        "Медианалар, дана, жастар бойынша қосынды: табиғи өлім s·X, жыртқыштар γ·X, ШРА, браконьерлік (β − 1)·ШРА.")],
+            **_bcommon(D, meta, years, y, code, R)}
+
+
+def v_by_params(D, opt):
+    R, meta, code, y, years = _bayes_species(D, opt)
+    lang = D.lang
+    detail = opt.get("bdetail") == "all"
+    toggles = [{"key": "bdetail", "title": L(lang, "Строки", "Жолдар"), "value": "all" if detail else "groups",
+                "options": [{"value": "groups", "label": L(lang, "сводно", "жиынтық")}, {"value": "all", "label": L(lang, "по годам и возрастам", "жылдар мен жастар бойынша")}]}]
+    rows, groups = [], {}
+    for r in R.get("param_rows") or []:
+        q = r.get("q") or [None] * 5
+        if r.get("index") is None:
+            rows.append({"param": r.get("label"), "index": "—", "median": num(q[2]), "i95": f"{num(q[0])} – {num(q[4])}",
+                         "i50": f"{num(q[1])} – {num(q[3])}", "rhat": r.get("rhat")})
+            continue
+        groups.setdefault(r.get("name"), []).append(r)
+    for name, rr in groups.items():
+        med = [r["q"][2] for r in rr if r["q"][2] is not None]
+        lo = [r["q"][0] for r in rr if r["q"][0] is not None]
+        hi = [r["q"][4] for r in rr if r["q"][4] is not None]
+        rh = max([r.get("rhat") or 0 for r in rr]) or None
+        rows.append({"param": rr[0].get("label"), "index": (L(lang, f"{len(rr)} возрастов", f"{len(rr)} жас") if name == "q_bias" else L(lang, f"{len(rr)} лет", f"{len(rr)} жыл")),
+                     "median": f"{num(min(med))} – {num(max(med))}" if med else "—", "i95": f"{num(min(lo))} – {num(max(hi))}" if lo else "—", "i50": "", "rhat": rh})
+        if detail:
+            for r in rr:
+                q = r["q"]
+                rows.append({"param": "", "index": age_label(r["index"]) if name == "q_bias" else r["index"], "median": num(q[2]),
+                             "i95": f"{num(q[0])} – {num(q[4])}", "i50": f"{num(q[1])} – {num(q[3])}", "rhat": r.get("rhat")})
+    for r in rows:
+        r["_bad"] = bool(r.get("rhat") and r["rhat"] > 1.01)
+    return {"columns": [col("param", L(lang, "Параметр", "Параметр")), col("index", L(lang, "Год / возраст", "Жыл / жас")),
+                        col("median", L(lang, "Медиана", "Медиана")), col("i95", L(lang, "95 % интервал", "95 % аралық")),
+                        col("i50", L(lang, "50 % интервал", "50 % аралық")), col("rhat", "R̂", "number")],
+            "rows": rows, "default_view": "table", "chart": None, "toggles": toggles,
+            "notes": [L(lang, "Апостериорные медианы и интервалы; R̂ > 1,01 — цепи не сошлись.", "Апостериорлық медианалар мен аралықтар; R̂ > 1,01 — тізбектер жинақталмады.")],
+            **_bcommon(D, meta, years, y, code, R)}
+
+
+def v_by_diag(D, opt):
+    R, meta, code, y, years = _bayes_species(D, opt)
+    lang = D.lang
+    m = R.get("meta") or {}
+    dv = m.get("divergences")
+    items = [
+        (L(lang, "Режим", "Режим"), m.get("mode_title")), (L(lang, "Начало", "Басталуы"), m.get("started")),
+        (L(lang, "Окончание", "Аяқталуы"), m.get("finished")), (L(lang, "Время", "Уақыт"), hms(m.get("seconds"))),
+        (L(lang, "Цепей × выборок", "Тізбек × таңдама"), f"{m.get('chains')} × {m.get('draws_per_chain')}"),
+        (L(lang, "Шагов настройки (tune)", "Баптау қадамдары (tune)"), m.get("tune")),
+        (L(lang, "Расходимостей", "Алшақтықтар"), "—" if dv is None else f"{dv}" + (f" ({L(lang, 'по цепям', 'тізбектер бойынша')}: {', '.join(map(str, m['divergences_by_chain']))})" if m.get("divergences_by_chain") else "")),
+        (L(lang, "Достигнута max_treedepth", "max_treedepth жеткен"), m.get("treedepth_hits")),
+        (L(lang, "Средний шаг", "Орташа қадам"), num(m.get("step_size")) if m.get("step_size") else "—"),
+        (L(lang, "Средняя доля принятия", "Орташа қабылдау үлесі"), nf(m.get("acceptance_rate"), 3) if m.get("acceptance_rate") else "—"),
+        (L(lang, "R̂ численности, max", "Сан R̂, max"), nf(m.get("rhat_X_max"), 3) if m.get("rhat_X_max") else "—"),
+        (L(lang, "Сверка уравнений PyMC и numpy", "PyMC және numpy теңдеулерін салыстыру"),
+         "—" if m.get("numpy_check") is None else L(lang, f"отличие {m['numpy_check']:.1e}", f"айырма {m['numpy_check']:.1e}")),
+        (L(lang, "Ловов в правдоподобии", "Шынайылықтағы аулаулар"), f"{m.get('n_obs')}" + (L(lang, f" (исключено {m['dropped']})", f" ({m['dropped']} алынып тасталды)") if m.get("dropped") else "")),
+        ("m0 / m1 / m2", f"{m.get('m0')} / {m.get('m1')} / {m.get('m2')}"),
+    ]
+    rows = [{"key": k, "value": "—" if v is None else str(v)} for k, v in items]
+    return {"columns": [col("key", L(lang, "Показатель", "Көрсеткіш")), col("value", L(lang, "Значение", "Мәні"))], "rows": rows,
+            "default_view": "table", "chart": None, "diag": {"divergences": dv, "rhat": m.get("rhat_X_max"), "n_obs": m.get("n_obs")},
+            **_bcommon(D, meta, years, y, code, R)}
+
+
+VIEWS.update({"by_species": v_by_species, "by_tiles": v_by_tiles, "by_total": v_by_total, "by_ages": v_by_ages,
+              "by_recruits": v_by_recruits, "by_s": v_by_s, "by_pred": v_by_pred, "by_beta": v_by_beta, "by_q": v_by_q,
+              "by_deaths": v_by_deaths, "by_params": v_by_params, "by_diag": v_by_diag})
+
+
+# ================================================================== ПДУ НПЦ по возрастам (этап 3) — официальный
+def tonnes(v):
+    if v is None:
+        return "—"
+    if abs(v) < 0.005:
+        return "0"
+    a = abs(v)
+    return nf(v, 0 if a >= 100 else 1 if a >= 1 else 2)
+
+
+def pct(v):
+    if v is None:
+        return "—"
+    return f"{nf(v * 100, 0 if v >= 0.1 else 1)} %"
+
+
+def _pdu(D):
+    pl, meta = D.run_payload("pdu_by_age")
+    if pl is None or not pl.get("species"):
+        if meta is None:
+            raise NoData(L(D.lang, "Для водоёма ещё нет расчёта ПДУ НПЦ по возрастам — запустите расчёт в разделе «Расчёты»",
+                           "Су айдыны үшін жас бойынша ҒӨО ШРА әлі есептелмеген — «Есептеулер» бөлімінде іске қосыңыз"))
+        raise NoData(L(D.lang, "В запуске нет шага «ПДУ НПЦ по возрастам»", "Іске қосуда «Жас бойынша ҒӨО ШРА» қадамы жоқ"))
+    return pl, meta
+
+
+def _pdu_species(D, opt):
+    pl, meta = _pdu(D)
+    code = opt.get("species")
+    if not code:
+        raise NoData(L(D.lang, "Выберите вид кнопкой под шапкой", "Тақырыптың астындағы түймемен түрді таңдаңыз"))
+    key = _key_for(D, {"fits": pl["species"]}, code)
+    if key is None:
+        raise NoData(L(D.lang, f"Для вида «{D.sp_name(code)}» нет ПДУ НПЦ в этом запуске", f"«{D.sp_name(code)}» түрі үшін бұл іске қосуда ҒӨО ШРА жоқ"))
+    y, years = _year(pl, opt)
+    return pl, meta, pl["species"][key], code, y, years
+
+
+def _pcommon(D, meta, years, y, code):
+    return {"meta": meta, "year": y, "year_choices": years, "calc_year": True, "help": "method-pdu-age", "species_shown": code,
+            "filter_label": " · ".join(x for x in [D.sp_name(code) if code else None, str(y), L(D.lang, "ПДУ НПЦ (официальный)", "ҒӨО ШРА (ресми)")] if x)}
+
+
+def v_pn_species(D, opt):
+    pl, meta = _pdu(D)
+    y, years = _year(pl, opt)
+    yi = years.index(y)
+    names = _names(D)
+    lang = D.lang
+    rows = []
+    for key, sp in pl["species"].items():
+        code = names.get(key.strip().lower(), key)
+        b = sp["biomass_t"][yi]
+        rows.append({"_code": code, "species": D.sp_name(code), "pdu_t": sp["pdu_t"][yi], "dist_t": sp["distributed_t"][yi],
+                     "left_t": sp["left_t"][yi], "pcs": sp["pieces_total"][yi], "biomass_t": b,
+                     "share": (sp["pdu_t"][yi] / b * 100) if b else None, "stop": sp["stop_reason"][yi]})
+    rows.sort(key=lambda r: -(r["pdu_t"] or 0))
+    cols = [col("species", L(lang, "Вид", "Түр")), col("pdu_t", L(lang, "ПДУ НПЦ, т", "ҒӨО ШРА, т"), "number"),
+            col("dist_t", L(lang, "Распределено, т", "Бөлінді, т"), "number"), col("left_t", L(lang, "Не распределено, т", "Бөлінбеді, т"), "number"),
+            col("pcs", L(lang, "ПДУ, шт", "ШРА, дана"), "integer"), col("biomass_t", L(lang, "Промысловая биомасса, т", "Кәсіптік биомасса, т"), "number"),
+            col("share", L(lang, "ПДУ / биомасса, %", "ШРА / биомасса, %"), "number"), col("stop", L(lang, "Остановка", "Тоқтау"))]
+    return {"columns": cols, "rows": rows, "default_view": "table", "row_action": "species", "chart": None,
+            "notes": [L(lang, "Официальный ПДУ НПЦ, переведённый в штуки рыб по возрастам. Щелчок по строке — все данные по виду.",
+                        "Жас бойынша балық данасына аударылған ресми ҒӨО ШРА. Жолды басу — түр бойынша барлық деректер.")],
+            **_pcommon(D, meta, years, y, None)}
+
+
+def v_pn_tiles(D, opt):
+    pl, meta, sp, code, y, years = _pdu_species(D, opt)
+    yi = years.index(y)
+    lang = D.lang
+    by = sp["by_year"][yi]
+    share = sp["pdu_t"][yi] / sp["biomass_t"][yi] if sp["biomass_t"][yi] else None
+    dist = sp["distributed_t"][yi] / sp["pdu_t"][yi] if sp["pdu_t"][yi] else None
+    tiles = [
+        {"label": L(lang, f"ПДУ НПЦ, {y}", f"ҒӨО ШРА, {y}"), "value": f"{tonnes(sp['pdu_t'][yi])} т", "hint": L(lang, "официальный", "ресми")},
+        {"label": L(lang, "Распределено", "Бөлінді"), "value": f"{tonnes(sp['distributed_t'][yi])} т", "hint": L(lang, f"{pct(dist)} квоты", f"квотаның {pct(dist)}") if dist is not None else None},
+        {"label": L(lang, "Не распределено", "Бөлінбеді"), "value": f"{tonnes(sp['left_t'][yi])} т", "hint": sp["stop_reason"][yi],
+         "level": "warning" if (sp["left_t"][yi] or 0) > 1e-6 else None},
+        {"label": L(lang, "ПДУ в штуках", "ШРА данамен"), "value": pieces(sp["pieces_total"][yi], lang),
+         "hint": L(lang, f"возрасты от {age_label(sp['m0'])} (половозрелые)", f"{age_label(sp['m0'])} бастап жастар (жыныстық жетілген)")},
+        {"label": L(lang, "Доля от промысловой биомассы", "Кәсіптік биомассадан үлес"), "value": pct(share),
+         "hint": L(lang, f"биомасса {tonnes(sp['biomass_t'][yi])} т", f"биомасса {tonnes(sp['biomass_t'][yi])} т")},
+        {"label": L(lang, "Итераций", "Итерациялар"), "value": nf(sp["iterations"][yi], 0), "hint": L(lang, "до исчерпания квоты или запаса", "квота немесе қор біткенге дейін")},
+    ]
+    warn = []
+    if (sp["left_t"][yi] or 0) > 1e-6:
+        warn.append(L(lang, f"не распределено {tonnes(sp['left_t'][yi])} т: {sp['stop_reason'][yi]}", f"{tonnes(sp['left_t'][yi])} т бөлінбеді: {sp['stop_reason'][yi]}"))
+    capped = [age_label(a) for a, c in zip(sp["ages"], by.get("capped") or []) if c]
+    if capped:
+        warn.append(L(lang, "ограничение 75 % срабатывало для возрастов " + ", ".join(capped), "75 % шектеу мына жастар үшін іске қосылды: " + ", ".join(capped)))
+    filled = [age_label(a) for a, f in zip(sp["ages"], sp.get("weight_filled") or []) if f]
+    if filled:
+        warn.append(L(lang, "средний вес возраста " + ", ".join(filled) + " взят от ближайшего младшего возраста",
+                      ", ".join(filled) + " жасының орташа салмағы ең жақын кіші жастан алынды"))
+    return {"tiles": tiles, "warnings": [{"level": "warning", "text": L(lang, "Обратите внимание: ", "Назар аударыңыз: ") + "; ".join(warn) + "."}] if warn else [],
+            "default_view": "tiles", "chart": None,
+            "columns": [col("label", L(lang, "Показатель", "Көрсеткіш")), col("value", L(lang, "Значение", "Мәні")), col("hint", L(lang, "Пояснение", "Түсініктеме"))],
+            "rows": [{"label": t["label"], "value": t["value"], "hint": t.get("hint")} for t in tiles],
+            "values": {"pdu_t": sp["pdu_t"][yi], "share": share, "pcs": sp["pieces_total"][yi], "left_t": sp["left_t"][yi]},
+            **_pcommon(D, meta, years, y, code)}
+
+
+def v_pn_ages(D, opt):
+    pl, meta, sp, code, y, years = _pdu_species(D, opt)
+    yi = years.index(y)
+    lang = D.lang
+    by = sp["by_year"][yi]
+    ages = sp["ages"]
+    series = [{"name": L(lang, "Запас", "Қор"), "values": by["stock"], "type": "bar", "c": 0},
+              {"name": L(lang, "ПДУ", "ШРА"), "values": [v if v and v > 0 else None for v in by["pieces"]], "type": "bar", "c": 1}]
+    rows = [{"age": age_label(a) + (" *" if (sp.get("weight_filled") or [False] * len(ages))[i] else ""), "stock": by["stock"][i], "weight": by["weight"][i],
+             "pcs": by["pieces"][i], "t": by["tonnes"][i], "expl": (by["exploitation"][i] * 100 if by["exploitation"][i] is not None else None) if a >= sp["m0"] else None,
+             "capped": L(lang, "да", "иә") if (by.get("capped") or [False] * len(ages))[i] else "—"} for i, a in enumerate(ages)]
+    return {"chart": {"kind": "fit", "x": [age_label(a) for a in ages], "series": series, "vrefs": [{"x": age_label(sp["m0"]), "label": L(lang, "половозрелые →", "жыныстық жетілгендер →")}],
+                      "x_title": L(lang, "Возраст, лет", "Жасы, жыл"), "y_title": L(lang, "штук", "дана"), "allowed": ["log", "linear"], "default": "log"},
+            "columns": [col("age", L(lang, "Возраст, лет", "Жасы, жыл")), col("stock", L(lang, "Запас, шт", "Қор, дана"), "integer"),
+                        col("weight", L(lang, "Средний вес, г", "Орташа салмақ, г"), "integer"), col("pcs", L(lang, "ПДУ, шт", "ШРА, дана"), "integer"),
+                        col("t", L(lang, "ПДУ, т", "ШРА, т"), "number"), col("expl", L(lang, "Доля изъятия, %", "Алу үлесі, %"), "number"),
+                        col("capped", L(lang, "Ограничение 75 %", "75 % шектеу"))],
+            "rows": rows,
+            "notes": [L(lang, "Окончательный запас (сети и невод) и ПДУ НПЦ в штуках по возрастам; ловятся только половозрелые. * — вес взят от младшего возраста.",
+                        "Жастар бойынша түпкілікті қор (аулар мен сүзекі) және ҒӨО ШРА данамен; тек жыныстық жетілгендер ауланады. * — салмақ кіші жастан алынған.")],
+            **_pcommon(D, meta, years, y, code)}
+
+
+def v_pn_expl(D, opt):
+    pl, meta, sp, code, y, years = _pdu_species(D, opt)
+    yi = years.index(y)
+    lang = D.lang
+    by = sp["by_year"][yi]
+    ages = sp["ages"]
+    vals = [(by["exploitation"][i] * 100 if by["exploitation"][i] is not None else None) if a >= sp["m0"] else None for i, a in enumerate(ages)]
+    rows = [{"age": age_label(a), "expl": vals[i]} for i, a in enumerate(ages)]
+    return {"chart": {"kind": "curve", "x": [age_label(a) for a in ages], "x_num": ages, "series": [{"name": L(lang, "Доля изъятия, %", "Алу үлесі, %"), "values": vals}],
+                      "hrefs": [{"y": (pl.get("cap") or 0.75) * 100, "label": L(lang, f"предел за итерацию {nf((pl.get('cap') or 0.75) * 100, 0)} %", f"итерациядағы шек {nf((pl.get('cap') or 0.75) * 100, 0)} %")}],
+                      "vrefs": [], "x_title": L(lang, "Возраст, лет", "Жасы, жыл"), "y_title": "%", "y_max": 100},
+            "columns": [col("age", L(lang, "Возраст, лет", "Жасы, жыл")), col("expl", L(lang, "Доля изъятия, %", "Алу үлесі, %"), "number")], "rows": rows,
+            "notes": [L(lang, "Доля запаса возраста, изымаемая по ПДУ НПЦ; молодь до m0 не ловится.", "ҒӨО ШРА бойынша алынатын жас қорының үлесі; m0-ге дейінгі жас балық ауланбайды.")],
+            **_pcommon(D, meta, years, y, code)}
+
+
+def v_pn_years(D, opt):
+    pl, meta, sp, code, y, years = _pdu_species(D, opt)
+    lang = D.lang
+    series = [{"name": L(lang, "Промысловая биомасса, т", "Кәсіптік биомасса, т"), "values": sp["biomass_t"], "type": "line", "c": 0},
+              {"name": L(lang, "ПДУ НПЦ, т", "ҒӨО ШРА, т"), "values": sp["pdu_t"], "type": "line", "c": 1, "bold": True}]
+    if any((v or 0) > 1e-6 for v in sp["left_t"]):
+        series.append({"name": L(lang, "Распределено, т", "Бөлінді, т"), "values": sp["distributed_t"], "type": "line", "c": 2, "dash": True})
+    rows = [{"year": yy, "pdu_t": sp["pdu_t"][i], "dist_t": sp["distributed_t"][i], "left_t": sp["left_t"][i], "pcs": sp["pieces_total"][i],
+             "biomass_t": sp["biomass_t"][i], "share": (sp["pdu_t"][i] / sp["biomass_t"][i] * 100) if sp["biomass_t"][i] else None,
+             "iter": sp["iterations"][i], "stop": sp["stop_reason"][i], "_current": yy == y} for i, yy in enumerate(years)]
+    return {"chart": {"kind": "fit", "x": years, "series": series, "vrefs": [{"x": str(y), "label": str(y)}], "pick_year": True,
+                      "x_title": L(lang, "Год", "Жыл"), "y_title": L(lang, "тонн", "тонна"), "allowed": ["log", "linear"], "default": "linear"},
+            "columns": [col("year", L(lang, "Год", "Жыл"), "integer"), col("pdu_t", L(lang, "ПДУ НПЦ, т", "ҒӨО ШРА, т"), "number"),
+                        col("dist_t", L(lang, "Распределено, т", "Бөлінді, т"), "number"), col("left_t", L(lang, "Не распределено, т", "Бөлінбеді, т"), "number"),
+                        col("pcs", L(lang, "ПДУ, шт", "ШРА, дана"), "integer"), col("biomass_t", L(lang, "Промысловая биомасса, т", "Кәсіптік биомасса, т"), "number"),
+                        col("share", L(lang, "ПДУ / биомасса, %", "ШРА / биомасса, %"), "number"), col("iter", L(lang, "Итераций", "Итерациялар"), "integer"),
+                        col("stop", L(lang, "Остановка", "Тоқтау"))],
+            "rows": rows, "row_action": "year",
+            "notes": [L(lang, "Щелчок по точке или строке выбирает год.", "Нүктені немесе жолды басу жылды таңдайды.")],
+            **_pcommon(D, meta, years, y, code)}
+
+
+def v_pn_table(D, opt):
+    res = v_pn_years(D, opt)
+    return {**res, "chart": None, "default_view": "table"}
+
+
+VIEWS.update({"pn_species": v_pn_species, "pn_tiles": v_pn_tiles, "pn_ages": v_pn_ages, "pn_expl": v_pn_expl,
+              "pn_years": v_pn_years, "pn_table": v_pn_table})
+
+
+# ================================================================== ПДУ, рассчитанный в приложении (этап 5: F = k·M, прогноз)
+SCEN = ("baranov", "fixed", "none")
+
+
+def _scen_title(sc, lang):
+    return {"baranov": "F = k·M", "fixed": L(lang, "фиксированный ПДУ", "тіркелген ШРА"), "none": L(lang, "без промысла", "кәсіпшіліксіз")}[sc]
+
+
+def _fc(D):
+    pl, meta = D.run_payload("forecast_pdu")
+    if pl is None or not pl.get("species"):
+        if meta is None:
+            raise NoData(L(D.lang, "Для водоёма ещё нет полного расчёта (этапы 1–5): ПДУ приложения считается по байесовской модели",
+                           "Су айдыны үшін толық есеп (1–5 кезеңдер) әлі жоқ: қосымша ШРА байестік модель бойынша есептеледі"))
+        raise NoData(L(D.lang, "В запуске нет шага «Прогноз и ПДУ» — нужен полный расчёт (этапы 1–5)",
+                       "Іске қосуда «Болжам және ШРА» қадамы жоқ — толық есеп қажет (1–5 кезеңдер)"))
+    return pl, meta
+
+
+def _fc_species(D, opt):
+    pl, meta = _fc(D)
+    code = opt.get("species")
+    if not code:
+        raise NoData(L(D.lang, "Выберите вид кнопкой под шапкой", "Тақырыптың астындағы түймемен түрді таңдаңыз"))
+    key = _key_for(D, {"fits": pl["species"]}, code)
+    if key is None:
+        raise NoData(L(D.lang, f"Для вида «{D.sp_name(code)}» прогноз в этом запуске не считался", f"«{D.sp_name(code)}» түрі үшін болжам бұл іске қосуда есептелмеген"))
+    return pl, meta, pl["species"][key], code
+
+
+def _ftoggle(D, opt):
+    lang = D.lang
+    sc = opt.get("scenario") if opt.get("scenario") in SCEN else "baranov"
+    return sc, [{"key": "scenario", "title": L(lang, "Интервалы для сценария", "Сценарий аралықтары"), "value": sc,
+                 "options": [{"value": s, "label": _scen_title(s, lang)} for s in SCEN]}]
+
+
+def _fcommon(D, meta, code, extra=None):
+    return {"meta": meta, "calc_year": False, "help": "method-forecast", "species_shown": code,
+            "filter_label": " · ".join(x for x in [D.sp_name(code) if code else None, L(D.lang, "ПДУ, рассчитанный в приложении (F = k·M)", "Қосымшада есептелген ШРА (F = k·M)"), extra] if x)}
+
+
+def v_fc_species(D, opt):
+    pl, meta = _fc(D)
+    lang = D.lang
+    names = _names(D)
+    rows = []
+    y1 = ye = yl = None
+    for r in pl.get("summary") or []:
+        code = r.get("code") or names.get(str(r.get("species")).strip().lower())
+        y1, ye, yl = r.get("year_first_fc"), r.get("year_last_fc"), r.get("year_last")
+        rows.append({"_code": code, "species": D.sp_name(code), "pdu": r.get("pdu_next_t"), "lo": r.get("pdu_next_t_q025"), "hi": r.get("pdu_next_t_q975"),
+                     "npc": r.get("npc_last_t"), "ratio": (r["pdu_next_t"] / r["npc_last_t"]) if r.get("npc_last_t") else None,
+                     "total": r.get("total_last"), "end_b": r.get("total_end_baranov"), "end_f": r.get("total_end_fixed"), "end_n": r.get("total_end_none"),
+                     "p_dec": (r.get("p_decline_baranov") or 0) * 100 if r.get("p_decline_baranov") is not None else None})
+    rows.sort(key=lambda r: -(r["pdu"] or 0))
+    cols = [col("species", L(lang, "Вид", "Түр")), col("pdu", L(lang, f"ПДУ {y1}, F = k·M, т", f"ШРА {y1}, F = k·M, т"), "number"),
+            col("lo", "2,5 %", "number"), col("hi", "97,5 %", "number"), col("npc", L(lang, f"ПДУ НПЦ {yl}, т (для сравнения)", f"ҒӨО ШРА {yl}, т (салыстыру үшін)"), "number"),
+            col("ratio", L(lang, "F = k·M / НПЦ, раз", "F = k·M / ҒӨО, есе"), "number"), col("total", L(lang, f"Численность {yl}", f"Саны {yl}"), "integer"),
+            col("end_b", f"{ye}: F = k·M", "integer"), col("end_f", L(lang, f"{ye}: фикс. ПДУ", f"{ye}: тіркелген ШРА"), "integer"),
+            col("end_n", L(lang, f"{ye}: без промысла", f"{ye}: кәсіпшіліксіз"), "integer"), col("p_dec", L(lang, "Вероятность снижения, F = k·M, %", "Төмендеу ықтималдығы, F = k·M, %"), "number")]
+    return {"columns": cols, "rows": rows, "default_view": "table", "row_action": "species", "chart": None,
+            "notes": [L(lang, f"ПДУ, рассчитанный в приложении по байесовской модели (k = {nf(pl.get('k'), 2)}); ПДУ НПЦ — только для сравнения. Щелчок по строке — все данные по виду.",
+                        f"Байестік модель бойынша қосымшада есептелген ШРА (k = {nf(pl.get('k'), 2)}); ҒӨО ШРА — тек салыстыру үшін. Жолды басу — түр бойынша барлық деректер.")],
+            **_fcommon(D, meta, None, f"k = {nf(pl.get('k'), 2)}")}
+
+
+def v_fc_tiles(D, opt):
+    pl, meta, R, code = _fc_species(D, opt)
+    sc, toggles = _ftoggle(D, opt)
+    lang = D.lang
+    S = R["scenarios"]
+    y1, ye, yl = R["years_fc"][0], R["years_fc"][-1], R["years_hist"][-1]
+    b, F, M = S["baranov"]["pdu_t_q"], R["F_q"], R["Mbar_q"]
+    f = S[sc]
+    st = R.get("settings") or {}
+    tiles = [
+        {"label": L(lang, f"ПДУ {y1}, F = k·M", f"ШРА {y1}, F = k·M"), "value": f"{tonnes(b[2][0])} т", "hint": f"95 %: {tonnes(b[0][0])} – {tonnes(b[4][0])} т"},
+        {"label": L(lang, f"ПДУ НПЦ {yl} (для сравнения)", f"ҒӨО ШРА {yl} (салыстыру үшін)"), "value": f"{tonnes(st.get('npc_last'))} т",
+         "hint": L(lang, f"фиксированный в прогнозе: {tonnes(st.get('pdu_fixed_t'))} т", f"болжамда тіркелген: {tonnes(st.get('pdu_fixed_t'))} т")},
+        {"label": f"F {y1}", "value": nf(F[2][0], 3), "hint": f"M̄ = {nf(M[2][0], 3)}, k = {nf(st.get('k'), 2)}"},
+        {"label": L(lang, f"Численность {yl}", f"Саны {yl}"), "value": pieces(R["hist"]["total_q"][2][-1], lang), "hint": L(lang, "возрасты 1–2 и старше", "1–2 және үлкен жастар")},
+        {"label": L(lang, f"Численность {ye}", f"Саны {ye}"), "value": pieces(f["total_q"][2][-1], lang), "hint": _scen_title(sc, lang)},
+        {"label": L(lang, "Вероятность снижения", "Төмендеу ықтималдығы"), "value": pct(f.get("p_decline")),
+         "hint": L(lang, f"{ye} ниже {yl}, {_scen_title(sc, lang)}", f"{ye} {yl}-ден төмен, {_scen_title(sc, lang)}")},
+    ]
+    notes = [str(n) for n in (R.get("notes") or [])]
+    setm = [f"{R['years_fc'][i]}: {nf(v, 3)}" for i, v in enumerate(st.get("mortality") or []) if v is not None]
+    if setm:
+        notes.append(L(lang, "смертность задана: " + ", ".join(setm) + "; в остальные годы — из истории", "өлім-жітім берілген: " + ", ".join(setm) + "; басқа жылдары — тарихтан"))
+    return {"tiles": tiles, "warnings": [{"level": "warning", "text": n} for n in notes], "default_view": "tiles", "chart": None, "toggles": toggles,
+            "columns": [col("label", L(lang, "Показатель", "Көрсеткіш")), col("value", L(lang, "Значение", "Мәні")), col("hint", L(lang, "Пояснение", "Түсініктеме"))],
+            "rows": [{"label": t["label"], "value": t["value"], "hint": t.get("hint")} for t in tiles],
+            "values": {"pdu": b[2][0], "lo": b[0][0], "hi": b[4][0], "npc": st.get("npc_last"), "p_dec": f.get("p_decline"), "y1": y1, "ye": ye, "sc": _scen_title(sc, lang)},
+            **_fcommon(D, meta, code)}
+
+
+def _joined(R, hist, fc_arr, join=None):
+    nh = len(R["years_hist"])
+    h = list(hist) + [None] * len(R["years_fc"])
+    f = [None] * nh + list(fc_arr)
+    if join is not None and nh:
+        f[nh - 1] = join
+    return h, f
+
+
+def _scen_chart(D, opt, hist_q, key, y_title, last_q=None):
+    pl, meta, R, code = _fc_species(D, opt)
+    sc, toggles = _ftoggle(D, opt)
+    lang = D.lang
+    x = R["years_hist"] + R["years_fc"]
+    nh = len(R["years_hist"])
+    hq = hist_q(R)
+    lq = last_q(R) if last_q else [q[nh - 1] for q in hq]
+    bands = [{"name": L(lang, "История, 95 %", "Тарих, 95 %"), "lo": _joined(R, hq[0], [])[0], "hi": _joined(R, hq[4], [])[0], "op": 0.16, "c": 0}]
+    lines = [{"name": L(lang, "История, медиана", "Тарих, медиана"), "values": _joined(R, hq[2], [])[0], "c": 0, "bold": True}]
+    cmap = {"baranov": 1, "fixed": 3, "none": 2}
+    for s in SCEN:
+        qd = R["scenarios"][s][key]
+        lines.append({"name": _scen_title(s, lang), "values": _joined(R, [], qd[2], lq[2])[1], "c": cmap[s], "bold": s == sc})
+    fq = R["scenarios"][sc][key]
+    bands.append({"name": L(lang, f"{_scen_title(sc, lang)}, 95 %", f"{_scen_title(sc, lang)}, 95 %"), "lo": _joined(R, [], fq[0], lq[0])[1], "hi": _joined(R, [], fq[4], lq[4])[1], "op": 0.14, "c": cmap[sc]})
+    bands.append({"name": L(lang, f"{_scen_title(sc, lang)}, 50 %", f"{_scen_title(sc, lang)}, 50 %"), "lo": _joined(R, [], fq[1], lq[1])[1], "hi": _joined(R, [], fq[3], lq[3])[1], "op": 0.28, "c": cmap[sc]})
+    rows = []
+    for i, yy in enumerate(x):
+        r = {"year": yy, "kind": L(lang, "история", "тарих") if i < nh else L(lang, "прогноз", "болжам")}
+        if i < nh:
+            r.update({"median": hq[2][i], "lo": hq[0][i], "hi": hq[4][i]})
+        else:
+            h = i - nh
+            r.update({"median": fq[2][h], "lo": fq[0][h], "hi": fq[4][h]})
+        rows.append(r)
+    return {"chart": {"kind": "band", "x": x, "bands": bands, "lines": lines, "vrefs": [{"x": str(R["years_fc"][0]), "label": L(lang, "прогноз →", "болжам →")}],
+                      "x_title": L(lang, "Год", "Жыл"), "y_title": y_title, "allowed": ["linear", "log"], "default": "linear"},
+            "columns": [col("year", L(lang, "Год", "Жыл"), "integer"), col("kind", L(lang, "Период", "Кезең")), col("median", L(lang, "Медиана", "Медиана"), "number"),
+                        col("lo", "2,5 %", "number"), col("hi", "97,5 %", "number")],
+            "rows": rows, "toggles": toggles, **_fcommon(D, meta, code, _scen_title(sc, lang))}
+
+
+def v_fc_total(D, opt):
+    lang = D.lang
+    r = _scen_chart(D, opt, lambda R: R["hist"]["total_q"], "total_q", L(lang, "штук", "дана"), lambda R: R["hist"]["total_last_draws_q"])
+    r["notes"] = [L(lang, "Возрасты 1–2 и старше. История — байесовская модель; прогноз — медианы сценариев, полосы 50 % и 95 % — для выбранного сценария.",
+                    "1–2 және үлкен жастар. Тарих — байестік модель; болжам — сценарийлер медианалары, 50 % және 95 % жолақтары — таңдалған сценарий үшін.")]
+    return r
+
+
+def v_fc_biomass(D, opt):
+    lang = D.lang
+    r = _scen_chart(D, opt, lambda R: R["hist"]["fishable_q"], "fishable_q", L(lang, "тонн", "тонна"))
+    r["notes"] = [L(lang, "Промысловая биомасса: возрасты от m0 × средний вес последнего года истории, тонн.",
+                    "Кәсіптік биомасса: m0-ден бастап жастар × тарихтың соңғы жылының орташа салмағы, тонна.")]
+    return r
+
+
+def v_fc_pdu(D, opt):
+    pl, meta, R, code = _fc_species(D, opt)
+    lang = D.lang
+    x = R["years_hist"] + R["years_fc"]
+    b, fx = R["scenarios"]["baranov"]["pdu_t_q"], R["scenarios"]["fixed"]["pdu_t_q"]
+    npc = R["hist"]["npc_pdu_t"]
+    last = npc[-1] if npc else None
+    bands = [{"name": "F = k·M, 95 %", "lo": _joined(R, [], b[0])[1], "hi": _joined(R, [], b[4])[1], "op": 0.16, "c": 1},
+             {"name": "F = k·M, 50 %", "lo": _joined(R, [], b[1])[1], "hi": _joined(R, [], b[3])[1], "op": 0.3, "c": 1}]
+    lines = [{"name": L(lang, "ПДУ НПЦ (история)", "ҒӨО ШРА (тарих)"), "values": _joined(R, npc, [])[0], "c": 3},
+             {"name": L(lang, "F = k·M, медиана", "F = k·M, медиана"), "values": _joined(R, [], b[2])[1], "c": 1, "bold": True},
+             {"name": L(lang, "Фиксированный ПДУ", "Тіркелген ШРА"), "values": _joined(R, [], fx[2], last)[1], "c": 3, "dash": True}]
+    rows = [{"year": yy, "npc": npc[i] if i < len(npc) else None} for i, yy in enumerate(R["years_hist"])]
+    rows += [{"year": yy, "pdu": b[2][h], "lo": b[0][h], "hi": b[4][h], "fixed": fx[2][h]} for h, yy in enumerate(R["years_fc"])]
+    return {"chart": {"kind": "band", "x": x, "bands": bands, "lines": lines, "vrefs": [{"x": str(R["years_fc"][0]), "label": L(lang, "прогноз →", "болжам →")}],
+                      "x_title": L(lang, "Год", "Жыл"), "y_title": L(lang, "тонн", "тонна"), "allowed": ["linear", "log"], "default": "linear"},
+            "columns": [col("year", L(lang, "Год", "Жыл"), "integer"), col("npc", L(lang, "ПДУ НПЦ, т", "ҒӨО ШРА, т"), "number"),
+                        col("pdu", L(lang, "F = k·M, медиана, т", "F = k·M, медиана, т"), "number"), col("lo", "2,5 %", "number"), col("hi", "97,5 %", "number"),
+                        col("fixed", L(lang, "Фиксированный ПДУ, т", "Тіркелген ШРА, т"), "number")],
+            "rows": rows,
+            "notes": [L(lang, "История — ПДУ НПЦ (для сравнения); прогноз — ПДУ приложения F = k·M (медиана и интервалы) и фиксированный ПДУ.",
+                        "Тарих — ҒӨО ШРА (салыстыру үшін); болжам — қосымша ШРА F = k·M (медиана және аралықтар) және тіркелген ШРА.")],
+            **_fcommon(D, meta, code)}
+
+
+def v_fc_ages(D, opt):
+    pl, meta, R, code = _fc_species(D, opt)
+    sc, toggles = _ftoggle(D, opt)
+    lang = D.lang
+    yl, ye = R["years_hist"][-1], R["years_fc"][-1]
+    ages = R["ages"]
+    a1, a2 = R["hist"]["X_last_q"][2], R["scenarios"][sc]["X_last_q"][2]
+    series = [{"name": L(lang, f"{yl} (модель)", f"{yl} (модель)"), "values": a1, "type": "bar", "c": 0},
+              {"name": f"{ye}: {_scen_title(sc, lang)}", "values": a2, "type": "bar", "c": {"baranov": 1, "fixed": 3, "none": 2}[sc]}]
+    rows = [{"age": age_label(a), "last": a1[i], "end": a2[i]} for i, a in enumerate(ages)]
+    return {"chart": {"kind": "fit", "x": [age_label(a) for a in ages], "series": series, "vrefs": [{"x": age_label(R["m0"]), "label": L(lang, "промысловые →", "кәсіптік →")}],
+                      "x_title": L(lang, "Возраст, лет", "Жасы, жыл"), "y_title": L(lang, "штук", "дана"), "allowed": ["log", "linear"], "default": "log"},
+            "columns": [col("age", L(lang, "Возраст, лет", "Жасы, жыл")), col("last", str(yl), "integer"), col("end", f"{ye}: {_scen_title(sc, lang)}", "integer")],
+            "rows": rows, "toggles": toggles, "notes": [L(lang, "Медианы, штук.", "Медианалар, дана.")], **_fcommon(D, meta, code, _scen_title(sc, lang))}
+
+
+def v_fc_pdu_ages(D, opt):
+    pl, meta, R, code = _fc_species(D, opt)
+    lang = D.lang
+    med = R["scenarios"]["baranov"]["pdu_pcs_median"]
+    ages = R["ages"]
+    idx = [i for i, a in enumerate(ages) if a >= R["m0"]]
+    pick = sorted({0, len(med) - 1})
+    series = [{"name": str(R["years_fc"][h]), "values": [med[h][i] for i in idx], "type": "bar", "c": 1 + n} for n, h in enumerate(pick)]
+    rows = [{"age": age_label(ages[i]), **{f"y{R['years_fc'][h]}": med[h][i] for h in pick}} for i in idx]
+    return {"chart": {"kind": "fit", "x": [age_label(ages[i]) for i in idx], "series": series, "x_title": L(lang, "Возраст, лет", "Жасы, жыл"),
+                      "y_title": L(lang, "штук", "дана"), "allowed": ["linear", "log"], "default": "linear"},
+            "columns": [col("age", L(lang, "Возраст, лет", "Жасы, жыл"))] + [col(f"y{R['years_fc'][h]}", str(R["years_fc"][h]), "integer") for h in pick],
+            "rows": rows, "notes": [L(lang, "Медианы, штук, сценарий F = k·M.", "Медианалар, дана, F = k·M сценарийі.")], **_fcommon(D, meta, code)}
+
+
+def v_fc_table(D, opt):
+    pl, meta, R, code = _fc_species(D, opt)
+    sc, toggles = _ftoggle(D, opt)
+    lang = D.lang
+    S = R["scenarios"][sc]
+    st = R.get("settings") or {}
+    rows = []
+    for h, yy in enumerate(R["years_fc"]):
+        r = {"year": yy, "area": st.get("areas", [None] * 99)[h], "s_mat": R["s_mature_q"][2][h], "beta": R["beta_q"][2][h],
+             "total": S["total_q"][2][h], "total_lo": S["total_q"][0][h], "total_hi": S["total_q"][4][h], "fish_t": S["fishable_q"][2][h],
+             "pdu_t": S["pdu_t_q"][2][h], "pdu_lo": S["pdu_t_q"][0][h] if sc != "none" else None, "pdu_hi": S["pdu_t_q"][4][h] if sc != "none" else None,
+             "pdu_pcs": S["pdu_pcs_total_q"][2][h], "removal": S["removal_t_q"][2][h]}
+        if sc == "baranov":
+            r.update({"F": R["F_q"][2][h], "M": R["Mbar_q"][2][h]})
+        rows.append(r)
+    cols = [col("year", L(lang, "Год", "Жыл"), "integer"), col("area", L(lang, "Площадь, км²", "Аудан, км²"), "number"),
+            col("s_mat", L(lang, "s половозрелых", "жетілгендер s"), "number"), col("beta", "β", "number"),
+            col("total", L(lang, "Численность", "Саны"), "integer"), col("total_lo", "2,5 %", "integer"), col("total_hi", "97,5 %", "integer"),
+            col("fish_t", L(lang, "Промысловая биомасса, т", "Кәсіптік биомасса, т"), "number"), col("pdu_t", L(lang, "ПДУ, т", "ШРА, т"), "number"),
+            col("pdu_lo", "ПДУ 2,5 %", "number"), col("pdu_hi", "ПДУ 97,5 %", "number"), col("pdu_pcs", L(lang, "ПДУ, штук", "ШРА, дана"), "integer"),
+            col("removal", L(lang, "Изъятие β·ПДУ, т", "Алу β·ШРА, т"), "number")]
+    if sc == "baranov":
+        cols += [col("F", "F", "number"), col("M", "M̄", "number")]
+    return {"columns": cols, "rows": rows, "default_view": "table", "chart": None, "toggles": toggles,
+            "notes": [L(lang, f"Медиана и 95 % интервал по {R.get('n_draws')} траекториям.", f"{R.get('n_draws')} траектория бойынша медиана және 95 % аралық.")],
+            **_fcommon(D, meta, code, _scen_title(sc, lang))}
+
+
+VIEWS.update({"fc_species": v_fc_species, "fc_tiles": v_fc_tiles, "fc_total": v_fc_total, "fc_biomass": v_fc_biomass, "fc_pdu": v_fc_pdu,
+              "fc_ages": v_fc_ages, "fc_pdu_ages": v_fc_pdu_ages, "fc_table": v_fc_table})

@@ -9,7 +9,7 @@
         <el-radio-button v-for="s in sections" :key="s.code" :value="s.code">{{ tr(s, 'title') }}</el-radio-button>
       </el-radio-group>
       <!-- год результатов расчёта: стрелками, как в прежнем приложении; общий для всех слайдов раздела -->
-      <div v-if="curTab?.year_picker && calcYears.length" class="ystep" :aria-label="$t('mon.year')">
+      <div v-if="curTab?.year_picker && calcYears.length && showYear" class="ystep" :aria-label="$t('mon.year')">
         <span class="muted small">{{ $t('mon.year') }}</span>
         <el-button size="small" :disabled="yIdx <= 0" :title="$t('mon.prev_year')" @click="stepYear(-1)"><el-icon><ArrowLeft /></el-icon></el-button>
         <el-select :model-value="shownYear" size="small" style="width:88px" @update:model-value="setYear">
@@ -118,6 +118,8 @@ const calcYears = ref([])
 const reportedYear = ref(null)
 const shownYear = computed(() => calcYear.value ?? reportedYear.value)
 const yIdx = computed(() => calcYears.value.indexOf(shownYear.value))
+// стрелки года — только если слайд (или лента раздела) зависит от года; у прогноза года свои
+const showYear = computed(() => (slidesOn.value ? !!dataById[cur.value?.id]?.calc_year : visible.value.some((w) => dataById[w.id]?.calc_year)))
 function setYear(y) { calcYear.value = y ? Number(y) : null }
 function stepYear(d) { const i = yIdx.value + d; if (i >= 0 && i < calcYears.value.length) setYear(calcYears.value[i]) }
 

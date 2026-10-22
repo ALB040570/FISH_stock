@@ -29,6 +29,8 @@ def test_dashboards(calc_stack, tmp_path, monkeypatch):
         j = r.json()
         if w["source"].get("algorithm") in ("bayes_cohort", "forecast_pdu"):
             assert j.get("empty") and j["reason"] == "no_step", w["id"]
+        elif str(w["source"].get("view", "")).startswith("by_"):      # байесовская модель: в расчёте «stock» шага нет
+            assert j.get("empty") and "полный расчёт" in j["message"], w["id"]
         else:
             assert not j.get("empty"), (w["id"], j)
     j = db.post("/widgets/data", headers=H(), json={"source": {"kind": "dataset", "dataset_type": "npc_pdu"}, "filters": f,
@@ -161,3 +163,16 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     assert ages[:3] == ["1–2", "2–3", "3–4"] and ages.index("10–11") > ages.index("9–10")
     hl = view("st_hauls", "lesh")
     assert hl["chart"]["kind"] == "dots" and sum(len(d["points"]) for d in hl["chart"]["dots"]) == len(hl["rows"])
+    # ---- ПДУ НПЦ (официальный): числа результата этапа 3; лещ 2024 — 11 302 439 шт
+    pdu = db.post("/widgets/data", headers=H("viewer"), json={"source": {"kind": "payload", "algorithm": "pdu_by_age"},
+                                                              "filters": {"water_body": "zhaysan"}, "options": {}}).json()["payload"]
+    pl = pdu["species"]["лещ"]
+    pt = view("pn_tiles", "lesh")
+    assert pt["values"]["pcs"] == pl["pieces_total"][-1] == 11302439 and pt["values"]["pdu_t"] == pl["pdu_t"][-1]
+    pa = view("pn_ages", "lesh", year=2020)
+    assert [r["pcs"] for r in pa["rows"]] == pl["by_year"][pdu["years"].index(2020)]["pieces"]
+    assert all(r["expl"] is None for r, a in zip(pa["rows"], pl["ages"]) if a < pl["m0"])
+    ps = view("pn_species")
+    assert {r["_code"] for r in ps["rows"]} >= {"lesh", "sudak"} and "F = k·M" not in str(ps["columns"])
+    # байесовская модель и ПДУ приложения: в расчёте «stock» их нет — понятное сообщение, а не ошибка
+    assert "полный расчёт" in view("by_total", "lesh")["message"] and "полный расчёт" in view("fc_tiles", "lesh")["message"]

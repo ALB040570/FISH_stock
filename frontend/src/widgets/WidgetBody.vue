@@ -134,6 +134,10 @@ function onPick(e) {
     xi = e.seriesType === 'boxplot' ? e.dataIndex : e.value[0]; x = spec.x[xi]
   } else if (spec.kind === 'lifecycle' || spec.kind === 'dots' || spec.kind === 'curve') {
     return
+  } else if (spec.kind === 'band') {
+    xi = Array.isArray(e.value) ? e.value[0] : e.dataIndex; x = spec.x?.[xi]
+    if (spec.pick_year && board?.setYear && /^\d{4}$/.test(String(x))) board.setYear(Number(x))
+    return
   } else {
     xi = e.dataIndex; x = spec.x?.[xi]
     const s = (spec.series || []).find((q) => q.name === e.seriesName)
