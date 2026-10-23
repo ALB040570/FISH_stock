@@ -4,7 +4,7 @@
       <template v-if="run">
         <div class="page-head">
           <div>
-            <el-button text @click="$router.push('/runs')"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ $t('runs.title') }}</el-button>
+            <el-button text @click="$router.push('/calc/runs')"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ $t('runs.title') }}</el-button>
             <h1>{{ run.calculation_title }}</h1>
             <div class="sub">
               <RunStatus :status="run.status" /> <el-tag v-if="run.is_main" type="success" size="small">★ {{ $t('runs.is_main') }}</el-tag>
@@ -19,7 +19,7 @@
               <el-button @click="download('algo-admin', `/runs/${run.id}/export.zip`)">{{ $t('runs.export_zip') }}</el-button>
               <el-button @click="download('algo-admin', `/runs/${run.id}/report.docx`)">{{ $t('runs.report_docx') }}</el-button>
               <el-button @click="download('algo-admin', `/runs/${run.id}/report.pdf`)">{{ $t('runs.report_pdf') }}</el-button>
-              <el-button type="primary" @click="$router.push('/monitoring/' + run.water_body)">{{ $t('nav.monitoring') }}</el-button>
+              <el-button type="primary" @click="$router.push('/monitoring/waterbody/' + run.water_body)">{{ $t('nav.monitoring') }}</el-button>
             </template>
           </div>
         </div>
@@ -32,13 +32,13 @@
               <div class="small muted">{{ s.version }} · <RunStatus :status="s.status" /><template v-if="s.seconds"> · {{ dur(s.seconds) }}</template></div>
               <el-progress v-if="s.status === 'running' && run.progress" :percentage="Math.round((run.progress.fraction || 0) * 100)" :stroke-width="6" style="margin-top:4px" />
               <div v-if="s.status === 'running' && run.progress" class="small muted">{{ [run.progress.phase, run.progress.species].filter(Boolean).join(' · ') }}</div>
-              <div v-if="s.reused_run" class="small muted">{{ $t('runs.reused') }} <router-link :to="'/runs/' + s.reused_run">{{ s.reused_run.slice(-6) }}</router-link></div>
+              <div v-if="s.reused_run" class="small muted">{{ $t('runs.reused') }} <router-link :to="'/calc/runs/' + s.reused_run">{{ s.reused_run.slice(-6) }}</router-link></div>
             </div>
           </div>
         </div>
         <div v-if="cur !== null" class="card">
           <div v-if="METHOD[run.steps[cur].algorithm]" class="method-link">
-            <router-link :to="'/help/' + METHOD[run.steps[cur].algorithm]"><el-icon><QuestionFilled /></el-icon> {{ $t('help.method_step') }}</router-link>
+            <router-link :to="helpPath(METHOD[run.steps[cur].algorithm])"><el-icon><QuestionFilled /></el-icon> {{ $t('help.method_step') }}</router-link>
           </div>
           <el-tabs v-model="tab">
             <el-tab-pane v-if="view && result" :label="$t('runs.view')" name="view" />
@@ -76,7 +76,7 @@
             </template>
             <template v-else-if="tab === 'params'">
               <pre class="code-editor" style="min-height:200px">{{ JSON.stringify(run.steps[cur].params, null, 1) }}</pre>
-              <div class="small muted">Наборы данных: <span v-for="(d, k) in run.datasets" :key="k"><router-link :to="'/data/' + d.dataset_id">{{ k }}</router-link> v{{ d.version }}; </span></div>
+              <div class="small muted">Наборы данных: <span v-for="(d, k) in run.datasets" :key="k"><router-link :to="'/input/datasets/' + d.dataset_id">{{ k }}</router-link> v{{ d.version }}; </span></div>
               <div class="small muted">Контрольная сумма пакета: <span class="mono">{{ run.steps[cur].checksum }}</span></div>
             </template>
           </StateBlock>
@@ -90,6 +90,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api, download } from '../api'
+import { helpPath } from '../cabinets'
 const METHOD = { seine_catchability: 'method-seine', stock_by_catch: 'method-stock', pdu_by_age: 'method-pdu-age', bayes_cohort: 'method-bayes', forecast_pdu: 'method-forecast' }
 import { useAuth } from '../store/auth'
 import { fmt } from '../components/charts'

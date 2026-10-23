@@ -61,15 +61,15 @@
           <div v-for="(n, i) in data.notes || []" :key="i" class="note">{{ n }}</div>
           <div v-if="srcLine.length || data.filter_label" class="src">
             <span v-if="data.filter_label">{{ data.filter_label }}<template v-if="srcLine.length"> · </template></span>
-            <template v-for="(s, i) in srcLine" :key="i"><router-link :to="'/data/' + s.dataset_id">{{ s.title }} v{{ s.version }}</router-link><span v-if="i < srcLine.length - 1">, </span></template>
+            <template v-for="(s, i) in srcLine" :key="i"><router-link v-if="canGo('/input/')" :to="'/input/datasets/' + s.dataset_id">{{ s.title }} v{{ s.version }}</router-link><span v-else>{{ s.title }} v{{ s.version }}</span><span v-if="i < srcLine.length - 1">, </span></template>
           </div>
           <div v-if="data.meta?.run_id || data.help" class="src">
             <template v-if="data.meta?.run_id">
-              {{ $t('wv.by_run') }} <router-link :to="'/runs/' + data.meta.run_id">«{{ data.meta.calculation_title }}»</router-link>
+              {{ $t('wv.by_run') }} <router-link v-if="canGo('/calc/')" :to="'/calc/runs/' + data.meta.run_id">«{{ data.meta.calculation_title }}»</router-link><span v-else>«{{ data.meta.calculation_title }}»</span>
               <span v-if="data.meta.run_finished_at">&nbsp;{{ $t('wv.from') }} {{ new Date(data.meta.run_finished_at).toLocaleDateString('ru-RU') }}</span>
               <span v-if="data.meta.is_main === false"> · {{ $t('monitoring.run_last') }}</span>
             </template>
-            <template v-if="data.help"> · <router-link :to="'/help/' + data.help">{{ $t('wv.how') }}</router-link></template>
+            <template v-if="data.help"> · <router-link :to="helpPath(data.help)">{{ $t('wv.how') }}</router-link></template>
           </div>
         </div>
       </template>
@@ -102,10 +102,10 @@
       <StateBlock :loading="drillLoading" :error="drillErr">
         <template v-if="drillData">
           <div v-if="drillData.formula" class="formula">{{ drillData.formula }}
-            <router-link v-if="drillData.help" :to="'/help/' + drillData.help" style="margin-left:6px">{{ $t('wv.how') }}</router-link></div>
+            <router-link v-if="drillData.help" :to="helpPath(drillData.help)" style="margin-left:6px">{{ $t('wv.how') }}</router-link></div>
           <div class="row" style="justify-content:space-between; margin-bottom:8px">
             <span class="muted small">{{ $t('wv.rows_found', { n: drillData.total }) }}</span>
-            <router-link v-if="drillData.dataset_id" :to="'/data/' + drillData.dataset_id">{{ $t('wv.open_dataset') }} →</router-link>
+            <router-link v-if="drillData.dataset_id && canGo('/input/')" :to="'/input/datasets/' + drillData.dataset_id">{{ $t('wv.open_dataset') }} →</router-link>
           </div>
           <el-table :data="drillData.rows" size="small" border max-height="78vh">
             <el-table-column v-for="c in drillData.columns" :key="c.code" :prop="c.code" :label="c.title" :min-width="c.code === 'place' ? 150 : 90"
@@ -127,9 +127,13 @@ import i18n, { tr } from '../i18n'
 import StateBlock from '../components/StateBlock.vue'
 import { fmt } from '../components/charts'
 import WidgetBody from './WidgetBody.vue'
+import { canGo as canGoRole, helpPath } from '../cabinets'
+import { useAuth } from '../store/auth'
 import ExplainPanel from './ExplainPanel.vue'
 import CommentsPanel from './CommentsPanel.vue'
 import { tableOf } from './views'
+// ссылки в кабинет, куда роль не входит, показываются текстом (docs/decisions.md, № 52)
+const canGo = (p) => canGoRole(p, useAuth().role)
 
 const MODE_ICON = { chart: 'TrendCharts', table: 'Grid', tiles: 'Menu', cards: 'Postcard', signals: 'Bell', traffic: 'Odometer', journal: 'Notebook', trust: 'CircleCheck' }
 const p = defineProps({ widget: Object, filters: Object, species: Object, big: Boolean })

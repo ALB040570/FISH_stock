@@ -84,9 +84,9 @@
             </el-table>
           </div>
           <div class="row" style="margin-top:12px">
-            <el-button type="primary" @click="$router.push('/monitoring/' + sel.code)"><el-icon><DataLine /></el-icon>&nbsp;{{ $t('map.monitoring') }}</el-button>
-            <el-button @click="$router.push({ path: '/data', query: { wb: sel.code } })">{{ $t('map.data') }}</el-button>
-            <el-button v-if="auth.can('run.execute')" @click="$router.push({ path: '/calculations', query: { wb: sel.code } })">{{ $t('map.start_calc') }}</el-button>
+            <el-button type="primary" @click="$router.push('/monitoring/waterbody/' + sel.code)"><el-icon><DataLine /></el-icon>&nbsp;{{ $t('map.monitoring') }}</el-button>
+            <el-button @click="$router.push({ path: '/input/datasets', query: { wb: sel.code } })">{{ $t('map.data') }}</el-button>
+            <el-button v-if="auth.can('run.execute')" @click="$router.push({ path: '/calc/calculations', query: { wb: sel.code } })">{{ $t('map.start_calc') }}</el-button>
           </div>
         </div>
       </transition>

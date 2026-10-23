@@ -7,7 +7,7 @@
     <StateBlock :loading="loading" :error="error">
       <div class="card">
         <h2 style="margin-top:0">{{ $t('dict.entities') }}</h2>
-        <el-table :data="grouped" @row-click="(r) => $router.push('/dictionaries/entities/' + r.code)" style="cursor:pointer">
+        <el-table :data="grouped" @row-click="(r) => $router.push('/design/dictionaries/entities/' + r.code)" style="cursor:pointer">
           <el-table-column :label="$t('dict.group')" width="150"><template #default="{ row }"><span class="muted">{{ $t('dict.group_' + row.group) }}</span></template></el-table-column>
           <el-table-column :label="$t('common.name')" min-width="200"><template #default="{ row }"><b>{{ tr(row, 'title') }}</b> <el-tag v-if="row.system" size="small" type="info">{{ $t('dict.system') }}</el-tag><div class="muted small">{{ row.description }}</div></template></el-table-column>
           <el-table-column prop="code" :label="$t('common.code')" width="160" />
@@ -18,14 +18,14 @@
       </div>
       <div class="card">
         <h2 style="margin-top:0">{{ $t('dict.dtypes') }}</h2>
-        <el-table :data="dtypes" @row-click="(r) => $router.push('/dictionaries/types/' + r.code)" style="cursor:pointer">
+        <el-table :data="dtypes" @row-click="(r) => $router.push('/design/dictionaries/types/' + r.code)" style="cursor:pointer">
           <el-table-column :label="$t('common.name')" min-width="220"><template #default="{ row }"><b>{{ tr(row, 'title') }}</b><div class="muted small">{{ row.description }}</div></template></el-table-column>
           <el-table-column prop="code" :label="$t('common.code')" width="170" />
           <el-table-column :label="$t('dict.columns')" width="90" align="right"><template #default="{ row }">{{ row.columns.length }}</template></el-table-column>
           <el-table-column :label="$t('dict.species_columns')" width="130" align="center"><template #default="{ row }">{{ row.species_columns?.enabled ? $t('common.yes') : $t('common.no') }}</template></el-table-column>
           <el-table-column :label="$t('common.version')" width="90" align="right"><template #default="{ row }">v{{ row.current_version }}</template></el-table-column>
         </el-table>
-        <el-button v-if="auth.can('dict.edit')" style="margin-top:10px" @click="$router.push('/dictionaries/types/_new')"><el-icon><Plus /></el-icon>&nbsp;Новый тип набора данных</el-button>
+        <el-button v-if="auth.can('dict.edit')" style="margin-top:10px" @click="$router.push('/design/dictionaries/types/_new')"><el-icon><Plus /></el-icon>&nbsp;Новый тип набора данных</el-button>
       </div>
     </StateBlock>
     <el-dialog v-model="dlg" :title="$t('dict.new_entity')" width="1100px">
@@ -73,7 +73,7 @@ const f = reactive({ code: '', title_ru: '', title_kk: '', description: '', fiel
 function openNew() { Object.assign(f, { code: '', title_ru: '', title_kk: '', description: '', fields: [{ code: 'name', title_ru: 'Название', title_kk: 'Атауы', type: 'string', required: true }] }); err.value = null; dlg.value = true }
 async function create() {
   err.value = null
-  try { const e = await api.post('data-model', '/entities', f); dlg.value = false; router.push('/dictionaries/entities/' + e.code) } catch (e) { err.value = e }
+  try { const e = await api.post('data-model', '/entities', f); dlg.value = false; router.push('/design/dictionaries/entities/' + e.code) } catch (e) { err.value = e }
 }
 onMounted(async () => {
   try { [entities.value, dtypes.value] = await Promise.all([api.get('data-model', '/entities'), api.get('data-model', '/dataset-types')]) }

@@ -4,7 +4,7 @@
       <template v-if="ds">
         <div class="page-head">
           <div>
-            <el-button text @click="$router.push({ path: '/data', query: { wb: ds.water_body } })"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ $t('common.back') }}</el-button>
+            <el-button text @click="$router.push({ path: '/input/datasets', query: { wb: ds.water_body } })"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ $t('common.back') }}</el-button>
             <h1>{{ ds.title }}</h1>
             <div class="sub">{{ $t('common.version') }} {{ version }} {{ version !== ds.current_version ? '(не текущая)' : '' }} · {{ vinfo?.comment }} · {{ vinfo ? new Date(vinfo.created_at).toLocaleString('ru-RU') : '' }}</div>
           </div>

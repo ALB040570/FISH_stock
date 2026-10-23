@@ -4,7 +4,7 @@
       <el-select v-model="chosen" size="small" style="width:150px"><el-option v-for="s in list" :key="s" :label="s" :value="s" /></el-select>
       <el-select v-model="yi" size="small" style="width:100px"><el-option v-for="(y, i) in years" :key="y" :label="y" :value="i" /></el-select>
       <div class="grow" />
-      <router-link to="/help/method-pdu-age" class="small" style="color:var(--fs-primary)">{{ $t('help.how_pdu') }}</router-link>
+      <router-link :to="helpPath('method-pdu-age')" class="small" style="color:var(--fs-primary)">{{ $t('help.how_pdu') }}</router-link>
     </div>
     <div class="flow">
       <div class="step"><div class="n">1</div><div><div class="v">{{ fmt(stockTotal) }} {{ $t('w.pcs') }}</div><div class="l">{{ $t('w.step1', { a: ageLabel(sp.m0), b: ageLabel(sp.m1) }) }}</div></div></div>
@@ -38,6 +38,7 @@ import EChart from '../components/EChart.vue'
 import { CHART } from '../theme'
 import { base, fmt } from '../components/charts'
 import { useSpecies } from './useSpecies'
+import { helpPath } from '../cabinets'
 const p = defineProps({ data: Object, filters: Object })
 const { t } = useI18n()
 const all = computed(() => p.data?.payload?.species || {})

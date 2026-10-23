@@ -26,7 +26,7 @@
             <template #default="{ row }">
               <el-button size="small" @click="download('data-admin', `/templates/${row.type.code}.xlsx`, { water_body: wb })">{{ $t('data.template') }}</el-button>
               <el-button v-if="auth.can('data.edit')" size="small" @click="openUpload(row.type.code)">{{ $t('common.upload') }}</el-button>
-              <el-button v-if="row.ds?.current_version" size="small" type="primary" plain @click="$router.push('/data/' + row.ds.id)">{{ $t('common.open') }}</el-button>
+              <el-button v-if="row.ds?.current_version" size="small" type="primary" plain @click="$router.push('/input/datasets/' + row.ds.id)">{{ $t('common.open') }}</el-button>
             </template>
           </el-table-column>
         </el-table>

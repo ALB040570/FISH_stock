@@ -10,7 +10,7 @@
           </div>
           <div class="row">
             <template v-if="design">
-              <el-button @click="$router.push('/calculations/' + calc.id)">{{ $t('calc.to_run') }}</el-button>
+              <el-button @click="$router.push('/calc/calculations/' + calc.id)">{{ $t('calc.to_run') }}</el-button>
               <el-button @click="check">{{ $t('calc.check') }}</el-button>
             </template>
             <template v-else>
@@ -73,7 +73,7 @@
                   <h3>{{ $t('calc.steps') }}</h3>
                   <div v-for="s in plan.plan.steps" :key="s.algorithm" class="small">{{ s.title }} <span class="mono">{{ s.version }}</span><span v-if="s.profile_version" class="muted"> · профиль v{{ s.profile_version }}</span></div>
                   <h3>{{ $t('calc.datasets_used') }}</h3>
-                  <div v-for="(d, k) in plan.plan.datasets" :key="k" class="small"><router-link :to="'/data/' + d.dataset_id">{{ k }}</router-link> v{{ d.version }}</div>
+                  <div v-for="(d, k) in plan.plan.datasets" :key="k" class="small"><router-link :to="'/input/datasets/' + d.dataset_id">{{ k }}</router-link> v{{ d.version }}</div>
                 </template>
               </template>
             </div>
@@ -87,7 +87,7 @@
                   </div>
                 </el-form-item>
               </el-form>
-              <el-table :data="runs" size="small" @row-click="(r) => $router.push('/runs/' + r.id)" style="cursor:pointer">
+              <el-table :data="runs" size="small" @row-click="(r) => $router.push('/calc/runs/' + r.id)" style="cursor:pointer">
                 <el-table-column :label="$t('common.date')"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString('ru-RU') }}</template></el-table-column>
                 <el-table-column :label="$t('common.status')" width="120"><template #default="{ row }"><RunStatus :status="row.status" /> <el-tag v-if="row.is_main" size="small">★</el-tag></template></el-table-column>
                 <el-table-column prop="author_name" :label="$t('common.author')" width="120" />
@@ -113,7 +113,7 @@ const auth = useAuth()
 const route = useRoute()
 // /calculations/:id — запуск (порядок только просмотр, параметры запуска вводятся); /design/calculations/:id — правка порядка
 const design = !!route.meta.design
-const base = design ? '/design/calculations' : '/calculations'
+const base = design ? '/design/calculations' : '/calc/calculations'
 const router = useRouter()
 const calc = ref(null)
 const catalog = ref([])
@@ -168,7 +168,7 @@ async function run() {
   try {
     await api.put('algo-admin', `/calculations/${calc.value.id}`, body())
     const r = await api.post('algo-admin', `/calculations/${calc.value.id}/run`, fromStep.value ? { from_step: fromStep.value, base_run: lastDone.value.id } : {})
-    router.push('/runs/' + r.id)
+    router.push('/calc/runs/' + r.id)
   } catch (e) { saveErr.value = e; plan.value = { ok: false, errors: Array.isArray(e.details) ? e.details : [e.message], warnings: [] } }
   finally { busy.value = false }
 }

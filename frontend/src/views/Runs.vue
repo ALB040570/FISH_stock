@@ -12,7 +12,7 @@
     </div>
     <StateBlock :loading="loading" :error="error" :empty="!items.length">
       <div class="card">
-        <el-table :data="items" @row-click="(r) => $router.push('/runs/' + r.id)" style="cursor:pointer">
+        <el-table :data="items" @row-click="(r) => $router.push('/calc/runs/' + r.id)" style="cursor:pointer">
           <el-table-column :label="$t('runs.started')" width="170"><template #default="{ row }">{{ new Date(row.created_at).toLocaleString('ru-RU') }}</template></el-table-column>
           <el-table-column prop="calculation_title" :label="$t('calc.title')" min-width="280" />
           <el-table-column prop="water_body" :label="$t('common.water_body')" width="130" />

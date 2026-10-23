@@ -4,7 +4,7 @@
       <template v-if="ent">
         <div class="page-head">
           <div>
-            <el-button text @click="$router.push('/dictionaries')"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ $t('dict.title') }}</el-button>
+            <el-button text @click="$router.push('/design/dictionaries')"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ $t('dict.title') }}</el-button>
             <h1>{{ tr(ent, 'title') }}</h1><div class="sub">{{ ent.description }} · {{ $t('common.version') }} v{{ ent.current_version }}</div>
           </div>
           <el-button v-if="auth.can('dict.edit')" type="primary" @click="openRec(null)"><el-icon><Plus /></el-icon>&nbsp;{{ $t('dict.record_new') }}</el-button>

@@ -17,11 +17,11 @@
               <div><b>{{ runInfo.run.calculation_title }}</b></div>
               <div class="muted" v-if="runInfo.run.finished_at">{{ new Date(runInfo.run.finished_at).toLocaleString('ru-RU') }}</div>
               <div v-if="!runInfo.is_main" class="muted" style="margin-top:4px">{{ $t('monitoring.run_last') }}</div>
-              <router-link :to="'/runs/' + runInfo.run.id" class="plink">{{ $t('mon.run_link') }} →</router-link>
+              <router-link v-if="canGo('/calc/', auth.role)" :to="'/calc/runs/' + runInfo.run.id" class="plink">{{ $t('mon.run_link') }} →</router-link>
             </template>
             <template v-else>
               <div>{{ $t('monitoring.no_run') }}</div>
-              <router-link v-if="auth.can('run.execute')" :to="{ path: '/calculations', query: { wb } }" class="plink">{{ $t('mon.start_calc') }} →</router-link>
+              <router-link v-if="auth.can('run.execute')" :to="{ path: '/calc/calculations', query: { wb } }" class="plink">{{ $t('mon.start_calc') }} →</router-link>
             </template>
           </div>
         </el-popover>
@@ -58,6 +58,7 @@
   </div>
 </template>
 <script setup>
+import { canGo } from '../cabinets'
 import { loadRegions, regionNames } from '../regions'
 loadRegions()
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -88,7 +89,7 @@ const wbRec = computed(() => wbs.value.find((w) => w.code === wb.value))
 const spNames = computed(() => Object.fromEntries(speciesList.value.map((s) => [s.code, s.name_ru])))
 const spName = (c) => { const r = speciesList.value.find((s) => s.code === c); return r ? tr(r, 'name') : c }
 const filters = computed(() => ({ water_body: wb.value, species: sp.value, species_ru: sp.value ? spNames.value[sp.value] : null }))
-function go(v) { sp.value = null; router.push('/monitoring/' + v) }
+function go(v) { sp.value = null; router.push('/monitoring/waterbody/' + v) }
 
 // виды водоёма в порядке доли в улове; красная точка — снижение по светофору
 const chips = computed(() => traffic.value.map((r) => ({ code: r._code, name: spName(r._code),

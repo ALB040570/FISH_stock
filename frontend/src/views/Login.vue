@@ -33,6 +33,7 @@ import { api } from '../api'
 import { useAuth } from '../store/auth'
 import { setLang } from '../i18n'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import { hardGo, homeFor } from '../cabinets'
 const auth = useAuth()
 const router = useRouter()
 const route = useRoute()
@@ -47,7 +48,9 @@ async function submit() {
   try {
     const j = await api.post('users', '/auth/login', { login: login.value, password: password.value })
     auth.setSession(j)
-    router.push(route.query.next || '/')
+    // свой кабинет (или адрес, с которого пришли), при нескольких кабинетах — выбор кабинета
+    const target = homeFor(auth.role, route.query.next)
+    if (target === '/') router.push('/'); else hardGo(target)
   } catch (e) { err.value = e.message } finally { busy.value = false }
 }
 </script>

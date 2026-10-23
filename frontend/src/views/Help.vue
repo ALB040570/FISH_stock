@@ -129,6 +129,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { api, download } from '../api'
+import { helpPath } from '../cabinets'
 import { useAuth } from '../store/auth'
 import HelpMarkdown from '../components/HelpMarkdown.vue'
 import StateBlock from '../components/StateBlock.vue'
@@ -165,7 +166,7 @@ async function loadToc() {
   if (sec) opened.add(sec.code)
 }
 function toggle(code) { opened.has(code) ? opened.delete(code) : opened.add(code) }
-function open(aid) { q.value = ''; router.push(`/help/${aid}`) }
+function open(aid) { q.value = ''; router.push(helpPath(aid)) }
 
 async function load() {
   loading.value = !art.value || art.value.id !== id.value
