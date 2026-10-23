@@ -239,27 +239,42 @@ class Engine:
             atomic_write_json(mp, cur)
             return cur
 
-    def recover_stale(self, host: str) -> int:
-        """Запуски «выполняется» этого хоста, чей воркер завершился, — помечаются прерванными."""
+    def recover_stale(self, host: str, sole: bool | None = None) -> int:
+        """Запуски «выполняется», чей воркер завершился (перезапуск, обновление), помечаются прерванными.
+
+        sole — этот процесс единственный воркер каталога данных (Docker: один контейнер worker; run_local — один
+        процесс; переменная FISH_WORKER_SOLE=1). Тогда при старте воркера все «выполняется» — от прежних процессов,
+        даже если имя хоста другое (контейнер пересоздан при обновлении — у него новое имя хоста).
+        Без sole проверяются только запуски этого хоста: процесс жив и это не мы с тем же номером процесса
+        (в контейнере номер процесса после перезапуска снова 1 — отличаем по метке запуска процесса).
+        """
+        if sole is None:
+            sole = os.environ.get("FISH_WORKER_SOLE", "") in ("1", "true", "yes")
+        me = worker_name()
         n = 0
         for r in self.runs.list():
             if r.get("status") != "running":
                 continue
             w = r.get("worker", "")
-            if not w.startswith(host + ":"):
+            if w == me:
                 continue
-            pid = int(w.split(":")[1]) if w.count(":") >= 1 and w.split(":")[1].isdigit() else None
-            alive = False
-            if pid:
-                try:
-                    os.kill(pid, 0)
-                    alive = True
-                except OSError:
-                    alive = False
-            if not alive:
-                self.update_run(r["id"], status="failed", finished_at=now_iso(),
-                                message="Расчёт прерван (перезапуск сервера). Запустите заново.")
-                n += 1
+            parts = w.split(":")
+            if not sole:
+                if parts[0] != host:
+                    continue
+                pid = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
+                alive = False
+                if pid and pid != os.getpid():
+                    try:
+                        os.kill(pid, 0)
+                        alive = True
+                    except OSError:
+                        alive = False
+                if alive:
+                    continue
+            self.update_run(r["id"], status="failed", finished_at=now_iso(),
+                            message="Расчёт прерван (перезапуск сервера). Запустите заново.")
+            n += 1
         return n
 
     def execute(self, run: dict, clients, log=print) -> dict:
@@ -325,5 +340,9 @@ class Engine:
         return self.update_run(run_id, status="done", finished_at=now_iso(), steps=steps, message="Расчёт выполнен")
 
 
+# метка запуска процесса: в контейнере номер процесса после перезапуска тот же (1), метка — новая
+_BOOT = os.urandom(4).hex()
+
+
 def worker_name() -> str:
-    return f"{socket.gethostname()}:{os.getpid()}"
+    return f"{socket.gethostname()}:{os.getpid()}:{_BOOT}"

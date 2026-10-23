@@ -134,3 +134,31 @@ def test_reference_change_migration(tmp_path, monkeypatch):
     assert "press_mu" not in lesh and lesh["target_accept"] == 0.95
     E.seed_builtin()                                       # второй запуск ничего не меняет
     assert len(E.profiles.list_versions(E.profile_id("bayes_cohort", "balkhash"))) == 2
+
+
+def test_recover_stale_after_restart(tmp_path, monkeypatch):
+    """Запуск, оборванный перезапуском воркера, помечается прерванным, а не висит «выполняется»."""
+    import os
+    from conftest import load_service
+    mod = load_service("algo_admin", tmp_path, monkeypatch)
+    from importlib import import_module
+    eng_mod = import_module("app.engine")
+    E = eng_mod.Engine(tmp_path / "recover")
+    me = eng_mod.worker_name()
+    host = me.split(":")[0]
+    mk = lambda w, st="running": E.runs.create({"status": st, "worker": w, "water_body": "zhaysan", "steps": []})
+    old_container = mk("3f2a9c1b7d4e:1:aaaa")             # контейнер пересоздан: другое имя хоста
+    same_pid_new_boot = mk(f"{host}:{os.getpid()}:bbbb")    # тот же номер процесса, прежний запуск процесса
+    mine = mk(me)                                           # выполняется этим процессом
+    queued = mk("x:1:c", st="queued")
+    # без признака «единственный воркер» — только этот хост
+    assert E.recover_stale(host, sole=False) == 1
+    assert E.runs.get(same_pid_new_boot["id"])["status"] == "failed"
+    assert E.runs.get(old_container["id"])["status"] == "running"
+    # единственный воркер каталога данных (Docker, run_local) — все прежние «выполняется»
+    monkeypatch.setenv("FISH_WORKER_SOLE", "1")
+    assert E.recover_stale(host) == 1
+    r = E.runs.get(old_container["id"])
+    assert r["status"] == "failed" and "перезапуск" in r["message"]
+    assert E.runs.get(mine["id"])["status"] == "running"
+    assert E.runs.get(queued["id"])["status"] == "queued"
