@@ -39,6 +39,10 @@ services:
     build: { context: ., dockerfile: deploy/service.Dockerfile, args: { SERVICE: algo_admin } }
     command: ["python", "-m", "app.worker"]
     healthcheck: { disable: true }
+    environment:
+      <<: *env
+      # единственный воркер: при старте все «выполняется» — от прежнего контейнера, помечаются прерванными
+      FISH_WORKER_SOLE: "1"
   dashboards:
     <<: *service
     build: { context: ., dockerfile: deploy/service.Dockerfile, args: { SERVICE: dashboards } }

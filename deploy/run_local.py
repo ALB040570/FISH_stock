@@ -35,6 +35,7 @@ def main():
     env.setdefault("FISH_DATA_DIR", str(REPO / "data"))
     env["PYTHONPATH"] = os.pathsep.join([str(REPO / "libs" / "fishcommon"), str(REPO), env.get("PYTHONPATH", "")])
     env["FISH_WORKERS"] = str(args.workers)
+    env["FISH_WORKER_SOLE"] = "1"  # один процесс воркера: оборванные прежним запуском расчёты — прерваны
     # ключи: из окружения, иначе — случайные, сохраняются в каталоге данных (не в Git)
     import json
     import secrets

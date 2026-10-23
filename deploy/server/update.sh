@@ -3,6 +3,11 @@
 #
 #   ~/fishstock/deploy/server/update.sh            # показать, что нового, сделать копию, обновить
 #   ~/fishstock/deploy/server/update.sh --check    # только показать, что нового
+#   ~/fishstock/deploy/server/update.sh --force    # обновить, даже если идёт расчёт (он будет прерван)
+#
+# Если идёт расчёт, обновление его прервёт (контейнер воркера пересоздаётся). Поэтому скрипт сначала проверяет
+# расчёты: при идущем расчёте спрашивает подтверждение (в фоне через nohup — останавливается, нужен --force).
+# Запуски в очереди не теряются — их выполнит новый воркер.
 #
 # Порядок: резервная копия данных -> git pull (ветка, на которой стоит копия, обычно develop) -> пересборка.
 # Если сборка не удалась, продолжают работать прежние контейнеры. Данные (том fishstock_fishdata) сохраняются.
@@ -28,7 +33,51 @@ if [ "$DEPLOYED" = "$TARGET" ]; then
 fi
 echo "== Новое в $BRANCH:"
 git log --format='  %h %ad %s' --date=format:'%d.%m %H:%M' "$DEPLOYED..$TARGET"
+
+# расчёты, которые идут сейчас (данные воркера — /data/algo_admin/runs/*/meta.json)
+active_runs() {
+  docker compose exec -T worker python - <<'PY' 2>/dev/null || true
+import glob, json
+from datetime import datetime, timezone
+def ago(ts):
+    try:
+        m = int((datetime.now(timezone.utc) - datetime.fromisoformat(ts)).total_seconds() // 60)
+    except Exception:
+        return ""
+    return f", {m // 60} ч {m % 60} мин назад" if m >= 60 else f", {m} мин назад"
+rows = {"running": [], "queued": []}
+for f in glob.glob("/data/algo_admin/runs/*/meta.json"):
+    try:
+        m = json.load(open(f, encoding="utf-8"))
+    except Exception:
+        continue
+    if m.get("status") in rows:
+        rows[m["status"]].append(f'{m.get("calculation_title") or m.get("id")} [{m.get("water_body", "")}]{ago(m.get("started_at") or m.get("created_at") or "")}')
+for x in rows["running"]:
+    print("RUNNING  " + x)
+for x in rows["queued"]:
+    print("QUEUED   " + x)
+PY
+}
+ACTIVE="$(active_runs)"
+if [ -n "$ACTIVE" ]; then
+  echo "== Расчёты сейчас:"
+  echo "$ACTIVE" | sed -e 's/^RUNNING  /  выполняется: /' -e 's/^QUEUED   /  в очереди:   /'
+fi
 [ "${1:-}" = "--check" ] && exit 0
+
+if echo "$ACTIVE" | grep -q '^RUNNING'; then
+  echo "Обновление ПРЕРВЁТ выполняющийся расчёт (его придётся запустить заново). Запуски в очереди не теряются."
+  if [ "${1:-}" = "--force" ]; then
+    echo "Указан --force — продолжаю."
+  elif [ -t 0 ]; then
+    read -r -p "Прервать расчёт и обновить сейчас? Введите «да», чтобы продолжить: " ANSWER
+    case "$ANSWER" in да|Да|ДА|yes|y) ;; *) echo "Обновление отменено. Повторите после окончания расчёта."; exit 1 ;; esac
+  else
+    echo "Обновление отменено (запуск без терминала). Дождитесь окончания расчёта или запустите с --force."
+    exit 1
+  fi
+fi
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "В папке $DIR есть изменённые файлы — обновление остановлено:"
