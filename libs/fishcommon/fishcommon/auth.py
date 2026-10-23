@@ -12,17 +12,20 @@ from fastapi import Depends, Header, Request
 
 from .errors import AppError
 
-ROLES = ("admin", "ichthyologist", "mathematician", "viewer")
+ROLES = ("admin", "ichthyologist", "mathematician", "operator", "viewer")
 
 ROLE_TITLES = {
     "admin": "Администратор",
     "ichthyologist": "Ихтиолог-аналитик",
     "mathematician": "Математик",
+    "operator": "Оператор ввода данных",
     "viewer": "Наблюдатель",
 }
 
 _ALL = set(ROLES)
 _WORK = {"admin", "ichthyologist", "mathematician"}
+# оператор ввода данных: вводит и правит наборы данных, остальное — только просмотр (docs/decisions.md, № 54)
+_DATA = _WORK | {"operator"}
 
 PERMISSIONS: dict[str, set[str]] = {
     "users.manage": {"admin"},
@@ -30,7 +33,7 @@ PERMISSIONS: dict[str, set[str]] = {
     "dict.view": _ALL,
     "dict.edit": _WORK,
     "data.view": _ALL,
-    "data.edit": _WORK,
+    "data.edit": _DATA,
     "profile.view": _ALL,
     "profile.edit": _WORK,
     "algo.develop": {"admin", "mathematician"},

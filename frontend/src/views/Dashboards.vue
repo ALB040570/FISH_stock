@@ -31,7 +31,7 @@ import StateBlock from '../components/StateBlock.vue'
 const auth = useAuth()
 // /dashboards — просмотр (раздел «Аналитика»); /design/dashboards — конструктор: свои, шаблоны, новый
 const design = !!useRoute().meta.design
-const base = design ? '/design/dashboards' : '/dashboards'
+const base = design ? '/design/dashboards' : '/monitoring/dashboards'
 const router = useRouter()
 const items = ref([])
 const loading = ref(true)

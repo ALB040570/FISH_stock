@@ -10,6 +10,7 @@ import texmath from 'markdown-it-texmath'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { useAuth } from '../store/auth'
+import { helpPath } from '../cabinets'
 
 const props = defineProps({ source: { type: String, default: '' }, stripTitle: Boolean })
 const emit = defineEmits(['navigate'])
@@ -35,7 +36,7 @@ const defaultLink = md.renderer.rules.link_open || ((tokens, idx, options, env, 
 md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const t = tokens[idx]
   const href = t.attrGet('href') || ''
-  if (href.startsWith('help:')) { t.attrSet('data-help', href.slice(5)); t.attrSet('href', `/help/${href.slice(5)}`) }
+  if (href.startsWith('help:')) { t.attrSet('data-help', href.slice(5)); t.attrSet('href', helpPath(href.slice(5))) }
   else if (/^https?:/.test(href)) { t.attrSet('target', '_blank'); t.attrSet('rel', 'noopener') }
   return defaultLink(tokens, idx, options, env, self)
 }
@@ -51,7 +52,7 @@ function onClick(e) {
   if (a) {
     e.preventDefault()
     emit('navigate', a.dataset.help)
-    router.push(`/help/${a.dataset.help}`)
+    router.push(helpPath(a.dataset.help))
   }
 }
 </script>

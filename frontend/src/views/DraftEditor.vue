@@ -4,7 +4,7 @@
       <template v-if="d">
         <div class="page-head">
           <div>
-            <el-button text @click="$router.push('/algorithms')"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ $t('algo.title') }}</el-button>
+            <el-button text @click="$router.push('/design/algorithms')"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ $t('algo.title') }}</el-button>
             <h1>{{ d.manifest?.title_ru || d.algorithm }} <span class="mono muted" style="font-size:15px">{{ d.manifest?.version }}</span></h1>
             <div class="sub">{{ d.status === 'published' ? 'опубликован ' + d.published_version : 'черновик' }}<template v-if="d.base_version"> · от версии {{ d.base_version }}</template> · ревизия {{ d.current_version }}</div>
           </div>

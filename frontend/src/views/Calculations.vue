@@ -21,7 +21,7 @@
       <span>{{ $t('runs.st_queued') }}: <b class="num">{{ queue.queued?.length ?? '—' }}</b></span>
       <span>{{ $t('runs.st_running') }}: <b class="num">{{ queue.running?.length ?? '—' }}</b></span>
       <div class="grow" />
-      <router-link to="/runs">{{ $t('calc.all_runs') }} →</router-link>
+      <router-link to="/calc/runs">{{ $t('calc.all_runs') }} →</router-link>
     </div>
     <StateBlock :loading="loading" :error="error" :empty="!items.length" :empty-text="design ? (wb ? 'Для водоёма ещё нет расчётов — создайте из шаблона.' : 'Расчётов пока нет.') : $t('calc.no_calc_run')">
       <div class="card">
@@ -47,7 +47,7 @@ const auth = useAuth()
 const route = useRoute()
 // /calculations — запуск (раздел «Расчёт»); /design/calculations — порядок расчёта (раздел «Конструктор»)
 const design = !!route.meta.design
-const base = design ? '/design/calculations' : '/calculations'
+const base = design ? '/design/calculations' : '/calc/calculations'
 const queue = ref({})
 const router = useRouter()
 const wb = ref(route.query.wb || null)

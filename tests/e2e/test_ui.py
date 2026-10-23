@@ -39,44 +39,116 @@ def test_admin_flow(browser):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     login(page)
+    page.goto(URL + "/monitoring/")
     page.wait_for_selector("text=Зайсан (Жайсан)")
-    page.goto(URL + "/monitoring/zhaysan")
+    page.goto(URL + "/monitoring/waterbody/zhaysan")
     for tab in ("Уловистость", "Запасы", "ПДУ"):
         page.get_by_text(tab, exact=True).first.click()
         page.wait_for_timeout(1500)
-    page.goto(URL + "/data?wb=zhaysan")
+    page.goto(URL + "/input/datasets?wb=zhaysan")
     page.wait_for_selector("text=Уловы по ловам")
-    for path in ("/dictionaries", "/calculations?wb=zhaysan", "/runs", "/catalog", "/profiles", "/algorithms",
-                 "/dashboards", "/users", "/audit"):
+    for path in ("/design/dictionaries", "/calc/calculations?wb=zhaysan", "/calc/runs", "/admin/catalog", "/calc/profiles",
+                 "/design/algorithms", "/monitoring/dashboards", "/admin/users", "/admin/audit", "/design/signal-rules"):
         page.goto(URL + path)
         page.wait_for_timeout(1200)
+        assert page.url.startswith(URL + path.split("?")[0]), (path, page.url)
     assert not errors, errors
 
 
-def test_viewer_and_language(browser):
+def _user(role, password="user-pass-1"):
+    """Новый пользователь роли (через API администратора); возвращает логин."""
     import httpx
     api = httpx.Client(base_url=URL + "/api", timeout=30)
     tok = api.post("/users/auth/login", json={"login": "admin", "password": PWD}).json()["access_token"]
-    login_name = "viewer_" + uuid.uuid4().hex[:6]
+    login_name = f"{role}_" + uuid.uuid4().hex[:6]
     r = api.post("/users/users", headers={"Authorization": f"Bearer {tok}"},
-                 json={"login": login_name, "name": "Коллега", "role": "viewer", "password": "viewer-pass-1"})
-    assert r.status_code == 201
-    page = browser.new_page(viewport={"width": 1440, "height": 900})
-    login(page, login_name, "viewer-pass-1")
-    # первый вход — обязательная смена пароля
+                 json={"login": login_name, "name": "Коллега Тест", "role": role, "password": password})
+    assert r.status_code == 201, r.text
+    return login_name
+
+
+def _change_password(page, old, new):
     page.wait_for_selector("text=Смените пароль")
     inputs = page.locator(".el-dialog input[type=password]")
-    inputs.nth(0).fill("viewer-pass-1")
-    inputs.nth(1).fill("viewer-pass-2")
-    inputs.nth(2).fill("viewer-pass-2")
+    inputs.nth(0).fill(old)
+    inputs.nth(1).fill(new)
+    inputs.nth(2).fill(new)
     page.locator(".el-dialog button.el-button--primary").click()
     page.wait_for_timeout(1000)
-    page.goto(URL + "/data?wb=zhaysan")
+
+
+def test_cabinets_flow(browser):
+    """Кабинеты (№ 52) и стартовая страница «Поток» (№ 53): плитки по роли, клавиши, старые адреса, переключатель."""
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    login(page)
+    assert page.url.rstrip("/") == URL                                  # администратор — на «Поток»
+    page.wait_for_selector(".flow .tile")
+    assert page.locator("[data-cabinet]").count() == 5
+    assert page.locator("[data-pipe]").count() == 2
+    page.keyboard.press("2")
+    page.wait_for_url(URL + "/calc/calculations")
+    assert page.locator(".cab-title").inner_text().strip() == "Расчёты"
+    # переключатель кабинетов в шапке
+    page.locator(".cab-switch button").click()
+    page.locator(".el-dropdown-menu__item").filter(has_text="Конструктор").click()
+    page.wait_for_url(URL + "/design/dictionaries")
+    # старые адреса единого интерфейса
+    for old, new in (("/data?wb=zhaysan", "/input/datasets?wb=zhaysan"), ("/runs", "/calc/runs"),
+                     ("/monitoring/zhaysan?tab=pdu", "/monitoring/waterbody/zhaysan?tab=pdu"), ("/users", "/admin/users"),
+                     ("/dictionaries", "/design/dictionaries"), ("/profiles", "/calc/profiles")):
+        page.goto(URL + old)
+        page.wait_for_url(lambda u, n=new: u.startswith(URL + n), timeout=10000)
+    # «Продолжить» ведёт на последний экран
+    page.goto(URL + "/")
+    page.wait_for_selector("[data-test=continue]")
+    assert page.locator("[data-test=continue]").get_attribute("href") == "/calc/profiles"
+    assert not errors, errors
+    # ихтиолог: четыре кабинета, без администрирования
+    p2 = browser.new_page(viewport={"width": 1440, "height": 900})
+    name = _user("ichthyologist")
+    login(p2, name, "user-pass-1")
+    _change_password(p2, "user-pass-1", "user-pass-2")
+    p2.wait_for_selector(".flow .tile")
+    assert p2.locator("[data-cabinet]").count() == 4 and p2.locator("[data-cabinet=admin]").count() == 0
+    p2.goto(URL + "/admin/users")
+    p2.wait_for_url(URL + "/")
+
+
+def test_operator(browser):
+    """Оператор ввода данных (№ 54): сразу «Ввод данных», загрузка доступна, расчёты — нет, мониторинг — чтение."""
+    name = _user("operator")
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    login(page, name, "user-pass-1")
+    _change_password(page, "user-pass-1", "user-pass-2")
+    page.wait_for_url(lambda u: u.startswith(URL + "/input/datasets"))
+    page.goto(URL + "/input/datasets?wb=zhaysan")
     page.wait_for_selector("text=Уловы по ловам")
-    assert page.locator("text=Загрузить Excel").count() == 0       # наблюдатель не загружает
+    assert page.locator("text=Загрузить Excel").count() >= 1
+    page.goto(URL + "/calc/runs")
+    page.wait_for_url(lambda u: u.startswith(URL + "/input/"))
+    page.goto(URL + "/monitoring/waterbody/zhaysan")
+    page.wait_for_selector(".slide .widget")
+    assert page.locator(".slide-side textarea").count() == 0            # комментарии — только чтение
+
+
+def test_viewer_and_language(browser):
+    """Наблюдатель — сразу «Мониторинг» (№ 53), внутренние состояния скрыты (№ 55), другие кабинеты закрыты."""
+    login_name = _user("viewer", "viewer-pass-1")
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    login(page, login_name, "viewer-pass-1")
+    _change_password(page, "viewer-pass-1", "viewer-pass-2")
+    assert page.url.startswith(URL + "/monitoring/")
+    page.wait_for_selector("text=Зайсан (Жайсан)")
+    assert page.locator("text=данные новее расчёта").count() == 0
+    assert page.locator(".cab-switch").count() == 0                    # один кабинет — переключателя нет
+    for path in ("/input/datasets?wb=zhaysan", "/calc/runs", "/admin/users", "/"):
+        page.goto(URL + path)
+        page.wait_for_url(lambda u: u.startswith(URL + "/monitoring/"), timeout=10000)
     assert page.locator("text=Пользователи").count() == 0
     page.get_by_text("ҚАЗ", exact=True).first.click()
-    page.wait_for_selector("text=Бастапқы деректер")
+    page.wait_for_selector("text=Су айдындарының картасы")
 
 
 def test_monitoring_slides(browser):
@@ -86,7 +158,7 @@ def test_monitoring_slides(browser):
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("try{localStorage.removeItem('fishstock.monitoring.view')}catch(e){}")
     login(page)
-    page.goto(URL + "/monitoring/zhaysan")
+    page.goto(URL + "/monitoring/waterbody/zhaysan")
     page.wait_for_selector(".slide .widget")
     assert page.locator(".dots .dot").count() >= 2
     page.wait_for_selector(".slide-side .now")                     # «Что видно сейчас»
@@ -132,7 +204,7 @@ def test_monitoring_catchability(browser):
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("try{localStorage.removeItem('fishstock.monitoring.view')}catch(e){}")
     login(page)
-    page.goto(URL + "/monitoring/zhaysan?tab=catchability&s=seine")
+    page.goto(URL + "/monitoring/waterbody/zhaysan?tab=catchability&s=seine")
     page.wait_for_selector(".slide .el-table__row")
     page.locator(".slide .el-table__row").first.click()          # вид → все данные по виду, «Параметры года»
     page.wait_for_function("location.search.includes('sp=') && location.search.includes('w=k_s_tiles')")
@@ -153,13 +225,13 @@ def test_monitoring_trust(browser):
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("try{localStorage.removeItem('fishstock.monitoring.view')}catch(e){}")
     login(page)
-    page.goto(URL + "/monitoring/zhaysan?tab=catchability")
+    page.goto(URL + "/monitoring/waterbody/zhaysan?tab=catchability")
     page.wait_for_selector(".tr.row")
     assert "s=summary" in page.url and page.locator(".tr.row").count() == 8
     assert "Проверки пройдены у" in page.locator(".tr-head").inner_text()
     page.locator(".tr.row .sp").first.click()
     page.wait_for_function("location.search.includes('sp=') && location.search.includes('s=seine')")
-    page.goto(URL + "/monitoring/zhaysan?tab=catchability")
+    page.goto(URL + "/monitoring/waterbody/zhaysan?tab=catchability")
     page.wait_for_selector(".tr.row")
     page.locator(".tr.row").first.locator(".cell").nth(2).click()
     page.wait_for_function("location.search.includes('tab=stock') && location.search.includes('w=st_ages')")
@@ -173,7 +245,7 @@ def test_monitoring_checks(browser):
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("try{localStorage.removeItem('fishstock.monitoring.view')}catch(e){}")
     login(page)
-    page.goto(URL + "/monitoring/zhaysan?tab=catchability&s=checks&sp=lesh")
+    page.goto(URL + "/monitoring/waterbody/zhaysan?tab=catchability&s=checks&sp=lesh")
     page.wait_for_selector(".slide canvas")
     titles = []
     for _ in range(7):
@@ -182,7 +254,7 @@ def test_monitoring_checks(browser):
             page.locator(".nav.next").click()
             page.wait_for_timeout(1200)
     assert any("Проверка поколений" in t for t in titles) and any("Кого не видит" in t for t in titles), titles
-    page.goto(URL + "/monitoring/zhaysan?tab=catchability&s=summary&w=k_passport")
+    page.goto(URL + "/monitoring/waterbody/zhaysan?tab=catchability&s=summary&w=k_passport")
     page.wait_for_selector(".slide canvas")
     assert "Паспорт" in page.locator(".slide").first.inner_text()
     assert not errors, errors
@@ -195,7 +267,7 @@ def test_monitoring_stock(browser):
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("try{localStorage.removeItem('fishstock.monitoring.view')}catch(e){}")
     login(page)
-    page.goto(URL + "/monitoring/zhaysan?tab=stock&s=by_catch")
+    page.goto(URL + "/monitoring/waterbody/zhaysan?tab=stock&s=by_catch")
     page.wait_for_selector(".slide .el-table__row")
     page.locator(".slide .el-table__row").first.click()
     page.wait_for_function("location.search.includes('w=st_tiles')")

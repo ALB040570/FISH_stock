@@ -18,7 +18,7 @@
                     </el-select>
                     <el-button size="small" :disabled="!details[row.code].published.length" @click="newDraft(row.code)">{{ $t('algo.new_draft') }}</el-button>
                   </div>
-                  <el-table :data="details[row.code].drafts" size="small" style="margin-top:6px" @row-click="(d) => $router.push('/algorithms/drafts/' + d.id)">
+                  <el-table :data="details[row.code].drafts" size="small" style="margin-top:6px" @row-click="(d) => $router.push('/design/algorithms/drafts/' + d.id)">
                     <el-table-column :label="$t('common.date')" width="170"><template #default="{ row: d }">{{ new Date(d.created_at).toLocaleString('ru-RU') }}</template></el-table-column>
                     <el-table-column :label="$t('common.status')" width="130"><template #default="{ row: d }"><el-tag size="small" :type="d.status === 'published' ? 'success' : 'info'">{{ d.status === 'published' ? 'опубликован ' + d.published_version : 'черновик' }}</el-tag></template></el-table-column>
                     <el-table-column label="От версии" width="100" prop="base_version" />
@@ -67,11 +67,11 @@ async function load() { try { items.value = await api.get('algo-model', '/algori
 async function expand(row) { details[row.code] = await api.get('algo-model', `/algorithms/${row.code}`) }
 async function newDraft(code) {
   const d = await api.post('algo-model', `/algorithms/${code}/drafts`, { from_version: fromV[code] || null })
-  router.push('/algorithms/drafts/' + d.id)
+  router.push('/design/algorithms/drafts/' + d.id)
 }
 async function create() {
   err.value = null
-  try { const r = await api.post('algo-model', '/algorithms', f); router.push('/algorithms/drafts/' + r.draft_id) } catch (e) { err.value = e }
+  try { const r = await api.post('algo-model', '/algorithms', f); router.push('/design/algorithms/drafts/' + r.draft_id) } catch (e) { err.value = e }
 }
 onMounted(load)
 </script>

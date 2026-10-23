@@ -46,7 +46,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '../api'
 import StateBlock from '../components/StateBlock.vue'
-const roles = ['admin', 'ichthyologist', 'mathematician', 'viewer']
+const roles = ['admin', 'ichthyologist', 'mathematician', 'operator', 'viewer']
 const items = ref([])
 const loading = ref(true)
 const error = ref(null)

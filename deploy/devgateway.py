@@ -45,12 +45,16 @@ async def proxy(service: str, path: str, request: Request):
                              background=None)
 
 
+CABINETS = {"monitoring", "input", "calc", "design", "admin"}  # отдельные приложения-кабинеты (№ 52)
+
+
 @app.get("/{path:path}")
 async def spa(path: str):
     f = DIST / path
-    if path and f.is_file():
+    if path and f.is_file() and DIST in f.resolve().parents:
         return FileResponse(f)
-    index = DIST / "index.html"
+    seg = path.split("/", 1)[0]
+    index = DIST / seg / "index.html" if seg in CABINETS else DIST / "index.html"
     if index.exists():
-        return FileResponse(index)
+        return FileResponse(index, headers={"Cache-Control": "no-cache"})
     return Response("Фронтенд не собран: cd frontend && npm ci && npm run build", media_type="text/plain; charset=utf-8")

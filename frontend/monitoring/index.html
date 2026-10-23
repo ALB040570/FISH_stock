@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M6 32c10-14 30-16 42-6l10-8v28l-10-8c-12 10-32 8-42-6z' fill='%23E8B40C'/%3E%3Ccircle cx='20' cy='29' r='3' fill='%2316324F'/%3E%3C/svg%3E" />
+    <title>FishStock — ПДУ водоёмов Казахстана</title>
+    <script>
+      // схема (светлая/тёмная) — до загрузки приложения, чтобы не было белой вспышки; логика — src/theme.js
+      try {
+        var m = localStorage.getItem('fishstock.theme')
+        if (m !== 'light' && m !== 'dark') m = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        if (m === 'dark') { document.documentElement.classList.add('dark'); document.documentElement.style.colorScheme = 'dark' }
+      } catch (e) {}
+    </script>
+    <style>html.dark body { background: #121A24; }</style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/entries/monitoring.js"></script>
+  </body>
+</html>

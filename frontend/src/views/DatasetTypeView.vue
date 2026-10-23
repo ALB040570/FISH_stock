@@ -3,7 +3,7 @@
     <StateBlock :loading="loading" :error="error">
       <div class="page-head">
         <div>
-          <el-button text @click="$router.push('/dictionaries')"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ $t('dict.title') }}</el-button>
+          <el-button text @click="$router.push('/design/dictionaries')"><el-icon><ArrowLeft /></el-icon>&nbsp;{{ $t('dict.title') }}</el-button>
           <h1>{{ isNew ? 'Новый тип набора данных' : f.title_ru }}</h1>
           <div class="sub">{{ $t('dict.dtypes') }}<template v-if="!isNew"> · v{{ cur?.current_version }}</template></div>
         </div>
@@ -79,7 +79,7 @@ async function save() {
   const body = { code: f.code, title_ru: f.title_ru, title_kk: f.title_kk, description: f.description, period_field: f.period_field || null,
     columns: f.columns, species_columns: f.species_columns, key_fields: f.key_fields, rules: f.rules || [], comment: f.comment }
   try {
-    if (isNew) { await api.post('data-model', '/dataset-types', body); router.replace('/dictionaries/types/' + f.code) }
+    if (isNew) { await api.post('data-model', '/dataset-types', body); router.replace('/design/dictionaries/types/' + f.code) }
     else { await api.put('data-model', `/dataset-types/${f.code}`, body); ElMessage.success('Сохранена новая версия'); await load() }
   } catch (e) { saveErr.value = e }
 }

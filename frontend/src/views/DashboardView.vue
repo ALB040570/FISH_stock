@@ -125,7 +125,7 @@ const error = ref(null)
 const saveErr = ref(null)
 // /dashboards/:id — просмотр; /design/dashboards/:id — конструктор (сразу в режиме правки)
 const design = !!route.meta.design
-const base = design ? '/design/dashboards' : '/dashboards'
+const base = design ? '/design/dashboards' : '/monitoring/dashboards'
 const editing = ref(design || !!route.query.edit)
 const tab = ref(null)
 const species = ref([])
