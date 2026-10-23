@@ -5,7 +5,7 @@ function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {} } cat
 
 const PERMS = {
   'users.manage': ['admin'], 'audit.view': ['admin'],
-  'dict.edit': ['admin', 'ichthyologist', 'mathematician'], 'data.edit': ['admin', 'ichthyologist', 'mathematician'],
+  'dict.edit': ['admin', 'ichthyologist', 'mathematician'], 'data.edit': ['admin', 'ichthyologist', 'mathematician', 'operator'],
   'profile.edit': ['admin', 'ichthyologist', 'mathematician'], 'algo.develop': ['admin', 'mathematician'],
   'catalog.manage': ['admin', 'mathematician'], 'run.execute': ['admin', 'ichthyologist', 'mathematician'],
   'dashboard.edit': ['admin', 'ichthyologist', 'mathematician'], 'dashboard.template': ['admin', 'mathematician'],

@@ -71,10 +71,10 @@
             <div class="kpi"><div class="v">{{ sel.ndatasets }}</div><div class="l">{{ $t('map.datasets') }}</div></div>
           </div>
           <div v-if="sel.speciesList.length" class="small" style="margin-top:8px"><span class="muted">{{ $t('map.species_in_data') }}:</span> {{ sel.speciesList.join(', ') }}</div>
-          <div v-if="sel.run" class="small" style="margin-top:8px">
+          <div v-if="shownRun(sel)" class="small" style="margin-top:8px">
             <span class="muted">{{ sel.run.main_run ? $t('map.main_run') : $t('map.last_run') }}:</span>
-            {{ (sel.run.main_run || sel.run.last_done || sel.run.last_run || {}).calculation_title }}
-            <span class="muted"> · {{ shortDate((sel.run.main_run || sel.run.last_done || sel.run.last_run || {}).finished_at) }}</span>
+            {{ shownRun(sel).calculation_title }}
+            <span class="muted"> · {{ shortDate(shownRun(sel).finished_at) }}</span>
           </div>
           <div v-if="sel.pdu?.rows?.length" style="margin-top:8px">
             <div class="small muted">{{ $t('map.pdu') }}, т ({{ sel.pdu.rows[0].year }})</div>
@@ -85,7 +85,7 @@
           </div>
           <div class="row" style="margin-top:12px">
             <el-button type="primary" @click="$router.push('/monitoring/waterbody/' + sel.code)"><el-icon><DataLine /></el-icon>&nbsp;{{ $t('map.monitoring') }}</el-button>
-            <el-button @click="$router.push({ path: '/input/datasets', query: { wb: sel.code } })">{{ $t('map.data') }}</el-button>
+            <el-button v-if="canGo('/input/', auth.role)" @click="$router.push({ path: '/input/datasets', query: { wb: sel.code } })">{{ $t('map.data') }}</el-button>
             <el-button v-if="auth.can('run.execute')" @click="$router.push({ path: '/calc/calculations', query: { wb: sel.code } })">{{ $t('map.start_calc') }}</el-button>
           </div>
         </div>
@@ -105,9 +105,12 @@ import { useAuth } from '../store/auth'
 import { fmt } from '../components/charts'
 import { MAP, MAP_STATE, themeMode } from '../theme'
 import StateBlock from '../components/StateBlock.vue'
+import { mapState } from '../flow'
+import { canGo } from '../cabinets'
 
 const auth = useAuth()
-const STATES = ['no_data', 'has_data', 'has_run', 'stale']
+const hideInternal = auth.role === 'viewer'
+const STATES = ['no_data', 'has_data', 'has_run', 'stale'].filter((s) => !(hideInternal && s === 'stale'))
 const COLORS = MAP_STATE
 const { t } = useI18n()
 const typeTitle = (x) => dictName('water_body_types', x) || '—'
@@ -160,6 +163,8 @@ const filtered = computed(() => wbs.value.filter((w) =>
   (!fStatus.value || w.status === fStatus.value) && (!fOrigin.value || w.origin === fOrigin.value)
 ).sort((a, b) => (a.state === 'no_data') - (b.state === 'no_data') || a.name_ru.localeCompare(b.name_ru)))
 
+// наблюдателю — только завершённый расчёт (идущий или неудачный запуск — внутреннее состояние, № 55)
+const shownRun = (w) => (w.run ? w.run.main_run || w.run.last_done || (hideInternal ? null : w.run.last_run) : null)
 const shortDate = (s) => (s ? new Date(s).toLocaleDateString('ru-RU') : '')
 
 async function load() {
@@ -178,12 +183,8 @@ async function load() {
       const p = f.properties
       const d = ds[p.code]
       const r = rs[p.code]
-      let state = 'no_data'
-      if (d) {
-        state = 'has_data'
-        const done = r && (r.main_run || r.last_done)
-        if (done) state = (d.updated_at && done.finished_at && d.updated_at > done.finished_at) ? 'stale' : 'has_run'
-      }
+      // общее определение состояния с «Потоком» (src/flow.js); наблюдателю внутренние состояния не показываются (№ 55)
+      const state = mapState(d, r, { hideInternal })
       return { ...p, feature: f, state, years: d?.years || [], ndatasets: d ? Object.keys(d.datasets).length : 0,
         speciesCodes: [], speciesList: [], run: r, pdu: r?.pdu, updated_at: d?.updated_at }
     })

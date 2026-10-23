@@ -5,8 +5,8 @@
 const STAFF = ['admin', 'ichthyologist', 'mathematician']
 
 export const CABINETS = [
-  { key: 'monitoring', base: '/monitoring/', icon: 'TrendCharts', roles: [...STAFF, 'viewer'] },
-  { key: 'input', base: '/input/', icon: 'Upload', roles: STAFF },
+  { key: 'monitoring', base: '/monitoring/', icon: 'TrendCharts', roles: [...STAFF, 'operator', 'viewer'] },
+  { key: 'input', base: '/input/', icon: 'Upload', roles: [...STAFF, 'operator'] },
   { key: 'calc', base: '/calc/', icon: 'Odometer', roles: STAFF },
   { key: 'design', base: '/design/', icon: 'EditPen', roles: STAFF },
   { key: 'admin', base: '/admin/', icon: 'Setting', roles: ['admin', 'mathematician'] },
@@ -93,14 +93,28 @@ export function helpRoute(path) {
   return p
 }
 
-/** Куда вести после входа: адрес из next (если роли можно), единственный кабинет или выбор кабинета. */
+// Стартовая страница «Поток» (/) — для тех, кто ведёт данные через весь путь (№ 53); остальные сразу попадают
+// в свой главный кабинет. Порядок «Потока»: путь данных, затем основа; номер — клавиша на странице.
+export const FLOW_ROLES = ['admin', 'mathematician', 'ichthyologist']
+export const FLOW_PATH = ['input', 'calc', 'monitoring']
+export const FLOW_BASE = ['design', 'admin']
+const MAIN = { viewer: 'monitoring', operator: 'input' }
+
+export const hasFlow = (role) => FLOW_ROLES.includes(role)
+/** Главная страница роли: «Поток» или главный кабинет. */
+export function mainPage(role) {
+  if (hasFlow(role)) return '/'
+  const key = MAIN[role] || cabinetsFor(role)[0]?.key
+  return key ? cabinet(key).base : '/'
+}
+
+/** Куда вести после входа: адрес из next (если роли можно), иначе главная страница роли. */
 export function homeFor(role, next) {
   if (next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/login')) {
     const n = legacyToNew(next) || next
     if (n !== '/' && canGo(n, role)) return n
   }
-  const cabs = cabinetsFor(role)
-  return cabs.length === 1 ? cabs[0].base : '/'
+  return mainPage(role)
 }
 
 // ------------------------------------------------------------------ текущий кабинет (задаётся точкой входа)

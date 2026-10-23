@@ -28,7 +28,7 @@
               <el-dropdown-item v-for="c in cabs" :key="c.key" :command="c.base" :disabled="c.key === cab.key">
                 <el-icon><component :is="c.icon" /></el-icon>{{ $t('cab.' + c.key) }}
               </el-dropdown-item>
-              <el-dropdown-item command="/" divided>{{ $t('cab.all') }}</el-dropdown-item>
+              <el-dropdown-item v-if="hasFlow(auth.role)" command="/" divided><el-icon><Share /></el-icon>{{ $t('flow.title') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -72,7 +72,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuth } from '../store/auth'
 import { setLang, tr } from '../i18n'
-import { cabinetsFor, currentCabinet, hardGo, helpPath, helpRoute } from '../cabinets'
+import { cabinetsFor, currentCabinet, hardGo, hasFlow, helpPath, helpRoute } from '../cabinets'
+import { saveLast } from '../lastPlace'
 import ThemeToggle from './ThemeToggle.vue'
 import PasswordDialog from './PasswordDialog.vue'
 import HelpMarkdown from './HelpMarkdown.vue'
@@ -111,7 +112,7 @@ const items = computed(() => {
       ...dashboards.value.slice(0, MAX_DASH).map((d) => ({ index: '/monitoring/dashboards/' + d.id, label: tr(d, 'title'), icon: 'Histogram',
         dash: true, personal: !d.system && d.visibility !== 'shared' })),
       { index: '/monitoring/dashboards', label: t('nav.all_dashboards'), icon: 'Grid', more: true }]
-    case 'input': return it('/input/datasets', 'cab.datasets', 'Files')
+    case 'input': return it('/input/datasets', 'nav.data', 'Files')
     case 'calc': return [...it('/calc/calculations', 'nav.calculations', 'Odometer'), ...it('/calc/runs', 'nav.runs', 'List'),
       ...it('/calc/profiles', 'nav.profiles', 'Operation')]
     case 'design': return [...it('/design/dictionaries', 'nav.dictionaries', 'Collection'),
@@ -133,6 +134,11 @@ const active = computed(() => {
   return cand.sort((a, b) => b.index.length - a.index.length)[0]?.index || ''
 })
 watch(() => route.path, (p, old) => { if (/dashboards/.test(p) || /dashboards/.test(old || '')) loadDashboards() })
+// «Продолжить» на стартовой странице: последний экран (кабинет · пункт меню · водоём)
+watch([() => route.fullPath, active, items], () => {
+  const item = items.value.find((i) => i.index === active.value)
+  saveLast(auth.user?.id, { path: route.fullPath, cab: cab.key, item: item?.label || '', wb: route.params.wb || route.query.wb || '' })
+}, { immediate: true })
 onMounted(loadDashboards)
 const initials = computed(() => (auth.user?.name || '?').split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase())
 watch(() => auth.loggedIn, (v) => { if (!v) hardGo('/login?next=' + encodeURIComponent(route.fullPath)) })

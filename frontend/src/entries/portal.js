@@ -3,5 +3,5 @@ import { boot, view } from '../boot'
 
 boot(null, [
   { path: '/login', component: view('Login'), meta: { public: true } },
-  { path: '/', component: view('Cabinets'), meta: { bare: true } },
+  { path: '/', component: view('Flow'), meta: { bare: true } },
 ])

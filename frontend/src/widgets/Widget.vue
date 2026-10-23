@@ -134,6 +134,7 @@ import CommentsPanel from './CommentsPanel.vue'
 import { tableOf } from './views'
 // ссылки в кабинет, куда роль не входит, показываются текстом (docs/decisions.md, № 52)
 const canGo = (p) => canGoRole(p, useAuth().role)
+// ссылки в кабинет, куда роль не входит, показываются текстом (docs/decisions.md, № 52)
 
 const MODE_ICON = { chart: 'TrendCharts', table: 'Grid', tiles: 'Menu', cards: 'Postcard', signals: 'Bell', traffic: 'Odometer', journal: 'Notebook', trust: 'CircleCheck' }
 const p = defineProps({ widget: Object, filters: Object, species: Object, big: Boolean })

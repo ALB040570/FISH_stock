@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CABINETS, cabinetOf, cabinetsFor, canGo, helpRoute, homeFor, legacyToNew } from './cabinets'
+import { CABINETS, cabinetOf, cabinetsFor, canGo, helpRoute, homeFor, legacyToNew, mainPage } from './cabinets'
 
 describe('кабинеты', () => {
   it('адрес → кабинет', () => {
@@ -11,6 +11,9 @@ describe('кабинеты', () => {
   })
   it('доступ ролей', () => {
     expect(cabinetsFor('viewer').map((c) => c.key)).toEqual(['monitoring'])
+    expect(cabinetsFor('operator').map((c) => c.key)).toEqual(['monitoring', 'input'])
+    expect(canGo('/calc/runs/1', 'operator')).toBe(false)
+    expect(canGo('/input/datasets/1', 'operator')).toBe(true)
     expect(cabinetsFor('ichthyologist').map((c) => c.key)).toEqual(['monitoring', 'input', 'calc', 'design'])
     expect(cabinetsFor('mathematician').length).toBe(5)
     expect(cabinetsFor('admin').length).toBe(5)
@@ -55,5 +58,10 @@ describe('кабинеты', () => {
     expect(homeFor('viewer', '/admin/users')).toBe('/monitoring/')
     expect(homeFor('viewer', '//evil.example')).toBe('/monitoring/')
     expect(homeFor('ichthyologist', '/monitoring/waterbody/z')).toBe('/monitoring/waterbody/z')
+    expect(homeFor('ichthyologist')).toBe('/')
+    expect(homeFor('mathematician')).toBe('/')
+    expect(homeFor('operator')).toBe('/input/')
+    expect(homeFor('operator', '/monitoring/waterbody/z')).toBe('/monitoring/waterbody/z')
+    expect(mainPage('viewer')).toBe('/monitoring/')
   })
 })
