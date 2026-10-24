@@ -431,10 +431,8 @@ _HIDDEN_MON = access.hidden_widgets(templates.MONITORING)
 
 def _hidden_comments(board, user):
     """Комментарии к скрытым от роли виджетам не показываются (в них могут быть числа модели)."""
-    if access.full(user):
-        return set()
     d = boards.get(board)
-    return access.hidden_widgets(d) if d else set()
+    return access.hidden_widgets(d, access.full(user)) if d else set()
 
 
 def _insight(src, flt, opt, wb):

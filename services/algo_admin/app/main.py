@@ -43,10 +43,17 @@ E.seed_builtin()
 
 
 # ================================================================ каталог
+# «Проверки байесовской модели» скрыты везде — решение заказчика 24.10 (№ 65): нет в каталоге, выборе шагов и
+# шаблонах расчёта; пакет и прежние запуски сохраняются (вернуть — убрать код отсюда)
+HIDDEN_ALGOS = {"bayes_checks"}
+
+
 @app.get("/catalog", tags=["каталог"])
 def catalog(user: User = Depends(require("catalog.view"))):
     out = []
     for a in E.catalog.list():
+        if a["code"] in HIDDEN_ALGOS:
+            continue
         vs = E.versions(a["code"])
         latest = next((v for v in vs if v["enabled"]), None)
         out.append({**a, "versions": [{k: v.get(k) for k in ("version", "checksum", "enabled", "source", "created_at",
@@ -380,7 +387,6 @@ TEMPLATES = {
     "full": ("Полный расчёт ПДУ (этапы 1–5)", build.ORDER[:5]),
     "stock": ("Запас по уловам и ПДУ НПЦ по возрастам (этапы 1–3)", build.ORDER[:3]),
     "bayes_forecast": ("Байесовская модель и прогноз (этапы 1–5, модель — только выбранные виды)", build.ORDER[:5]),
-    "full_checks": ("Полный расчёт и проверки модели (этапы 1–5 и проверки; долго — запускать ночью)", build.ORDER),
 }
 
 
