@@ -24,23 +24,23 @@
           <el-table-column width="56" align="center">
             <template #default="{ row }"><span class="letter" :title="row.algorithm_title">{{ row.letter || '·' }}</span></template>
           </el-table-column>
-          <el-table-column :label="$t('calcs.calc')" min-width="320">
+          <el-table-column :label="$t('calcs.calc')" min-width="260">
             <template #default="{ row }">
               <b>{{ row.title }}</b>
               <div class="muted small">{{ $t('calcs.period') }}: {{ row.period_text }} · {{ row.param_set_name }}<template v-if="row.param_version"> v{{ row.param_version }}</template></div>
             </template>
           </el-table-column>
-          <el-table-column v-if="!wb" :label="$t('common.water_body')" width="160" prop="water_body_name" />
-          <el-table-column :label="$t('calcs.result')" width="150">
+          <el-table-column v-if="!wb" :label="$t('common.water_body')" width="140" prop="water_body_name" />
+          <el-table-column :label="$t('calcs.result')" width="145">
             <template #default="{ row }">
               <el-tag v-if="row.is_main" type="success" size="small">★ {{ $t('calcs.main') }}</el-tag>
               <el-tag v-else-if="row.has_result" type="info" size="small" effect="plain">{{ $t('calcs.alternative') }}</el-tag>
               <span v-else class="muted small">{{ $t('calcs.no_result') }}</span>
             </template>
           </el-table-column>
-          <el-table-column :label="$t('calcs.state')" width="190"><template #default="{ row }"><CalcState :calc="row" /></template></el-table-column>
-          <el-table-column :label="$t('calcs.finished')" width="150"><template #default="{ row }"><span class="small">{{ dt(row.result?.finished_at) }}</span></template></el-table-column>
-          <el-table-column v-if="auth.can('run.execute')" width="210" align="right">
+          <el-table-column :label="$t('calcs.state')" width="150"><template #default="{ row }"><CalcState :calc="row" /></template></el-table-column>
+          <el-table-column :label="$t('calcs.finished')" width="130"><template #default="{ row }"><span class="small">{{ dt(row.result?.finished_at) }}</span></template></el-table-column>
+          <el-table-column v-if="auth.can('run.execute')" width="170" align="right" fixed="right">
             <template #default="{ row }">
               <el-button v-if="!isActive(row)" size="small" @click.stop="run(row)">{{ row.has_result ? $t('calcs.rerun') : $t('calcs.run') }}</el-button>
               <el-button v-if="row.has_result && !row.is_main" size="small" type="success" plain @click.stop="setMain(row)">★</el-button>
