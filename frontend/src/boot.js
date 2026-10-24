@@ -15,6 +15,7 @@ import '@fontsource/inter/600.css'
 import './assets/app.css'
 import { initTheme } from './theme'
 import { useAuth } from './store/auth'
+import { request } from './api'
 import { cabinet, cabinetOf, canEnter, hardGo, legacyToNew, setCurrentCabinet } from './cabinets'
 
 export const view = (n) => () => import(`./views/${n}.vue`)
@@ -53,6 +54,13 @@ export function makeRouter(key, routes) {
   return router
 }
 
+/** При открытии приложения — свежий профиль: имя или фото мог изменить администратор (решение № 58). */
+export async function refreshProfile() {
+  const auth = useAuth()
+  if (!auth.loggedIn) return
+  try { auth.setUser(await request('users', '/auth/me')) } catch (e) { /* нет связи — остаётся сохранённый профиль */ }
+}
+
 export function boot(key, routes) {
   setCurrentCabinet(key)
   initTheme()
@@ -61,5 +69,6 @@ export function boot(key, routes) {
   app.use(createPinia())
   app.use(makeRouter(key, routes)).use(i18n).use(ElementPlus, { locale: elLocale() })
   app.mount('#app')
+  refreshProfile()
   return app
 }

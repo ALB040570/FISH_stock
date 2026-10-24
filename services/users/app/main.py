@@ -1,23 +1,26 @@
 """
-Сервис 1. Администрирование пользователей: вход, роли, блокировка, журнал действий.
+Сервис 1. Администрирование пользователей: вход, роли, блокировка, журнал действий,
+профиль пользователя (имя, почта, должность, организация, фото).
 """
 from __future__ import annotations
 
+import base64
 import io
 import os
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import Depends, Query, Request
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from fastapi.responses import Response, StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from fishcommon.app import create_app
 from fishcommon.auth import ROLE_TITLES, ROLES, User, current_user, decode_token, issue_token, require
 from fishcommon.errors import AppError, not_found
-from fishcommon.storage import Collection, atomic_write_json, read_json
+from fishcommon.storage import Collection, atomic_write_bytes, atomic_write_json, read_json
 
 from .auditlog import AuditLog
 
@@ -32,9 +35,12 @@ ph = PasswordHasher()
 MAX_FAILED = 10
 
 
+PUBLIC_FIELDS = ("id", "login", "name", "email", "position", "organization", "role", "blocked", "created_at",
+                 "updated_at", "last_login_at", "must_change_password", "avatar_ver")
+
+
 def _public(u: dict) -> dict:
-    return {k: u.get(k) for k in ("id", "login", "name", "email", "role", "blocked", "created_at",
-                                  "updated_at", "last_login_at", "must_change_password")}
+    return {k: u.get(k) for k in PUBLIC_FIELDS}
 
 
 def _find_login(login: str) -> dict | None:
@@ -156,23 +162,152 @@ def change_password(body: PasswordIn, user: User = Depends(current_user)):
     return _tokens(users.get(user.id))
 
 
+# ------------------------------------------------------------------ профиль
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+ORG_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+
+
+class ProfileFields(BaseModel):
+    """Поля профиля, которые может менять сам пользователь (и администратор). Логин и роль сюда не входят."""
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = Field(None, max_length=200)
+    email: str | None = Field(None, max_length=200)
+    position: str | None = Field(None, max_length=200)
+    organization: str | None = Field(None, max_length=64)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v):
+        if v is None:
+            return v
+        v = " ".join(v.split())
+        if not v:
+            raise ValueError("Имя не может быть пустым")
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v):
+        if v is None:
+            return v
+        v = v.strip()
+        if v and not EMAIL_RE.match(v):
+            raise ValueError("Неверный адрес почты")
+        return v
+
+    @field_validator("position")
+    @classmethod
+    def _position(cls, v):
+        return None if v is None else " ".join(v.split())
+
+    @field_validator("organization")
+    @classmethod
+    def _org(cls, v):
+        """Код записи справочника «Организации» (сервис моделирования данных); пустая строка — не указана."""
+        if v is None:
+            return v
+        v = v.strip()
+        if v and not ORG_RE.match(v):
+            raise ValueError("Неверный код организации")
+        return v
+
+
+def _profile_changes(body: ProfileFields) -> dict:
+    return body.model_dump(exclude_unset=True, exclude_none=True)
+
+
+@app.patch("/auth/me", tags=["профиль"])
+def update_me(body: ProfileFields, user: User = Depends(current_user)):
+    """Свой профиль: имя, почта, должность, организация. Возвращает новые токены (имя входит в токен)."""
+    u = users.get(user.id)
+    if not u or u.get("deleted"):
+        raise not_found("Пользователь")
+    changes = _profile_changes(body)
+    if changes:
+        u = users.update(u["id"], changes, actor=user.id)
+        _event(user, "user.profile_update", "user", user.id, changes)
+    return _tokens(u)
+
+
+AVATAR_MAX = 512 * 1024
+AVATAR_TYPES = {"image/jpeg": b"\xff\xd8\xff", "image/png": b"\x89PNG\r\n\x1a\n", "image/webp": b"RIFF"}
+
+
+class AvatarIn(BaseModel):
+    data: str = Field(description="data:image/jpeg;base64,... (квадрат, уменьшенный в браузере)")
+
+
+def _avatar_path(uid: str):
+    return users.obj_dir(uid) / "avatar.bin"
+
+
+def _decode_avatar(data: str) -> tuple[str, bytes]:
+    m = re.match(r"^data:(image/[a-z]+);base64,(.+)$", data.strip(), re.S)
+    if not m or m.group(1) not in AVATAR_TYPES:
+        raise AppError("users.avatar_type", "Фото должно быть в формате JPEG, PNG или WebP", 400)
+    try:
+        raw = base64.b64decode(m.group(2), validate=True)
+    except Exception:
+        raise AppError("users.avatar_type", "Файл фото повреждён", 400)
+    if len(raw) > AVATAR_MAX:
+        raise AppError("users.avatar_size", "Фото слишком большое (не более 512 КБ)", 400)
+    ctype = m.group(1)
+    if not raw.startswith(AVATAR_TYPES[ctype]) or (ctype == "image/webp" and raw[8:12] != b"WEBP"):
+        raise AppError("users.avatar_type", "Файл не похож на изображение", 400)
+    return ctype, raw
+
+
+def _set_avatar(uid: str, ctype: str | None, raw: bytes | None, actor: str) -> dict:
+    path = _avatar_path(uid)
+    if raw is None:
+        path.unlink(missing_ok=True)
+        return users.update(uid, {"avatar_ver": None, "avatar_type": None}, actor=actor)
+    atomic_write_bytes(path, raw)
+    ver = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
+    return users.update(uid, {"avatar_ver": ver, "avatar_type": ctype}, actor=actor)
+
+
+@app.put("/auth/me/avatar", tags=["профиль"])
+def put_my_avatar(body: AvatarIn, user: User = Depends(current_user)):
+    ctype, raw = _decode_avatar(body.data)
+    u = _set_avatar(user.id, ctype, raw, user.id)
+    _event(user, "user.avatar_set", "user", user.id, {"bytes": len(raw)})
+    return _public(u)
+
+
+@app.delete("/auth/me/avatar", tags=["профиль"])
+def delete_my_avatar(user: User = Depends(current_user)):
+    u = _set_avatar(user.id, None, None, user.id)
+    _event(user, "user.avatar_delete", "user", user.id)
+    return _public(u)
+
+
+@app.get("/users/{uid}/avatar", tags=["профиль"])
+def get_avatar(uid: str, user: User = Depends(current_user)):
+    """Фото пользователя — для любого вошедшего (аватары коллег). Адрес меняется вместе с avatar_ver."""
+    u = users.get(uid)
+    path = _avatar_path(uid) if u else None
+    if not u or u.get("deleted") or not u.get("avatar_ver") or not path.exists():
+        raise not_found("Фото")
+    return Response(path.read_bytes(), media_type=u.get("avatar_type") or "image/jpeg",
+                    headers={"Cache-Control": "private, max-age=31536000"})
+
+
 # ------------------------------------------------------------------ пользователи
 @app.get("/roles", tags=["пользователи"])
 def roles():
     return [{"code": r, "title": ROLE_TITLES[r]} for r in ROLES]
 
 
-class UserIn(BaseModel):
+class UserIn(ProfileFields):
     login: str = Field(min_length=2, max_length=64, pattern=r"^[A-Za-z0-9._@-]+$")
     name: str = Field(min_length=1, max_length=200)
-    email: str = ""
     role: str
     password: str = Field(min_length=8)
 
 
-class UserPatch(BaseModel):
-    name: str | None = None
-    email: str | None = None
+class UserPatch(ProfileFields):
+    """Правка администратором: поля профиля и роль. Логин не меняется (по нему ведётся журнал)."""
     role: str | None = None
 
 
@@ -187,7 +322,8 @@ def create_user(body: UserIn, user: User = Depends(require("users.manage"))):
         raise AppError("users.bad_role", "Неизвестная роль", 400)
     if _find_login(body.login):
         raise AppError("users.exists", "Пользователь с таким логином уже есть", 409)
-    u = users.create({"login": body.login.strip().lower(), "name": body.name, "email": body.email,
+    u = users.create({"login": body.login.strip().lower(), "name": body.name, "email": body.email or "",
+                      "position": body.position or "", "organization": body.organization or "",
                       "role": body.role, "password_hash": ph.hash(body.password), "blocked": False,
                       "token_version": 0, "failed_logins": 0, "must_change_password": True}, actor=user.id)
     _event(user, "user.create", "user", u["id"], {"login": u["login"], "role": u["role"]})
@@ -199,7 +335,9 @@ def update_user(uid: str, body: UserPatch, user: User = Depends(require("users.m
     u = users.get(uid)
     if not u or u.get("deleted"):
         raise not_found("Пользователь")
-    changes = body.model_dump(exclude_none=True)
+    changes = body.model_dump(exclude_unset=True, exclude_none=True)
+    if changes.get("role") == u["role"]:
+        changes.pop("role")
     if "role" in changes:
         if changes["role"] not in ROLES:
             raise AppError("users.bad_role", "Неизвестная роль", 400)
@@ -255,6 +393,17 @@ def reset_password(uid: str, body: ResetIn, user: User = Depends(require("users.
     return {"ok": True}
 
 
+@app.delete("/users/{uid}/avatar", tags=["пользователи"])
+def delete_user_avatar(uid: str, user: User = Depends(require("users.manage"))):
+    """Администратор убирает фото пользователя (например, неподходящее)."""
+    u = users.get(uid)
+    if not u or u.get("deleted"):
+        raise not_found("Пользователь")
+    u = _set_avatar(uid, None, None, user.id)
+    _event(user, "user.avatar_delete", "user", uid, {"login": u["login"]})
+    return _public(u)
+
+
 @app.delete("/users/{uid}", tags=["пользователи"])
 def delete_user(uid: str, user: User = Depends(require("users.manage"))):
     u = users.get(uid)
@@ -264,8 +413,9 @@ def delete_user(uid: str, user: User = Depends(require("users.manage"))):
         raise AppError("users.self_delete", "Нельзя удалить самого себя", 400)
     if u["role"] == "admin" and _admins_left(exclude=uid) == 0:
         raise AppError("users.last_admin", "Нельзя удалить последнего администратора", 400)
-    users.update(uid, {"deleted": True, "blocked": True, "token_version": int(u.get("token_version", 0)) + 1},
-                 actor=user.id)
+    _avatar_path(uid).unlink(missing_ok=True)  # фото — личные данные, при удалении не храним
+    users.update(uid, {"deleted": True, "blocked": True, "avatar_ver": None, "avatar_type": None,
+                       "token_version": int(u.get("token_version", 0)) + 1}, actor=user.id)
     _event(user, "user.delete", "user", uid, {"login": u["login"]})
     return {"ok": True}
 
@@ -274,6 +424,21 @@ def delete_user(uid: str, user: User = Depends(require("users.manage"))):
 def directory(user: User = Depends(current_user)):
     """Имена пользователей для подписей «автор» в других экранах (без служебных полей)."""
     return {u["id"]: u.get("name") or u["login"] for u in users.list()}
+
+
+@app.get("/users/people", tags=["пользователи"])
+def people(user: User = Depends(current_user)):
+    """Подписи и аватары авторов (комментарии и др.): актуальное имя, фото, должность, организация.
+    Удалённые — только имя (их записи остаются подписанными)."""
+    out = {}
+    for u in users.list():
+        name = u.get("name") or u["login"]
+        if u.get("deleted"):
+            out[u["id"]] = {"name": name, "deleted": True}
+        else:
+            out[u["id"]] = {"name": name, "avatar_ver": u.get("avatar_ver"), "position": u.get("position") or "",
+                            "organization": u.get("organization") or ""}
+    return out
 
 
 # ------------------------------------------------------------------ журнал

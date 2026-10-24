@@ -14,11 +14,12 @@
         <el-radio-button value="ru">РУС</el-radio-button><el-radio-button value="kk">ҚАЗ</el-radio-button>
       </el-radio-group>
       <el-dropdown trigger="click" @command="onCmd">
-        <span class="user"><el-avatar :size="28" class="avatar">{{ initials }}</el-avatar>
+        <span class="user"><UserAvatar :user="auth.user" :size="28" />
           <span class="uname">{{ auth.user?.name }}<br><span class="urole">{{ $t('roles.' + auth.role) }}</span></span></span>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item command="password">{{ $t('nav.password') }}</el-dropdown-item>
+            <el-dropdown-item command="profile"><el-icon><User /></el-icon>{{ $t('profile.title') }}</el-dropdown-item>
+              <el-dropdown-item command="password"><el-icon><Lock /></el-icon>{{ $t('nav.password') }}</el-dropdown-item>
             <el-dropdown-item command="logout" divided>{{ $t('nav.logout') }}</el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -150,6 +151,7 @@
       <div class="faint small keys">{{ $t('flow.keys', { n: order.length }) }}</div>
     </main>
     <PasswordDialog v-model="pwd" :forced="forced" />
+    <ProfileDialog v-model="prof" @password="prof = false; pwd = true" />
   </div>
 </template>
 <script setup>
@@ -164,6 +166,8 @@ import { buildFlow, runProgress, stageLink } from '../flow'
 import { loadLast } from '../lastPlace'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import PasswordDialog from '../components/PasswordDialog.vue'
+import ProfileDialog from '../components/ProfileDialog.vue'
+import UserAvatar from '../components/UserAvatar.vue'
 
 // Стартовая страница «Поток» (docs/decisions.md, № 53): путь данных Ввод → Расчёты → Мониторинг, между кабинетами —
 // «трубы» с водоёмами, ждущими следующего этапа. Состояния — только факты из сервисов (src/flow.js).
@@ -176,8 +180,8 @@ const order = computed(() => [...FLOW_PATH, ...FLOW_BASE].filter((k) => mine.val
 const keyOf = (k) => order.value.indexOf(k) + 1
 const baseCabs = computed(() => FLOW_BASE.filter((k) => mine.value.includes(k)).map(cabinet))
 const pwd = ref(!!auth.user?.must_change_password)
+const prof = ref(false)
 const forced = computed(() => !!auth.user?.must_change_password)
-const initials = computed(() => (auth.user?.name || '?').split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase())
 const firstName = computed(() => {
   // «Фамилия Имя Отчество» или «Имя Фамилия»: обращаемся по имени — второму слову из трёх, иначе первому
   const p = (auth.user?.name || '').trim().split(/\s+/).filter(Boolean)
@@ -265,6 +269,7 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('keydow
 function onCmd(c) {
   if (c === 'logout') { auth.logout(); hardGo('/login') }
   if (c === 'password') pwd.value = true
+  if (c === 'profile') prof.value = true
 }
 </script>
 <style scoped>
@@ -287,7 +292,6 @@ function onCmd(c) {
 .top :deep(.el-radio-button__inner) { background: transparent; border-color: rgba(255, 255, 255, .25); color: var(--fs-nav-muted); box-shadow: none; }
 .top :deep(.el-radio-button.is-active .el-radio-button__inner) { background: var(--fs-primary-2); border-color: var(--fs-primary-2); color: var(--fs-nav-active); }
 .user { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--fs-nav-text); }
-.avatar { background: var(--fs-primary-2); color: var(--fs-nav-active); font-weight: 600; }
 .uname { font-size: 13px; line-height: 1.15; }
 .urole { color: var(--fs-nav-muted); font-size: 11px; }
 .hello { position: relative; max-width: 1180px; margin: 0 auto; padding: 30px 24px 0; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }

@@ -20,7 +20,16 @@ export const useAuth = defineStore('auth', {
   actions: {
     setSession(j) {
       this.accessToken = j.access_token; this.refreshToken = j.refresh_token; this.user = j.user; this.expired = false
+      this.persist()
+    },
+    persist() {
       try { localStorage.setItem(KEY, JSON.stringify({ accessToken: this.accessToken, refreshToken: this.refreshToken, user: this.user })) } catch (e) { /* приватный режим */ }
+    },
+    /** Профиль с сервера (имя, фото…) без смены токенов — например, после правки администратором. */
+    setUser(u) {
+      if (!u || !this.user || u.id !== this.user.id) return
+      this.user = { ...this.user, ...u }
+      this.persist()
     },
     logout(expired = false) {
       this.accessToken = null; this.refreshToken = null; this.user = null; this.expired = expired

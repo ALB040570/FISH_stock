@@ -44,12 +44,13 @@
         </el-radio-group>
         <el-dropdown trigger="click" @command="onCmd">
           <span class="user">
-            <el-avatar :size="28" class="avatar">{{ initials }}</el-avatar>
+            <UserAvatar :user="auth.user" :size="28" />
             <span class="uname">{{ auth.user?.name }}<br><span class="urole">{{ $t('roles.' + auth.role) }}</span></span>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="password">{{ $t('nav.password') }}</el-dropdown-item>
+              <el-dropdown-item command="profile"><el-icon><User /></el-icon>{{ $t('profile.title') }}</el-dropdown-item>
+              <el-dropdown-item command="password"><el-icon><Lock /></el-icon>{{ $t('nav.password') }}</el-dropdown-item>
               <el-dropdown-item command="logout" divided>{{ $t('nav.logout') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -58,6 +59,7 @@
       <el-main class="main"><slot /></el-main>
     </el-container>
     <PasswordDialog v-model="pwd" :forced="forced" />
+    <ProfileDialog v-model="prof" @password="prof = false; pwd = true" />
     <el-drawer v-model="ctxOpen" :title="ctxArt?.title || $t('nav.help')" size="560px">
       <div v-if="ctxArt">
         <HelpMarkdown :source="ctxArt.markdown" strip-title @navigate="ctxOpen = false" />
@@ -76,6 +78,8 @@ import { cabinetsFor, currentCabinet, hardGo, hasFlow, helpPath, helpRoute } fro
 import { saveLast } from '../lastPlace'
 import ThemeToggle from './ThemeToggle.vue'
 import PasswordDialog from './PasswordDialog.vue'
+import ProfileDialog from './ProfileDialog.vue'
+import UserAvatar from './UserAvatar.vue'
 import HelpMarkdown from './HelpMarkdown.vue'
 import { api } from '../api'
 
@@ -87,6 +91,7 @@ const { locale } = i18n
 const lang = ref(locale.value)
 const collapsed = ref(window.innerWidth < 900)
 const pwd = ref(!!auth.user?.must_change_password)
+const prof = ref(false)
 const forced = computed(() => !!auth.user?.must_change_password)
 // Кабинет — отдельный интерфейс со своим меню (docs/decisions.md, № 52). Права на экраны не меняются — пункт скрыт,
 // если у роли нет к нему доступа.
@@ -140,7 +145,6 @@ watch([() => route.fullPath, active, items], () => {
   saveLast(auth.user?.id, { path: route.fullPath, cab: cab.key, item: item?.label || '', wb: route.params.wb || route.query.wb || '' })
 }, { immediate: true })
 onMounted(loadDashboards)
-const initials = computed(() => (auth.user?.name || '?').split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase())
 watch(() => auth.loggedIn, (v) => { if (!v) hardGo('/login?next=' + encodeURIComponent(route.fullPath)) })
 const ctxOpen = ref(false)
 const ctxArt = ref(null)
@@ -155,6 +159,7 @@ async function openContext() {
 function onCmd(c) {
   if (c === 'logout') { auth.logout(); hardGo('/login') }
   if (c === 'password') pwd.value = true
+  if (c === 'profile') prof.value = true
 }
 </script>
 <style scoped>
@@ -178,7 +183,6 @@ function onCmd(c) {
 .help-link { color: var(--fs-muted); }
 .aside :deep(.el-menu--collapse) { width: 64px; }
 .aside :deep(.el-menu-item.is-active) { color: var(--fs-nav-text); background: var(--fs-nav-active) !important; box-shadow: inset 3px 0 0 var(--fs-accent); font-weight: 500; }
-.avatar { background: var(--fs-primary-2); font-weight: 600; }
 .header { display: flex; align-items: center; gap: 14px; background: var(--fs-card); border-bottom: 1px solid var(--fs-line); }
 .user { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .uname { font-size: 13px; line-height: 1.15; }
