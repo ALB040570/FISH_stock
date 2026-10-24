@@ -101,7 +101,10 @@
           </el-tabs>
           <StateBlock :loading="rLoading" :error="rError">
             <template v-if="tab === 'view' && view && result">
-              <component :is="view" :data="{ payload: viewPayload(c.algorithm, result.payload) }" :filters="{}" :options="{ kind: VIEWS[c.algorithm] }" />
+              <div v-for="(k, i) in views" :key="k" :class="{ 'view-next': i > 0 }">
+                <div v-if="views.length > 1" class="view-h">{{ $t('calcs.view_' + k) }}</div>
+                <component :is="specials[k]" :data="{ payload: viewPayload(c.algorithm, result.payload) }" :filters="{}" :options="{ kind: k }" />
+              </div>
             </template>
             <template v-else-if="tab === 'tables' && result">
               <div v-if="Object.keys(result.metrics || {}).length" class="fs-tiles" style="margin-bottom:12px">
@@ -188,7 +191,8 @@ const formOpen = ref(false)
 let timer
 let resultId = null
 const active = computed(() => isActive(c.value))
-const view = computed(() => specials[VIEWS[c.value?.algorithm]])
+const views = computed(() => (VIEWS[c.value?.algorithm] || []).filter((k) => specials[k]))
+const view = computed(() => views.value.length > 0)
 const pct = computed(() => Math.round((c.value?.progress?.fraction || 0) * 100))
 async function load() {
   try {
@@ -244,4 +248,6 @@ watch(() => route.params.id, () => { if (route.params.id) { resultId = null; loa
 .method-link { float: right; font-size: 13px; margin-top: 10px; position: relative; z-index: 1; }
 .method-link a { color: var(--fs-link); text-decoration: none; display: inline-flex; gap: 4px; align-items: center; }
 @media (max-width: 640px) { .kv { grid-template-columns: 1fr; gap: 2px; } .kv .k { margin-top: 8px; } }
+.view-next { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--fs-line); }
+.view-h { font-weight: 600; margin-bottom: 8px; }
 </style>

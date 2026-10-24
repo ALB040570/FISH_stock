@@ -4,6 +4,7 @@ import BayesBand from './BayesBand.vue'
 import PduSummary from './PduSummary.vue'
 import PduBreakdown from './PduBreakdown.vue'
 import ForecastScenarios from './ForecastScenarios.vue'
+import CalcStockView from './CalcStockView.vue'
 
 export default {
   data_summary: DataSummary,
@@ -13,4 +14,7 @@ export default {
   pdu_summary: PduSummary,
   pdu_breakdown: PduBreakdown,
   forecast_scenarios: ForecastScenarios,
+  calc_likelihood: CalcStockView,
+  calc_gear_stock: CalcStockView,
+  calc_combined: CalcStockView,
 }

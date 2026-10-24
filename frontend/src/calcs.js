@@ -24,8 +24,11 @@ export const dur = (s) => (s == null ? '—' : s >= 3600 ? `${Math.floor(s / 360
   : s >= 60 ? `${Math.floor(s / 60)} мин ${Math.round(s % 60)} с` : `${Math.round(s)} с`)
 
 /** Специальное представление результата алгоритма (виджеты мониторинга). */
-export const VIEWS = { seine_catchability: 'seine_curves', net_catchability: 'net_curves', net_likelihood: 'net_curves',
-  pdu_by_age: 'pdu_breakdown', bayes_cohort: 'bayes_band', forecast_pdu: 'forecast_scenarios' }
+// Представления результата на странице расчёта; у d — два: оценки по ловам и кривые сети с долей в сети σ
+export const VIEWS = { seine_catchability: ['seine_curves'], net_catchability: ['net_curves'],
+  seine_likelihood: ['calc_likelihood'], net_likelihood: ['calc_likelihood', 'net_curves'],
+  seine_stock: ['calc_gear_stock'], net_stock: ['calc_gear_stock'], combined_stock: ['calc_combined'],
+  pdu_by_age: ['pdu_breakdown'], bayes_cohort: ['bayes_band'], forecast_pdu: ['forecast_scenarios'] }
 
 /** Нагрузка результата в виде, который ждёт представление (кривые сети — в поле net). */
 export function viewPayload(code, payload) {

@@ -49,6 +49,8 @@ const opt = computed(() => {
       ...(f.fitted ? [{ type: 'line', name: t('w.catch_curve'), data: f.fitted, symbol: 'none', lineStyle: { color: CHART.fit } }] : []),
       { type: 'line', name: t('w.catchability'), data: f.c, yAxisIndex: 1, lineStyle: { width: 2.5, color: CHART.main }, itemStyle: { color: CHART.main },
         markLine: { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: CHART.limit }, label: { formatter: '{c}' }, data: [lo, hi].filter((v) => v !== null && v !== undefined).map((v) => ({ yAxis: v })) } },
+      // доля рыбы в сети σ (балансовая модель, алгоритм d) — есть только в результате d
+      ...(net.value && f.sigma ? [{ type: 'line', name: t('w.sigma'), data: f.sigma, yAxisIndex: 1, symbol: 'emptyCircle', lineStyle: { type: 'dotted', width: 2, color: CHART.highlight }, itemStyle: { color: CHART.highlight } }] : []),
     ],
   }
 })
