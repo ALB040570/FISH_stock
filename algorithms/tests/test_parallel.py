@@ -8,7 +8,10 @@ import os
 import numpy as np
 import pytest
 
-from test_pipeline import PKG, env, executor, manifest_defaults  # noqa: F401  (env — фикстура)
+from test_pipeline import PKG, build, env, executor, manifest_defaults  # noqa: F401  (env — фикстура)
+
+# «Проверки модели» в каталог не входят (решение № 65), пакет сохранён — для сверки собирается отдельно
+PKG = {**PKG, "bayes_checks": build.package_files("bayes_checks")}
 
 SHORT = {"draws": 20, "tune": 20, "chains": 2}
 TIMES = {"seconds", "started", "finished", "diagnostics_dir"}
@@ -62,10 +65,16 @@ def _same(a, b):
 
 def test_parallel_same_as_sequential(env, monkeypatch):
     tmp, sp, gk = env
-    d2, _ = _step(tmp, sp, gk, "stock_by_catch", "s2")
-    d3, _ = _step(tmp, sp, gk, "pdu_by_age", "s3", {"stock_by_catch": d2})
+    da, _ = _step(tmp, sp, gk, "net_catchability", "a")
+    db, _ = _step(tmp, sp, gk, "seine_catchability", "b")
+    dc, _ = _step(tmp, sp, gk, "seine_likelihood", "c", {"seine_catchability": db})
+    dd, _ = _step(tmp, sp, gk, "net_likelihood", "d", {"net_catchability": da})
+    de, _ = _step(tmp, sp, gk, "seine_stock", "e", {"seine_likelihood": dc})
+    df, _ = _step(tmp, sp, gk, "net_stock", "f", {"net_likelihood": dd})
+    dg, _ = _step(tmp, sp, gk, "combined_stock", "g", {"seine_stock": de, "net_stock": df})
+    d3, _ = _step(tmp, sp, gk, "pdu_by_age", "h", {"combined_stock": dg})
     prm = {**SHORT, "species": ["lesh", "plotva"]}
-    inp = {"stock_by_catch": d2, "pdu_by_age": d3}
+    inp = {"seine_likelihood": dc, "net_likelihood": dd, "combined_stock": dg, "pdu_by_age": d3}
     monkeypatch.setenv("FISH_CALC_CORES", "1")                 # по очереди, в одном процессе
     ds, rs = _step(tmp, sp, gk, "bayes_cohort", "seq", inp, prm)
     monkeypatch.setenv("FISH_CALC_CORES", "4")                 # 2 процесса по 2 цепи

@@ -156,14 +156,15 @@ class Context:
 
 
 def _apply_fixed_early(manifest: dict, params: dict) -> None:
-    """Неизменяемые параметры с именами настроек fishcore.config применяются ДО загрузки кода алгоритма:
-    часть функций ядра берёт их значениями аргументов по умолчанию при импорте."""
+    """Параметры методики с именами настроек fishcore.config применяются ДО загрузки кода алгоритма:
+    часть функций ядра берёт их значениями аргументов по умолчанию при импорте. С решения № 66 это параметры
+    набора «Параметры алгоритма» (категория param; прежние версии — fixed)."""
     if not (Path(sys.path[0]) / "fishcore" / "config.py").exists():
         return
     cfg = importlib.import_module("fishcore.config")
     for p in manifest.get("parameters", []):
         code = p["code"]
-        if p.get("category") == "fixed" and hasattr(cfg, code) and params.get(code) is not None:
+        if p.get("category") in ("fixed", "param") and hasattr(cfg, code) and params.get(code) is not None:
             cur = getattr(cfg, code)
             setattr(cfg, code, params[code] if isinstance(cur, str) else type(cur)(params[code]))
 

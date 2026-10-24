@@ -1,4 +1,4 @@
-"""Проверка и сборка параметров шага по манифесту: неизменяемые → водоём (профиль) → запуск."""
+"""Проверка и сборка параметров алгоритма: набор «Параметры алгоритма» (версии) + параметры расчёта (решение № 66)."""
 from __future__ import annotations
 
 
@@ -86,31 +86,38 @@ def check_value(p: dict, v, species_codes: set[str] | None = None):
     return v, None
 
 
-def merge(manifest: dict, profile_values: dict | None, run_values: dict | None, species_codes=None):
-    """Итоговые параметры шага и ошибки. Неизменяемые параметры нельзя задавать в расчёте/запуске."""
+def check_set(manifest: dict, values: dict, species_codes=None) -> tuple[dict, list[str]]:
+    """Набор «Параметры алгоритма» (решение № 66): значения всех параметров алгоритма, кроме задаваемых в расчёте
+    (категория calc). Неизвестные параметры (например, убранные в новой версии кода) отбрасываются."""
     out, errors = {}, []
-    run_values = dict(run_values or {})
-    profile_values = dict(profile_values or {})
+    values = dict(values or {})
     for p in manifest.get("parameters", []):
-        code, cat = p["code"], p.get("category", "run")
-        if cat == "fixed":
-            if code in run_values and run_values[code] not in (None, "") and run_values[code] != p.get("default"):
-                errors.append(f"«{p.get('title_ru', code)}» — неизменяемый параметр методики; меняется только новой версией алгоритма")
-            out[code] = p.get("default")
-            run_values.pop(code, None)
+        code = p["code"]
+        if p.get("category") == "calc":
             continue
-        if cat == "waterbody":
-            raw = profile_values.get(code, p.get("default"))
-        else:
-            raw = run_values.get(code, p.get("default"))
+        raw = values.get(code, p.get("default"))
         v, err = check_value(p, raw, species_codes)
         if err:
             errors.append(err)
         if p.get("required") and v in (None, {}, []):
             errors.append(f"«{p.get('title_ru', code)}»: обязательный параметр")
         out[code] = v
-    known = {p["code"] for p in manifest.get("parameters", [])}
-    for k in run_values:
+    return out, errors
+
+
+def merge_calc(manifest: dict, set_values: dict, calc_params: dict | None, species_codes=None):
+    """Итоговые параметры расчёта: набор «Параметры алгоритма» + параметры расчёта (виды модели и прогноза)."""
+    out, errors = check_set(manifest, set_values, species_codes)
+    calc_params = dict(calc_params or {})
+    for p in manifest.get("parameters", []):
+        if p.get("category") != "calc":
+            continue
+        v, err = check_value(p, calc_params.get(p["code"], p.get("default")), species_codes)
+        if err:
+            errors.append(err)
+        out[p["code"]] = v
+    known = {p["code"] for p in manifest.get("parameters", []) if p.get("category") == "calc"}
+    for k in calc_params:
         if k not in known:
-            errors.append(f"Неизвестный параметр «{k}»")
+            errors.append(f"Неизвестный параметр расчёта «{k}»")
     return out, errors

@@ -1,268 +1,310 @@
+"""Сервис расчётов (решение № 66): каталог a–k, параметры алгоритмов с версиями, расчёты с одним результатом,
+основной / альтернативный, устаревание, журнал, перенос данных прежних версий."""
 import io
+import json
 import zipfile
 
 from conftest import H
 
+CHAIN = ["net_catchability", "seine_catchability", "seine_likelihood", "net_likelihood", "seine_stock", "net_stock",
+         "combined_stock", "pdu_by_age"]
 
-def mod_process(mod):
-    """Выполнить один запуск из очереди (как воркер)."""
+
+def work(mod, limit=50):
+    """Выполнить очередь (как воркер), пока есть что выполнять."""
     from importlib import import_module
-    return import_module("app.worker").process_one(mod.E, mod.CLIENTS, log=lambda *a: None)
+    w = import_module("app.worker")
+    n = 0
+    while n < limit and w.process_one(mod.E, mod.CLIENTS, log=lambda *a: None):
+        n += 1
+    return n
 
 
-def E_has_checks(aa):
-    """Скрытый шаг остаётся в хранилище каталога, но шаблона «с проверками» нет."""
-    r = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "full_checks"})
-    return r.status_code == 400
+def make(aa, code, role="ichthyologist", run=True, **kw):
+    r = aa.post("/calcs", headers=H(role), json={"algorithm": code, "water_body": kw.pop("water_body", "zhaysan"),
+                                                 "run": run, **kw})
+    assert r.status_code == 201, r.json()
+    return r.json()
 
 
-def test_catalog_and_profiles(calc_stack):
+def chain(aa, mod):
+    ids = {code: make(aa, code)["id"] for code in CHAIN[:2]}
+    work(mod)
+    for code in CHAIN[2:]:
+        ids[code] = make(aa, code)["id"]
+        work(mod)
+    return ids
+
+
+def test_catalog_and_default_sets(calc_stack):
     dm, da, aa, mod = calc_stack
     cat = aa.get("/catalog", headers=H("viewer")).json()
-    # «Проверки байесовской модели» скрыты (№ 65): нет в каталоге и шаблонах, пакет остаётся
-    assert [a["code"] for a in cat] == ["seine_catchability", "stock_by_catch", "pdu_by_age", "bayes_cohort", "forecast_pdu"]
-    assert E_has_checks(aa)
-    latest = {a["code"]: a["latest"] for a in cat}
-    assert latest == {"seine_catchability": "2.0.0", "stock_by_catch": "2.0.0", "pdu_by_age": "2.0.0",
-                      "bayes_cohort": "2.0.2", "forecast_pdu": "2.0.0"}
-    files = aa.get("/catalog/bayes_cohort/versions/2.0.2/files", headers=H("viewer")).json()
-    assert any(f["path"] == "fishcore/bayes/dynamics.py" for f in files)
-    p = aa.get("/profiles/bayes_cohort/zhaysan", headers=H("viewer")).json()
-    assert set(p["profile"]["values"]["species_profiles"]) == {"lesh", "sudak", "okun", "plotva", "shuka", "sazan", "karas", "yaz"}
-    # «Презентация» (№ 62): каталог — названия, версии, описания; без кода, пакета и параметров водоёмов
-    assert len(aa.get("/catalog", headers=H("presenter")).json()) == 5
-    for url in ("/catalog/bayes_cohort/versions/2.0.2/files", "/catalog/bayes_cohort/versions/2.0.2/package.zip",
-                "/profiles/bayes_cohort/zhaysan"):
+    assert [a["letter"] for a in cat] == list("abcdefghijk")
+    by = {a["code"]: a for a in cat}
+    assert by["removal_pdu"]["planned"] and by["removal_pdu"]["versions"] == []
+    assert all(by[c]["latest"] == "3.0.0" for c in CHAIN + ["bayes_cohort", "forecast_pdu"])
+    assert "stock_by_catch" not in by and "bayes_checks" not in by
+    assert by["seine_likelihood"]["manifest"]["requires"]["steps"] == ["seine_catchability"]
+    assert by["bayes_cohort"]["manifest"]["requires"]["steps"] == ["seine_likelihood", "net_likelihood", "combined_stock", "pdu_by_age"]
+    # наборы «По умолчанию» — у каждого реализованного алгоритма
+    sets = aa.get("/param-sets", headers=H("viewer")).json()
+    defaults = {s["algorithm"]: s for s in sets if s["is_default"]}
+    assert set(defaults) == set(CHAIN + ["bayes_cohort", "forecast_pdu"])
+    b = aa.get(f"/param-sets/{defaults['bayes_cohort']['id']}", headers=H("ichthyologist")).json()
+    assert set(b["values"]["species_profiles"]) == {"lesh", "sudak", "okun", "plotva", "shuka", "sazan", "karas", "yaz"}
+    kinds = {r["key"]: r.get("value_kind") for r in b["schema"]}
+    assert kinds["beta_mu"] == "mu" and kinds["beta_lower"] == "lower"
+    sb = aa.get(f"/param-sets/{defaults['seine_catchability']['id']}", headers=H("ichthyologist")).json()
+    assert sb["values"]["SEINE_C_UPPER"] == 0.8 and sb["values"]["SEINE_C_LOWER_FIRST"] == 0.01
+    assert aa.get(f"/param-sets/{defaults['net_stock']['id']}", headers=H()).json()["values"] == {"STOCK_METHOD": "on_stock"}
+    # «Презентация» (№ 62): каталог — названия и описания; без кода и значений параметров
+    assert len(aa.get("/catalog", headers=H("presenter")).json()) == 11
+    for url in ("/catalog/bayes_cohort/versions/3.0.0/files", "/catalog/bayes_cohort/versions/3.0.0/package.zip",
+                f"/param-sets/{defaults['bayes_cohort']['id']}"):
         assert aa.get(url, headers=H("presenter")).status_code == 403, url
-    # копия профиля для другого водоёма, проверка значений
-    r = aa.post("/profiles/bayes_cohort/balkhash/copy-from/zhaysan", headers=H("ichthyologist")); assert r.status_code == 200
-    vals = r.json()["profile"]["values"]
+    # отключение версии — только математик и администратор
+    assert aa.post("/catalog/forecast_pdu/versions/3.0.0/disable", headers=H("ichthyologist")).status_code == 403
+    assert aa.post("/catalog/forecast_pdu/versions/3.0.0/disable", headers=H("mathematician")).status_code == 200
+    c = make(aa, "forecast_pdu", run=False)
+    assert any("нет включённых версий" in e for e in c["check"]["errors"])
+    assert aa.post("/catalog/forecast_pdu/versions/3.0.0/enable", headers=H("admin")).status_code == 200
+    # планируемый алгоритм не запускается
+    r = aa.post("/calcs", headers=H("ichthyologist"), json={"algorithm": "removal_pdu", "water_body": "zhaysan"})
+    assert r.status_code == 400 and "планируется" in str(r.json())
+
+
+def test_param_sets(calc_stack):
+    dm, da, aa, mod = calc_stack
+    d = {s["algorithm"]: s for s in aa.get("/param-sets", headers=H()).json() if s["is_default"]}
+    # «По умолчанию» не меняется
+    r = aa.put(f"/param-sets/{d['seine_catchability']['id']}", headers=H("mathematician"),
+               json={"name": "x", "values": {"SEINE_C_UPPER": 0.7}})
+    assert r.status_code == 400
+    # набор на основе — правка «неизменяемого» прежде коэффициента новой версией набора
+    s = aa.post("/param-sets", headers=H("mathematician"), json={"name": "Верхняя граница 0,7", "base": d["seine_catchability"]["id"]}).json()
+    assert s["version"] == 1 and s["values"]["SEINE_C_UPPER"] == 0.8
+    s = aa.put(f"/param-sets/{s['id']}", headers=H("mathematician"),
+               json={"name": s["name"], "values": {**s["values"], "SEINE_C_UPPER": 0.7}, "comment": "несходимость"}).json()
+    assert s["version"] == 2 and s["values"]["SEINE_C_UPPER"] == 0.7 and len(s["versions"]) == 2
+    assert aa.get(f"/param-sets/{s['id']}?version=1", headers=H()).json()["values"]["SEINE_C_UPPER"] == 0.8
+    # проверка значений
+    r = aa.put(f"/param-sets/{s['id']}", headers=H("mathematician"), json={"name": s["name"], "values": {"SEINE_C_UPPER": 5}})
+    assert r.status_code == 422
+    b = aa.post("/param-sets", headers=H("ichthyologist"), json={"name": "Балхаш", "base": d["bayes_cohort"]["id"]}).json()
+    vals = b["values"]
     vals["species_profiles"]["lesh"]["beta_lower"] = 5
-    r = aa.put("/profiles/bayes_cohort/balkhash", headers=H("mathematician"), json={"values": vals})
+    r = aa.put(f"/param-sets/{b['id']}", headers=H("mathematician"), json={"name": "Балхаш", "values": vals})
     assert r.status_code == 422 and "β" in str(r.json())
-    # отключение версии — только математик/админ
-    assert aa.post("/catalog/forecast_pdu/versions/2.0.0/disable", headers=H("ichthyologist")).status_code == 403
-    assert aa.post("/catalog/forecast_pdu/versions/2.0.0/disable", headers=H("mathematician")).status_code == 200
-    c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan"})
-    assert c.status_code == 422 and "нет включённых версий" in str(c.json())
-    aa.post("/catalog/forecast_pdu/versions/2.0.0/enable", headers=H("admin"))
+    # одинаковые названия у алгоритма — нельзя; наблюдатель не правит
+    assert aa.post("/param-sets", headers=H("mathematician"), json={"name": "Балхаш", "base": d["bayes_cohort"]["id"]}).status_code == 409
+    assert aa.post("/param-sets", headers=H("viewer"), json={"name": "z", "base": d["bayes_cohort"]["id"]}).status_code == 403
+    # «Добавить вид»: значения для вида вне эталона — общие значения модели
+    sd = aa.get("/param-sets/species-defaults/zherekh", headers=H("presenter"))
+    assert sd.status_code == 403
+    sd = aa.get("/param-sets/species-defaults/zherekh", headers=H("ichthyologist")).json()
+    assert sd["source"] == "general" and "beta_mu" in sd["values"]
+    # набор, используемый в расчёте, не удаляется
+    c = make(aa, "seine_catchability", run=False, param_set=s["id"])
+    assert c["param_version"] == 2 and c["param_set_name"] == "Верхняя граница 0,7"
+    assert aa.delete(f"/param-sets/{s['id']}", headers=H("mathematician")).status_code == 409
 
 
-def test_run_stock_chain(calc_stack):
+def test_chain_main_rerun_stale(calc_stack):
     dm, da, aa, mod = calc_stack
-    c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "stock"}).json()
-    chk = aa.post(f"/calculations/{c['id']}/check", headers=H("viewer"), json={}).json()
-    assert chk["ok"], chk["errors"]
-    assert set(chk["plan"]["datasets"]) >= {"catches", "age_samples", "npc_pdu"}
-    # неизменяемый параметр задать нельзя
-    r = aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"), json={"params": {"pdu_by_age": {"PDU_CAP": 0.5}}})
-    assert r.status_code == 422 and "неизменяемый" in str(r.json())
-    assert aa.post(f"/calculations/{c['id']}/run", headers=H("viewer"), json={}).status_code == 403
-    r = aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"), json={}).json()
-    assert r["status"] == "queued"
-    assert mod_process(mod)
-    run = aa.get(f"/runs/{r['id']}", headers=H("viewer")).json()
-    assert run["status"] == "done", run.get("message")
-    assert [s["status"] for s in run["steps"]] == ["done", "done", "done"]
-    res = aa.get(f"/runs/{r['id']}/steps/2/result", headers=H("ichthyologist")).json()
-    assert res["tables"]["pdu_by_age"]["rows"]
-    f = aa.get(f"/runs/{r['id']}/steps/2/files/pdu_by_age.xlsx", headers=H("ichthyologist")); assert f.status_code == 200
-    assert aa.get(f"/runs/{r['id']}/steps/2/files/state.pkl", headers=H("ichthyologist")).status_code == 404
-    # результаты, файлы, журнал, выгрузка и отчёты шагов — только с правом results.view (№ 62);
-    # список и статусы шагов видны всем
+    ids = chain(aa, mod)
+    for code, cid in ids.items():
+        c = aa.get(f"/calcs/{cid}", headers=H("viewer")).json()
+        assert c["state"] == "done", (code, c.get("message"))
+        assert c["is_main"] and c["stale"] == []          # первый результат — основной
+    # результаты: ПДУ НПЦ распределён полностью; файлы; выгрузка
+    res = aa.get(f"/calcs/{ids['pdu_by_age']}/result", headers=H("ichthyologist")).json()
+    lesh24 = sum(r["pdu_t"] or 0 for r in res["tables"]["pdu_by_age"]["rows"] if r["species"] == "лещ" and r["year"] == 2024)
+    assert abs(lesh24 - 4488) < 1
+    g = aa.get(f"/calcs/{ids['combined_stock']}/result", headers=H("ichthyologist")).json()
+    assert {"yearly_stock", "stock_by_age", "tonnes"} <= set(g["tables"])
+    assert aa.get(f"/calcs/{ids['pdu_by_age']}/files/pdu_by_age.xlsx", headers=H("ichthyologist")).status_code == 200
+    assert aa.get(f"/calcs/{ids['pdu_by_age']}/files/state.pkl", headers=H("ichthyologist")).status_code == 404
+    z = zipfile.ZipFile(io.BytesIO(aa.get(f"/calcs/{ids['pdu_by_age']}/export.zip", headers=H()).content))
+    assert any(n.endswith("h_pdu_by_age/zhaysan_pdu_pieces_3d.nc") for n in z.namelist()) and "journal.json" in z.namelist()
+    # права на результаты (№ 62): список и статусы — всем, результаты, файлы, журнал выполнения, отчёт — нет
     for role in ("viewer", "operator", "presenter"):
-        assert aa.get(f"/runs/{r['id']}", headers=H(role)).status_code == 200
-        for url in (f"/runs/{r['id']}/steps/2/result", f"/runs/{r['id']}/steps/0/log", f"/runs/{r['id']}/steps/2/files/pdu_by_age.xlsx",
-                    f"/runs/{r['id']}/export.zip", f"/runs/{r['id']}/report.pdf"):
+        assert aa.get(f"/calcs/{ids['pdu_by_age']}", headers=H(role)).status_code == 200
+        for url in (f"/calcs/{ids['pdu_by_age']}/result", f"/calcs/{ids['pdu_by_age']}/log",
+                    f"/calcs/{ids['pdu_by_age']}/files/pdu_by_age.xlsx", f"/calcs/{ids['pdu_by_age']}/export.zip",
+                    "/water-bodies/zhaysan/report.pdf"):
             assert aa.get(url, headers=H(role)).status_code == 403, (role, url)
-    z = zipfile.ZipFile(io.BytesIO(aa.get(f"/runs/{r['id']}/export.zip", headers=H()).content))
-    assert any(n.endswith("zhaysan_pdu_pieces_3d.nc") for n in z.namelist())
-    # основной запуск и сводка для карты
-    assert aa.post(f"/runs/{r['id']}/main", headers=H("ichthyologist")).status_code == 200
-    st = aa.get("/water-bodies/status", headers=H("viewer")).json()["zhaysan"]
-    assert st["main_run"]["run_id"] == r["id"]
-    # ПДУ на карте: без права на результаты — ПДУ НПЦ последнего года (из шага 3), не ПДУ приложения
-    assert st["pdu"]["source"] == "npc" and st["pdu"] == st["pdu_npc"] and st["pdu"]["rows"][0]["pdu_t"] > 0
-    assert aa.get("/water-bodies/status", headers=H("ichthyologist")).json()["zhaysan"]["pdu"] is None  # прогноза нет
-    mon = aa.get("/water-bodies/zhaysan/monitoring-run", headers=H("viewer")).json()
-    assert mon["is_main"] and mon["run"]["id"] == r["id"]
-    # отчёты
-    d = aa.get(f"/runs/{r['id']}/report.docx", headers=H("ichthyologist")); assert d.status_code == 200 and d.content[:2] == b"PK"
-    p = aa.get(f"/runs/{r['id']}/report.pdf", headers=H("ichthyologist")); assert p.status_code == 200 and p.content[:4] == b"%PDF"
-    # повтор с шага 3 по базовому запуску: шаги 1–2 берутся из него
-    r2 = aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"),
-                 json={"from_step": "pdu_by_age", "base_run": r["id"]}).json()
-    assert mod_process(mod)
-    run2 = aa.get(f"/runs/{r2['id']}", headers=H()).json()
-    assert [s["status"] for s in run2["steps"]] == ["reused", "reused", "done"]
-    a = aa.get(f"/runs/{r['id']}/steps/2/result", headers=H()).json()["tables"]["pdu_by_age"]["rows"]
-    b = aa.get(f"/runs/{r2['id']}/steps/2/result", headers=H()).json()["tables"]["pdu_by_age"]["rows"]
-    assert a == b
+        assert aa.post(f"/calcs/{ids['pdu_by_age']}/run", headers=H(role)).status_code == 403
+    # сводка для карты и «Потока»; результат основного расчёта для мониторинга
+    st = aa.get("/water-bodies/status", headers=H("ichthyologist")).json()["zhaysan"]
+    assert set(st["main"]) == set(CHAIN) and st["stale"] == [] and st["pdu_npc"]["rows"]
+    mr = aa.get("/water-bodies/zhaysan/main-result?algorithm=pdu_by_age", headers=H("viewer")).json()
+    assert mr["calc"]["id"] == ids["pdu_by_age"] and mr["result"] is None            # наблюдателю — без результата
+    mr = aa.get("/water-bodies/zhaysan/main-result?algorithm=pdu_by_age", headers=H("ichthyologist")).json()
+    assert mr["result"]["payload"]["species"]
+    for fmt in ("docx", "pdf"):
+        r = aa.get(f"/water-bodies/zhaysan/report.{fmt}", headers=H("ichthyologist"))
+        assert r.status_code == 200 and len(r.content) > 1000
+    # повторный запуск затирает результат; в журнале — оба выполнения
+    b = aa.get(f"/calcs/{ids['seine_catchability']}", headers=H()).json()
+    rid = b["result"]["result_id"]
+    aa.post(f"/calcs/{ids['seine_catchability']}/run", headers=H("ichthyologist"))
+    work(mod)
+    b = aa.get(f"/calcs/{ids['seine_catchability']}", headers=H()).json()
+    assert b["result"]["result_id"] != rid
+    runs = [j for j in aa.get(f"/calcs/{ids['seine_catchability']}/journal", headers=H("viewer")).json() if j["action"] == "run"]
+    assert len(runs) == 2 and all(j["status"] == "done" and j["param_set_name"] for j in runs)
+    # зависимые расчёты устарели: c — вход пересчитан, e, g, h — вход устарел
+    cs = {c["algorithm"]: c for c in aa.get("/calcs?water_body=zhaysan", headers=H()).json()}
+    assert cs["seine_likelihood"]["stale"] == ["расчёт-вход b пересчитан"]
+    assert cs["seine_stock"]["stale"] == ["расчёт-вход c устарел"]
+    assert cs["pdu_by_age"]["stale"] and not cs["net_likelihood"]["stale"] and not cs["seine_catchability"]["stale"]
+    assert aa.get("/water-bodies/status", headers=H()).json()["zhaysan"]["stale"]
+    r = aa.post("/calcs/recalc-stale", headers=H("ichthyologist"), json={"water_body": "zhaysan"}).json()
+    assert [x["id"] for x in r["queued"]] == [ids[c] for c in ("seine_likelihood", "seine_stock", "combined_stock", "pdu_by_age")]
+    work(mod)
+    cs = {c["algorithm"]: c for c in aa.get("/calcs?water_body=zhaysan", headers=H()).json()}
+    assert all(not c["stale"] and c["state"] == "done" for c in cs.values()), {k: (c["stale"], c["message"]) for k, c in cs.items()}
 
 
-def test_cancel_and_errors(calc_stack):
+def test_alternative_input_and_main(calc_stack):
     dm, da, aa, mod = calc_stack
-    c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "stock"}).json()
-    r = aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"), json={}).json()
-    x = aa.post(f"/runs/{r['id']}/cancel", headers=H("ichthyologist")).json()
-    assert x["status"] == "cancelled"
-    assert not mod_process(mod)
-    # водоём без данных: понятная ошибка до запуска
-    c2 = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "balkhash"}).json()
-    chk = aa.post(f"/calculations/{c2['id']}/check", headers=H()).json()
-    assert not chk["ok"] and any("не загружен набор" in e for e in chk["errors"])
-    assert any("профиля" in e for e in chk["errors"])
+    ids = chain(aa, mod)
+    d = {s["algorithm"]: s for s in aa.get("/param-sets", headers=H()).json() if s["is_default"]}
+    s = aa.post("/param-sets", headers=H("mathematician"), json={"name": "c ≤ 0,7", "base": d["seine_catchability"]["id"]}).json()
+    aa.put(f"/param-sets/{s['id']}", headers=H("mathematician"), json={"name": s["name"], "values": {**s["values"], "SEINE_C_UPPER": 0.7}})
+    b2 = make(aa, "seine_catchability", param_set=s["id"], period={"from": 2015, "to": 2024})
+    work(mod)
+    b2 = aa.get(f"/calcs/{b2['id']}", headers=H()).json()
+    assert b2["state"] == "done" and not b2["is_main"] and "c ≤ 0,7" in b2["title"]
+    # вход по умолчанию — основной; можно указать альтернативный
+    c2 = make(aa, "seine_likelihood", inputs={"seine_catchability": b2["id"]})
+    work(mod)
+    c2 = aa.get(f"/calcs/{c2['id']}", headers=H()).json()
+    assert c2["state"] == "done" and c2["result"]["inputs"]["seine_catchability"]["calc_id"] == b2["id"]
+    r1 = aa.get(f"/calcs/{ids['seine_likelihood']}/result", headers=H("ichthyologist")).json()["tables"]["per_haul"]["rows"]
+    r2 = aa.get(f"/calcs/{c2['id']}/result", headers=H("ichthyologist")).json()["tables"]["per_haul"]["rows"]
+    assert [x["stock"] for x in r1] != [x["stock"] for x in r2]
+    # смена основного: c (вход «основной») устаревает, c2 (вход указан) — нет
+    assert aa.post(f"/calcs/{b2['id']}/main", headers=H("viewer")).status_code == 403
+    aa.post(f"/calcs/{b2['id']}/main", headers=H("ichthyologist"))
+    cs = {c["id"]: c for c in aa.get("/calcs?water_body=zhaysan", headers=H()).json()}
+    assert cs[b2["id"]]["is_main"] and not cs[ids["seine_catchability"]]["is_main"]
+    assert cs[ids["seine_likelihood"]]["stale"] == ["сменился основной расчёт-вход b"]
+    assert cs[c2["id"]]["stale"] == []
+    j = aa.get(f"/calcs/{ids['seine_catchability']}/journal", headers=H()).json()
+    assert any("стал альтернативным" in (x.get("message") or "") for x in j)
+    # расчёт, указанный входом, не удаляется
+    assert aa.delete(f"/calcs/{b2['id']}", headers=H("ichthyologist")).status_code == 409
+    # новая версия набора данных — устаревают расчёты, которые его используют
+    from conftest import REPO
+    f = REPO / "samples" / "zhaysan" / "mean_weights.xlsx"
+    r = da.post("/upload", headers=H("ichthyologist"), data={"water_body": "zhaysan", "dataset_type": "mean_weights",
+                                                            "mode": "replace"}, files={"file": (f.name, f.read_bytes())})
+    assert r.json()["ok"]
+    cs = {c["algorithm"] + c["id"]: c for c in aa.get("/calcs?water_body=zhaysan", headers=H()).json()}
+    stale = {c["algorithm"] for c in cs.values() if any("mean_weights" in x for x in c["stale"])}
+    assert {"seine_catchability", "net_catchability", "seine_stock", "combined_stock", "pdu_by_age"} <= stale
 
 
-def test_classification(calc_stack):
-    """Тип модели и метод расчёта запаса (классификатор ТОФИ) — в каталоге; значения параметров — в профиле."""
+def test_period_and_errors(calc_stack):
     dm, da, aa, mod = calc_stack
-    cl = aa.get("/classifiers", headers=H("viewer")).json()
-    assert [m["code"] for m in cl["model_types"]] == ["deterministic", "stochastic"]
-    assert [m["code"] for m in cl["stock_methods"]] == ["area", "balance", "model"]
-    assert cl["param_values"][0]["tofi_code"] == "_FV_1124"
-    cat = {a["code"]: a["classification"] for a in aa.get("/catalog", headers=H("viewer")).json()}
-    assert cat["bayes_cohort"] == {"model_type": "stochastic", "stock_methods": ["model"]}
-    assert cat["stock_by_catch"]["stock_methods"] == ["area", "balance"]
-    body = {"model_type": "deterministic", "stock_methods": ["balance"]}
-    assert aa.put("/catalog/pdu_by_age/classification", headers=H("ichthyologist"), json=body).status_code == 403
-    assert aa.put("/catalog/pdu_by_age/classification", headers=H("mathematician"),
-                  json={"model_type": "x", "stock_methods": ["kushnarenko"]}).status_code == 422
-    assert aa.put("/catalog/pdu_by_age/classification", headers=H("mathematician"), json=body).status_code == 200
-    assert aa.get("/catalog/pdu_by_age", headers=H()).json()["classification"] == body
-    p = aa.get("/profiles/bayes_cohort/zhaysan", headers=H("viewer")).json()
-    kinds = {r["key"]: r.get("value_kind") for r in p["schema"]}
-    assert kinds["beta_mu"] == "mu" and kinds["beta_sigma"] == "sigma"
-    assert kinds["beta_lower"] == "lower" and kinds["x0_hi"] == "upper" and kinds["s_clip_lo"] == "lower"
-    assert kinds.get("draws") is None
+    b = make(aa, "seine_catchability", period={"from": 2018, "to": 2022})
+    work(mod)
+    b = aa.get(f"/calcs/{b['id']}", headers=H()).json()
+    assert b["state"] == "done" and b["result"]["years"] == [2018, 2019, 2020, 2021, 2022] and b["period_text"] == "2018–2022"
+    # c за все годы по b за 2018–2022 — предупреждение нет (период не задан), расчёт за общие годы с замечанием
+    c = make(aa, "seine_likelihood", period={"from": 2015, "to": 2024}, run=False)
+    chk = aa.post(f"/calcs/{c['id']}/check", headers=H()).json()
+    assert chk["ok"] and any("рассчитан за 2018–2022" in w for w in chk["warnings"])
+    aa.post(f"/calcs/{c['id']}/run", headers=H("ichthyologist"))
+    work(mod)
+    c = aa.get(f"/calcs/{c['id']}", headers=H()).json()
+    assert c["state"] == "done" and c["result"]["years"] == [2018, 2019, 2020, 2021, 2022]
+    assert any("2018–2022" in n for n in c["result"]["notes"])
+    # нет основного входа — понятная ошибка до запуска
+    r = aa.post("/calcs", headers=H("ichthyologist"), json={"algorithm": "net_likelihood", "water_body": "zhaysan", "run": True})
+    assert r.status_code == 422 and "Нет основного расчёта «a. Уловистость сети" in str(r.json())
+    # водоём без данных
+    r = aa.post("/calcs", headers=H("ichthyologist"), json={"algorithm": "seine_catchability", "water_body": "balkhash", "run": True})
+    assert r.status_code == 422 and "не загружен набор" in str(r.json())
+    # период задан неверно
+    r = aa.post("/calcs", headers=H("ichthyologist"), json={"algorithm": "seine_catchability", "water_body": "zhaysan",
+                                                            "period": {"from": 2024, "to": 2018}})
+    assert r.status_code == 422
+    # отмена до начала выполнения
+    x = make(aa, "net_catchability")
+    x = aa.post(f"/calcs/{x['id']}/cancel", headers=H("ichthyologist")).json()
+    assert x["state"] == "cancelled" and not work(mod)
+    # набор без части значений дополняется значениями по умолчанию
+    s = aa.post("/param-sets", headers=H("mathematician"), json={"name": "проба 20", "algorithm": "seine_catchability",
+                                                                "values": {"SEINE_MIN_SAMPLE": 20}}).json()
+    assert s["values"]["SEINE_C_UPPER"] == 0.8
 
 
-def test_reference_change_migration(tmp_path, monkeypatch):
-    """Переход на эталон 22.10.2026: прежние эталонные версии удаляются, профили водоёмов получают новые значения
-    по умолчанию с сохранением изменений пользователей; закреплённая в расчёте удалённая версия заменяется новой."""
-    import json
+def test_migration_from_runs(tmp_path, monkeypatch):
+    """Переход на каталог a–k: прежние запуски, цепочки и основной запуск удаляются, профили модели водоёмов
+    становятся наборами параметров алгоритма i со всеми правками; второй запуск ничего не меняет."""
     from conftest import load_service
+    from fishcommon.storage import Collection, atomic_write_json, dumps
+    root = tmp_path / "algo_admin"
+    for d in ("runs/R1", "calculations/C1", "catalog/stock_by_catch/versions/1", "catalog/bayes_checks"):
+        (root / d).mkdir(parents=True)
+    atomic_write_json(root / "runs/R1/meta.json", {"id": "R1", "status": "done"})
+    atomic_write_json(root / "catalog/stock_by_catch/meta.json", {"id": "stock_by_catch", "code": "stock_by_catch"})
+    atomic_write_json(root / "catalog/bayes_checks/meta.json", {"id": "bayes_checks", "code": "bayes_checks"})
+    atomic_write_json(root / "main_runs.json", {"zhaysan": {"run_id": "R1"}})
+    prof = Collection(root, "profiles")
+    prof.create({"algorithm": "bayes_cohort", "water_body": "balkhash"}, actor="u", obj_id="bayes_cohort__balkhash")
+    prof.add_version("bayes_cohort__balkhash", {"values.json": dumps({"species_profiles": {"zherekh": {"draws": 3000}}}).encode()},
+                     {}, "u")
     mod = load_service("algo_admin", tmp_path, monkeypatch)
     E = mod.E
-    prev = json.loads((mod.build.PACKAGES / "bayes_cohort" / "previous_defaults_1.0.json").read_text(encoding="utf-8"))
-    # как на сервере до обновления: эталонная версия 1.0.3 и профиль со значениями прежнего эталона
-    man = json.loads(json.dumps(E.manifest("seine_catchability", "2.0.0")))
-    man["version"] = "1.0.3"
-    E.publish(man, {"manifest.json": json.dumps(man).encode()}, actor="system", source="builtin")
-    old_vals = json.loads(json.dumps(prev))
-    old_vals["lesh"]["draws"] = 3000                       # изменено пользователем
-    E.save_profile("bayes_cohort", "balkhash", {"species_profiles": old_vals}, "u1", "до обновления")
-    E.profiles.update(E.profile_id("bayes_cohort", "balkhash"), {"migrated_to": None}, actor="system")  # профиль версии 1.x
+    assert not (root / "runs").exists() and not (root / "calculations").exists() and not (root / "main_runs.json").exists()
+    assert not E.catalog.exists("stock_by_catch") and not E.catalog.exists("bayes_checks")
+    sets = [s for s in E.param_sets.list() if s["algorithm"] == "bayes_cohort" and not s["is_default"]]
+    assert len(sets) == 1 and E.set_values(sets[0]["id"]) == {"species_profiles": {"zherekh": {"draws": 3000}}}
+    assert "balkhash" in sets[0]["name"] and not (root / "profiles").exists()
     E.seed_builtin()
-    assert [v["version"] for v in E.versions("seine_catchability")] == ["2.0.0"]
-    lesh = E.get_profile("bayes_cohort", "balkhash")["values"]["species_profiles"]["lesh"]
-    assert lesh["draws"] == 3000 and lesh["catch_mode"] == "cap" and lesh["likelihood"] == "delta"
-    assert "press_mu" not in lesh and lesh["target_accept"] == 0.95
-    E.seed_builtin()                                       # второй запуск ничего не меняет
-    assert len(E.profiles.list_versions(E.profile_id("bayes_cohort", "balkhash"))) == 2
+    assert len([s for s in E.param_sets.list() if s["algorithm"] == "bayes_cohort"]) == 2
+    assert len(E.param_sets.list_versions("default_bayes_cohort")) == 1
 
 
 def test_recover_stale_after_restart(tmp_path, monkeypatch):
-    """Запуск, оборванный перезапуском воркера, помечается прерванным, а не висит «выполняется»."""
+    """Расчёт, оборванный перезапуском воркера, помечается прерванным, а не висит «выполняется»."""
     import os
     from conftest import load_service
-    mod = load_service("algo_admin", tmp_path, monkeypatch)
+    load_service("algo_admin", tmp_path, monkeypatch)
     from importlib import import_module
     eng_mod = import_module("app.engine")
     E = eng_mod.Engine(tmp_path / "recover")
     me = eng_mod.worker_name()
     host = me.split(":")[0]
-    mk = lambda w, st="running": E.runs.create({"status": st, "worker": w, "water_body": "zhaysan", "steps": []})
-    old_container = mk("3f2a9c1b7d4e:1:aaaa")             # контейнер пересоздан: другое имя хоста
-    same_pid_new_boot = mk(f"{host}:{os.getpid()}:bbbb")    # тот же номер процесса, прежний запуск процесса
-    mine = mk(me)                                           # выполняется этим процессом
+    mk = lambda w, st="running": E.calcs.create({"state": st, "worker": w, "water_body": "zhaysan", "algorithm": "x"})
+    old_container = mk("3f2a9c1b7d4e:1:aaaa")
+    same_pid_new_boot = mk(f"{host}:{os.getpid()}:bbbb")
+    mine = mk(me)
     queued = mk("x:1:c", st="queued")
-    # без признака «единственный воркер» — только этот хост
     assert E.recover_stale(host, sole=False) == 1
-    assert E.runs.get(same_pid_new_boot["id"])["status"] == "failed"
-    assert E.runs.get(old_container["id"])["status"] == "running"
-    # единственный воркер каталога данных (Docker, run_local) — все прежние «выполняется»
+    assert E.calcs.get(same_pid_new_boot["id"])["state"] == "failed"
+    assert E.calcs.get(old_container["id"])["state"] == "running"
     monkeypatch.setenv("FISH_WORKER_SOLE", "1")
     assert E.recover_stale(host) == 1
-    r = E.runs.get(old_container["id"])
-    assert r["status"] == "failed" and "перезапуск" in r["message"]
-    assert E.runs.get(mine["id"])["status"] == "running"
-    assert E.runs.get(queued["id"])["status"] == "queued"
+    r = E.calcs.get(old_container["id"])
+    assert r["state"] == "failed" and "перезапуск" in r["message"]
+    assert E.journal(old_container["id"])[-1]["status"] == "failed"
+    assert E.calcs.get(mine["id"])["state"] == "running"
+    assert E.calcs.get(queued["id"])["state"] == "queued"
 
 
-def test_fix_version_keeps_previous_and_profiles(tmp_path, monkeypatch):
-    """Исправление 2.0.1 поверх 2.0.0 (как на сервере 24.10): 2.0.0 остаётся в каталоге, профили водоёмов
-    повторно не переносятся (значения пользователей не трогаются, новых версий профиля нет)."""
-    import json
-    from conftest import load_service
-    mod = load_service("algo_admin", tmp_path, monkeypatch)
-    E = mod.E
-    files = E.package_files("bayes_cohort", "2.0.2")
-    man = json.loads(files["manifest.json"])
-    man["version"] = "2.0.0"
-    old = dict(files, **{"manifest.json": json.dumps(man).encode(), "algorithm.py": files["algorithm.py"] + b"\n# 2.0.0\n"})
-    E.publish(man, old, actor="system", source="builtin")
-    pid = E.profile_id("bayes_cohort", "zhaysan")
-    E.profiles.update(pid, {"migrated_to": "defaults 2.0.0"}, actor="system")   # перенесён при переходе на 2.0.0
-    vals = E.get_profile("bayes_cohort", "zhaysan")["values"]
-    vals["species_profiles"]["lesh"]["draws"] = 1234
-    E.save_profile("bayes_cohort", "zhaysan", vals, "u1", "правка математика")
-    n = len(E.profiles.list_versions(pid))
-    E.seed_builtin()
-    assert [v["version"] for v in E.versions("bayes_cohort")] == ["2.0.2", "2.0.0"]
-    assert E.latest_enabled("bayes_cohort")["version"] == "2.0.2"
-    assert len(E.profiles.list_versions(pid)) == n
-    assert E.get_profile("bayes_cohort", "zhaysan")["values"]["species_profiles"]["lesh"]["draws"] == 1234
-    # профиль, созданный пользователем на версии 2.x, переносом не затрагивается
-    E.save_profile("bayes_cohort", "kapshagay", vals, "u1", "новый")
-    assert E.profiles.get(E.profile_id("bayes_cohort", "kapshagay"))["migrated_to"] == "defaults 2.0.2"
-
-
-def test_profile_species_add_remove(calc_stack):
-    """«Добавить вид» / «Убрать вид»: значения по умолчанию для вида, виды в данных водоёма, предупреждение
-    в запуске о видах данных, которых нет в профиле."""
+def test_classification(calc_stack):
     dm, da, aa, mod = calc_stack
-    p = aa.get("/profiles/bayes_cohort/zhaysan", headers=H("viewer")).json()
-    assert {"lesh", "sudak", "yaz"} <= set(p["water_body_species"])
-    ref = aa.get("/profiles/bayes_cohort/species-defaults/lesh", headers=H("viewer")).json()
-    assert ref["source"] == "reference" and ref["name"] == "лещ"
-    assert ref["values"] == p["profile"]["values"]["species_profiles"]["lesh"]
-    gen = aa.get("/profiles/bayes_cohort/species-defaults/zherekh", headers=H("viewer")).json()
-    assert gen["source"] == "general" and set(gen["values"]) == {r["key"] for r in p["schema"]}
-    assert aa.get("/profiles/bayes_cohort/species-defaults/nope", headers=H()).status_code == 404
-    assert aa.get("/profiles/seine_catchability/species-defaults/lesh", headers=H()).status_code == 400
-    # профиль Балхаша с нуля: жерех и сом (общие значения), без видов Жайсана, которых в Балхаше нет
-    body = {"values": {"species_profiles": {"zherekh": gen["values"], "lesh": ref["values"]}}, "comment": "проба"}
-    assert aa.put("/profiles/bayes_cohort/balkhash", headers=H("ichthyologist"), json=body).status_code == 200
-    assert aa.put("/profiles/bayes_cohort/balkhash", headers=H("viewer"), json=body).status_code == 403
-    got = aa.get("/profiles/bayes_cohort/balkhash", headers=H()).json()["profile"]["values"]["species_profiles"]
-    assert set(got) == {"zherekh", "lesh"}
-    # Жайсан без язя: расчёт возможен, но с предупреждением, что язь не будет рассчитан
-    zh = p["profile"]["values"]
-    del zh["species_profiles"]["yaz"]
-    assert aa.put("/profiles/bayes_cohort/zhaysan", headers=H("mathematician"), json={"values": zh}).status_code == 200
-    c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan"}).json()
-    chk = aa.post(f"/calculations/{c['id']}/check", headers=H()).json()
-    assert chk["ok"], chk["errors"]
-    assert any("язь" in w and "Добавить вид" in w for w in chk["warnings"]), chk["warnings"]
-
-
-def test_from_step_takes_base_versions(calc_stack):
-    """Запуск «с шага»: пропущенные шаги без закреплённой версии берут версию базового запуска,
-    даже если в каталоге появилась более новая (исправление алгоритма после базового запуска)."""
-    import json
-    dm, da, aa, mod = calc_stack
-    E = mod.E
-    c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "stock"}).json()
-    r = aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"), json={}).json()
-    assert mod_process(mod)
-    files = E.package_files("seine_catchability", "2.0.0")
-    man = json.loads(files["manifest.json"]); man["version"] = "2.0.9"
-    E.publish(man, dict(files, **{"manifest.json": json.dumps(man).encode()}), actor="system", source="builtin")
-    r2 = aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"),
-                 json={"from_step": "pdu_by_age", "base_run": r["id"]})
-    assert r2.status_code == 201, r2.json()
-    r2 = r2.json()
-    assert r2["steps"][0]["version"] == "2.0.0" and any("из базового запуска" in w for w in r2["warnings"])
-    assert mod_process(mod)
-    assert [s["status"] for s in aa.get(f"/runs/{r2['id']}", headers=H()).json()["steps"]] == ["reused", "reused", "done"]
+    cl = aa.get("/classifiers", headers=H("viewer")).json()
+    assert [m["code"] for m in cl["stock_methods"]] == ["area", "balance", "model"]
+    cat = {a["code"]: a["classification"] for a in aa.get("/catalog", headers=H("viewer")).json()}
+    assert cat["bayes_cohort"] == {"model_type": "stochastic", "stock_methods": ["model"]}
+    assert cat["seine_likelihood"]["stock_methods"] == ["area"] and cat["net_stock"]["stock_methods"] == ["balance"]
+    body = {"model_type": "deterministic", "stock_methods": ["balance"]}
+    assert aa.put("/catalog/pdu_by_age/classification", headers=H("ichthyologist"), json=body).status_code == 403
+    assert aa.put("/catalog/pdu_by_age/classification", headers=H("mathematician"), json=body).status_code == 200
+    assert aa.get("/catalog/pdu_by_age", headers=H()).json()["classification"] == body
+    assert json.dumps(cat)

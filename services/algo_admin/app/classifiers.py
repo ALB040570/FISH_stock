@@ -32,12 +32,17 @@ ALL = {"model_types": MODEL_TYPES, "stock_methods": STOCK_METHODS, "param_values
 
 # классификация эталонных алгоритмов (по их описанию; меняет администратор в каталоге)
 DEFAULT_CLASSIFICATION = {
+    "net_catchability": {"model_type": "deterministic", "stock_methods": ["balance"]},
     "seine_catchability": {"model_type": "deterministic", "stock_methods": ["area"]},
-    "stock_by_catch": {"model_type": "deterministic", "stock_methods": ["area", "balance"]},
+    "seine_likelihood": {"model_type": "deterministic", "stock_methods": ["area"]},
+    "net_likelihood": {"model_type": "deterministic", "stock_methods": ["balance"]},
+    "seine_stock": {"model_type": "deterministic", "stock_methods": ["area"]},
+    "net_stock": {"model_type": "deterministic", "stock_methods": ["balance"]},
+    "combined_stock": {"model_type": "deterministic", "stock_methods": ["area", "balance"]},
     "pdu_by_age": {"model_type": "deterministic", "stock_methods": []},
     "bayes_cohort": {"model_type": "stochastic", "stock_methods": ["model"]},
     "forecast_pdu": {"model_type": "stochastic", "stock_methods": ["model"]},
-    "bayes_checks": {"model_type": "stochastic", "stock_methods": ["model"]},
+    "removal_pdu": {"model_type": "deterministic", "stock_methods": []},
 }
 
 # какое значение распределения задаёт параметр профиля — по окончанию ключа

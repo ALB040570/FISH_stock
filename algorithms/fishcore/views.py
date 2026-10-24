@@ -90,15 +90,23 @@ def seine_excel(res) -> bytes:
 
 # ---------------------------------------------------------------- этап 2: сеть и запас
 def net_payload(res, net_c, props) -> dict:
-    sigma = res.sigma["with_ages"]
+    return net_payload_parts(net_c, props, res.years, res.species, res.ages, res.sigma.get("with_ages"))
+
+
+def net_payload_parts(net_c, props, years, species, ages, sigma=None) -> dict:
+    """Параметры парабол сети для мониторинга; sigma (годы, виды, группы) — доля балансовой модели, если посчитана
+    (алгоритм d); у алгоритма a её нет — поле пустое (решение № 66)."""
+    years, species = list(years), list(species)
     fits = {}
     for (fish, year), r in net_c.fits.items():
-        yi, si = res.years.index(year), res.species.index(fish)
-        idx = [int(np.where(res.ages == a)[0][0]) for a in r.ages]
+        if year not in years or fish not in species:
+            continue
+        yi, si = years.index(year), species.index(fish)
+        idx = [int(np.where(ages == a)[0][0]) for a in r.ages]
         p = r.parabola
         fits.setdefault(fish, {})[str(year)] = {
             "ages": arr(r.ages.astype(int)), "observed": arr(r.observed), "c": arr(r.catchability),
-            "sigma": arr(sigma[yi, si, idx]),
+            "sigma": arr(sigma[yi, si, idx]) if sigma is not None else None,
             "peak": num(p.peak), "c0": num(p.c0), "a1": num(p.a1), "a2": num(p.a2),
             "c_mean": num(r.c_mean), "m0": r.m0, "m1": r.m1,
             "n_sample": r.n_sample, "total_catch": num(r.total_catch), "n_hauls": r.n_hauls,
@@ -108,7 +116,7 @@ def net_payload(res, net_c, props) -> dict:
             "c_lower": num(r.c_mean * config.NET_C_LOWER_FRAC), "substeps": zone0_substeps(float(props.net_length[year]), float(props.cruise_speed[fish]) * 3600),
         }
     # нижняя граница c сети — своя у каждого вида (c̄/3), она в каждой подгонке; общей нет
-    return {"waterbody": res.waterbody, "years": res.years, "species": res.species,
+    return {"waterbody": net_c.waterbody, "years": years, "species": species,
             "c_lower": None, "c_lower_frac": config.NET_C_LOWER_FRAC, "c_upper": config.NET_C_UPPER, "fits": fits,
             "panels": {"mode": config.NET_PANELS_MODE, "by_type": dict(config.NET_PANELS_BY_CATCH_TYPE)}}
 
@@ -119,9 +127,10 @@ def stock_payload(res) -> dict:
         m1 = res.m1[fish]
         age_idx = [i for i, a in enumerate(res.ages) if 2 <= a <= m1]
         block = {"ages": [int(res.ages[i]) for i in age_idx], "variants": {}}
-        for v in VARIANTS:
+        vm = res.variant_methods()
+        for v in [x for x in VARIANTS if any(x == a for a, _ in vm)]:
             vb = {}
-            for meth in METHODS:
+            for meth in [m for a, m in vm if a == v]:
                 mb = {"totals": {}, "by_age": {}}
                 for g in (*GEARS, MEAN):
                     mb["totals"][g] = ints(res.yearly_total(g, v, meth)[:, si])
@@ -139,7 +148,9 @@ def stock_payload(res) -> dict:
                     "place": m["Place"].astype(str).tolist(), "type": m["CatchType"].astype(str).tolist()}
     return {"waterbody": res.waterbody, "years": res.years, "species_list": res.species, "species": species,
             "hauls": hauls, "gears": {"net": config.GEAR_NET, "seine": config.GEAR_SEINE, "mean": MEAN},
-            "variant_titles": VARIANT_TITLES, "method_titles": METHOD_TITLES,
+            "variant_titles": VARIANT_TITLES, "method_titles": METHOD_TITLES, "method": res.method,
+            "methods": sorted({m for _, m in res.variant_methods()}, key=METHODS.index),
+            "variants_list": sorted({v for v, _ in res.variant_methods()}, key=VARIANTS.index),
             "combine_how": config.COMBINE_GEARS, "net_formula": config.NET_STOCK_FORMULA}
 
 
@@ -147,10 +158,11 @@ def stock_excel(res, net_c) -> bytes:
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as xw:
         res.totals_frame().to_excel(xw, sheet_name="Годовой запас (итоги)", index=False)
-        for v in VARIANTS:
+        for v in [x for x in VARIANTS if (MEAN, x, res.method) in res.yearly or (MEAN, x, "on_stock") in res.yearly]:
             rows = []
+            meth = "on_stock" if (MEAN, v, "on_stock") in res.yearly else res.method
             for g in (*GEARS, MEAN):
-                cube = res.yearly[(g, v, "on_stock")]
+                cube = res.yearly[(g, v, meth)]
                 for si, fish in enumerate(res.species):
                     for yi, year in enumerate(res.years):
                         row = {"орудие": g, "вид": fish, "год": year}
@@ -179,8 +191,8 @@ def stock_tables(res) -> list[tuple[str, str, list[dict], list[dict]]]:
     """Плоские таблицы для дашбордов."""
     out = []
     rows = []
-    for v in VARIANTS:
-        for meth in METHODS:
+    for v, meth in res.variant_methods():
+        if True:
             for g in (*GEARS, MEAN):
                 tot = res.yearly_total(g, v, meth)
                 for si, fish in enumerate(res.species):
@@ -193,7 +205,7 @@ def stock_tables(res) -> list[tuple[str, str, list[dict], list[dict]]]:
                  {"code": "method", "title": "Метод"}, {"code": "stock", "title": "Запас", "unit": "шт", "type": "number"}],
                 rows))
     rows = []
-    cube = res.yearly[(MEAN, "with_ages", "on_stock")]
+    cube = res.yearly[(MEAN, "with_ages", "on_stock" if (MEAN, "with_ages", "on_stock") in res.yearly else res.method)]
     for si, fish in enumerate(res.species):
         for yi, year in enumerate(res.years):
             for ai, a in enumerate(res.ages):
@@ -383,11 +395,16 @@ def bayes_excel(per_species: dict[str, tuple[dict, dict]]) -> bytes:
 def catch_by_age_tables(res) -> list[tuple[str, str, list[dict], list[dict], str]]:
     """Улов по ловам и возрастам Y_ijd = Y_id · q_ij(t_d) (формула (20)) и доли возрастной пробы q_ij(t).
     Только чтение уже рассчитанного массива: формулы и результаты этапа не меняются."""
-    ages = [int(a) for a in res.ages]
+    return catch_by_age_tables_hc([res.catches[g] for g in GEARS])
+
+
+def catch_by_age_tables_hc(catches: list) -> list[tuple[str, str, list[dict], list[dict], str]]:
+    """То же по списку уловов орудий (алгоритмы c и d — по одному орудию)."""
+    ages = [int(a) for a in catches[0].ages]
     age_cols = [{"code": f"a{a}", "title": f"j = {a}", "unit": "шт", "type": "number"} for a in ages]
     rows = []
-    for g in GEARS:
-        hc = res.catches[g]
+    for hc in catches:
+        g = hc.gear
         if not len(hc.meta):
             continue
         tot = hc.totals()
@@ -412,7 +429,7 @@ def catch_by_age_tables(res) -> list[tuple[str, str, list[dict], list[dict], str
            *age_cols], rows,
           "Y_ijd = Y_id · q_ij(t_d): улов вида в лове, разложенный по возрастным группам по долям возрастной пробы "
           "года лова.")
-    hc = res.catches[GEARS[0]]
+    hc = catches[0]
     srows = []
     for yi, y in enumerate(hc.years):
         for si, fish in enumerate(hc.species):
@@ -432,3 +449,114 @@ def catch_by_age_tables(res) -> list[tuple[str, str, list[dict], list[dict], str
           f"{config.AGE_PSEUDOCOUNT_TOTAL:g} условн. рыба (поровну); если в пробе меньше {config.AGE_POOL_MIN_SAMPLE} рыб, "
           f"к ней прибавляются пробы соседних лет (± {config.AGE_POOL_NEIGHBOURS}).")
     return [t1, t2]
+
+
+# ---------------------------------------------------------------- алгоритмы каталога (решение № 66)
+def net_excel(net_c) -> bytes:
+    params = net_c.params_frame()
+    cube = net_c.cube_frame().pivot_table(index=["вид", "год"], columns="возраст", values="c", sort=False)
+    labels = [age_label(a) for a in net_c.all_ages]
+    cube = cube.reindex(columns=[c for c in labels if c in cube.columns])
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as xw:
+        params.to_excel(xw, sheet_name="Параметры парабол сети", index=False)
+        cube.to_excel(xw, sheet_name="Коэффициенты c(вид,год,возр)")
+        autowidth(xw)
+    return buf.getvalue()
+
+
+def age_mask(species, ages, m1) -> np.ndarray:
+    """(виды, группы) — группы от 2 до m1 вида (как StockResult.age_mask)."""
+    return np.array([[2 <= a <= m1[s] for a in ages] for s in species])
+
+
+def per_haul_totals(per: np.ndarray, species, ages, m1) -> np.ndarray:
+    """(ловы, виды) — оценка запаса по лову, сумма групп 2..m1; NaN — вид в лове не учитывался."""
+    m = age_mask(species, ages, m1)[None, :, :]
+    all_nan = np.all(np.isnan(np.where(m, per, np.nan)), axis=2)
+    return np.where(all_nan, np.nan, np.nansum(np.where(m, per, 0.0), axis=2))
+
+
+def yearly_totals(cube: np.ndarray, species, ages, m1) -> np.ndarray:
+    """(годы, виды) — годовой запас по сумме групп 2..m1; NaN, если данных нет."""
+    m = age_mask(species, ages, m1)[None, :, :]
+    all_nan = np.all(np.isnan(np.where(m, cube, np.nan)), axis=2)
+    return np.where(all_nan, np.nan, np.nansum(np.where(m, cube, 0.0), axis=2))
+
+
+def hauls_meta(hc) -> dict:
+    m = hc.meta
+    return {"id": m["Id"].astype(int).tolist() if len(m) else [], "year": m["Year"].astype(int).tolist(),
+            "date": m["Date"].astype(str).tolist(), "place": m["Place"].astype(str).tolist(),
+            "type": m["CatchType"].astype(str).tolist(),
+            "area_ha": [num(x) for x in m["Area"].tolist()] if "Area" in m else None}
+
+
+def per_haul_table(hc, per, m1, title: str):
+    """Таблица «оценки запаса по ловам»: лов, год, дата, место, тип лова, вид, запас по группам и всего."""
+    ages = [int(a) for a in hc.ages]
+    tot = per_haul_totals(per, hc.species, hc.ages, m1)
+    m = hc.meta.reset_index(drop=True)
+    rows = []
+    for d in range(len(m)):
+        for si, fish in enumerate(hc.species):
+            if np.isnan(tot[d, si]):
+                continue
+            r = {"haul": int(m.at[d, "Id"]), "year": int(m.at[d, "Year"]), "date": str(m.at[d, "Date"])[:10],
+                 "place": None if pd.isna(m.at[d, "Place"]) else str(m.at[d, "Place"]),
+                 "catch_type": None if pd.isna(m.at[d, "CatchType"]) else str(m.at[d, "CatchType"]),
+                 "species": fish, "stock": num(tot[d, si])}
+            for ai, a in enumerate(ages):
+                if 2 <= a <= m1[fish]:
+                    v = per[d, si, ai]
+                    r[f"a{a}"] = None if np.isnan(v) else num(v)
+            rows.append(r)
+    cols = [{"code": "haul", "title": "Лов №", "type": "integer"}, {"code": "year", "title": "Год", "type": "integer"},
+            {"code": "date", "title": "Дата"}, {"code": "place", "title": "Место лова"},
+            {"code": "catch_type", "title": "Тип лова"}, {"code": "species", "title": "Вид"},
+            {"code": "stock", "title": "Запас по лову", "unit": "шт", "type": "number"},
+            *[{"code": f"a{a}", "title": f"j = {a}", "unit": "шт", "type": "number"} for a in ages]]
+    return "per_haul", title, cols, rows
+
+
+def likelihood_payload(hc, per, m1, years) -> dict:
+    tot = per_haul_totals(per, hc.species, hc.ages, m1)
+    return {"gear": hc.gear, "years": list(years), "species": list(hc.species), "hauls": hauls_meta(hc),
+            "totals": {fish: ints(tot[:, si]) for si, fish in enumerate(hc.species)},
+            "n_hauls": {fish: arr(hc.yearly_count()[:, si]) for si, fish in enumerate(hc.species)}}
+
+
+def gear_stock_parts(gear: str, method: str, years, species, ages, m1, cube, t_all, t_fish, counts):
+    """Таблицы и представление годового запаса одного орудия (алгоритмы e, f)."""
+    tot = yearly_totals(cube, species, ages, m1)
+    rows, brows = [], []
+    for si, fish in enumerate(species):
+        for yi, y in enumerate(years):
+            rows.append({"year": int(y), "species": fish, "gear": gear, "method": method, "stock": num(tot[yi, si]),
+                         "tonnes_all": num(t_all[yi, si]), "tonnes_fishable": num(t_fish[yi, si]),
+                         "hauls": num(counts[yi, si])})
+            for ai, a in enumerate(ages):
+                if 2 <= a <= m1[fish]:
+                    brows.append({"year": int(y), "species": fish, "age": int(a), "age_title": age_title(int(a)),
+                                  "stock": num(cube[yi, si, ai])})
+    t1 = ("yearly", f"Годовой запас ({gear}), шт и т",
+          [{"code": "year", "title": "Год", "type": "integer"}, {"code": "species", "title": "Вид"},
+           {"code": "gear", "title": "Орудие"}, {"code": "method", "title": "Способ"},
+           {"code": "stock", "title": "Запас", "unit": "шт", "type": "number"},
+           {"code": "tonnes_all", "title": "Запас, все возрасты", "unit": "т", "type": "number"},
+           {"code": "tonnes_fishable", "title": "Промысловый запас", "unit": "т", "type": "number"},
+           {"code": "hauls", "title": "Ловов", "type": "number"}], rows)
+    t2 = ("by_age", f"Годовой запас ({gear}) по возрастам, шт",
+          [{"code": "year", "title": "Год", "type": "integer"}, {"code": "species", "title": "Вид"},
+           {"code": "age", "title": "Возраст j", "type": "integer"}, {"code": "age_title", "title": "Возраст"},
+           {"code": "stock", "title": "Запас", "unit": "шт", "type": "number"}], brows)
+    sp = {}
+    for si, fish in enumerate(species):
+        idx = [i for i, a in enumerate(ages) if 2 <= a <= m1[fish]]
+        sp[fish] = {"ages": [int(ages[i]) for i in idx], "totals": ints(tot[:, si]),
+                    "by_age": [ints(cube[yi, si, idx]) for yi in range(len(years))],
+                    "tonnes_all": jq(t_all[:, si], 3), "tonnes_fishable": jq(t_fish[:, si], 3),
+                    "n_hauls": arr(counts[:, si])}
+    payload = {"gear": gear, "method": method, "method_title": METHOD_TITLES.get(method, method),
+               "years": [int(y) for y in years], "species": sp}
+    return [t1, t2], payload

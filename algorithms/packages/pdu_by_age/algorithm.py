@@ -1,25 +1,23 @@
-"""Этап 3. ПДУ НПЦ по возрастам (перенос fish_stock_forecast, формулы без изменений)."""
+"""h. ПДУ в экземплярах особей: ПДУ НПЦ по возрастам (формулы fish_stock_forecast без изменений; решение № 66)."""
 from fishcore import stepkit, views
 from fishcore.data_source import load_fish_props
 from fishcore.export_nc import save_pdu
 from fishcore.pdu_npc import compute_pdu
-from fishcore.stock import compute_stock
+from fishcore.years import select_stock
 
-DATASETS = ("catches", "age_samples", "species_props", "yearly_conditions", "mean_weights", "npc_pdu")
+DATASETS = ("species_props", "yearly_conditions", "mean_weights", "npc_pdu")
 
 
 def run(ctx):
     stepkit.apply_fixed(ctx.params)
     b = stepkit.bundle(ctx, *DATASETS)
-    prev = ctx.load_state("stock_by_catch")
-    if prev is None:
-        ctx.log("запас по уловам не передан цепочкой — рассчитывается внутри шага")
-        props = load_fish_props(ctx.water_body, b)
-        res, _, _ = compute_stock(ctx.water_body, b, props=props)
-    else:
-        res, props = prev["res"], prev["props"]
+    g = stepkit.need_input(ctx, "combined_stock")
+    years = stepkit.years_for(ctx, stepkit.in_period(ctx, g["res"].years), combined_stock=g["res"].years)
+    res = select_stock(g["res"], years)
+    by = stepkit.keep_years(b, years)
+    props = load_fish_props(ctx.water_body, by)
     ctx.progress(0.2, phase="распределение ПДУ по возрастам")
-    pdu = compute_pdu(res, props, data_dir=b)
+    pdu = compute_pdu(res, props, data_dir=by)
     save_pdu(pdu, ctx.out_dir)
     for f in sorted(ctx.out_dir.glob("*.nc")) + sorted(ctx.out_dir.glob("*.csv")):
         ctx.result["files"].append({"name": f.name, "title": f.stem, "format": f.suffix[1:]})

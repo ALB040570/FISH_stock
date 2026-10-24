@@ -1,0 +1,155 @@
+{
+ "version": "3.0.0",
+ "author": "FishStock",
+ "entrypoint": "algorithm:run",
+ "language": "python",
+ "runtime": {
+  "python": ">=3.11",
+  "timeout_minutes": 20
+ },
+ "code": "net_likelihood",
+ "letter": "d",
+ "title_ru": "Правдоподобие балансовым методом (уловы сетью)",
+ "title_kk": "Баланс әдісімен шынайылық (ау ауланымы)",
+ "description": "Оценка запаса по каждому лову сетью балансовым методом: доля σ рыб первого круга, попавших в сеть за время стоянки (балансовая модель 12 колец с подшагами в круге у сети), и X¹_ij(d) = Y¹_ij(d) · S(t) / (√n(d) · π V² σ(c¹_ij(t))), где n — число сетей одной ячеи в лове, V — путь рыбы за час, c — уловистость сети (алгоритм a).",
+ "requires": {
+  "datasets": [
+   "catches",
+   "age_samples",
+   "species_props",
+   "yearly_conditions",
+   "mean_weights"
+  ],
+  "steps": [
+   "net_catchability"
+  ]
+ },
+ "parameters": [
+  {
+   "code": "NET_STOCK_FORMULA",
+   "title_ru": "Формула запаса по сетям",
+   "type": "enum",
+   "default": "article",
+   "category": "param",
+   "enum": [
+    {
+     "value": "article",
+     "title_ru": "X = Y·S / (√n·π·V²·σ)"
+    },
+    {
+     "value": "code",
+     "title_ru": "X = Y·S / (σ·(V² − r0²)), r0 — половина длины сети (прежний вариант)"
+    }
+   ]
+  },
+  {
+   "code": "NET_PANELS_MODE",
+   "title_ru": "Несколько сетей одной ячеи в лове",
+   "title_kk": "Аулауда бір көзді бірнеше ау",
+   "type": "enum",
+   "default": "sqrt",
+   "category": "param",
+   "enum": [
+    {
+     "value": "sqrt",
+     "title_ru": "улов приводится к одной сети делением на √n"
+    },
+    {
+     "value": "one",
+     "title_ru": "не учитывать (n = 1)"
+    }
+   ]
+  },
+  {
+   "code": "NET_PANELS_SCIENTIFIC",
+   "title_ru": "Сетей одной ячеи в научном лове",
+   "title_kk": "Ғылыми аулаудағы бір көзді аулар",
+   "type": "integer",
+   "default": 2,
+   "category": "param",
+   "min": 1,
+   "max": 10
+  },
+  {
+   "code": "NET_PANELS_COMMERCIAL",
+   "title_ru": "Сетей одной ячеи в промысловом лове",
+   "title_kk": "Кәсіптік аулаудағы бір көзді аулар",
+   "type": "integer",
+   "default": 1,
+   "category": "param",
+   "min": 1,
+   "max": 10
+  },
+  {
+   "code": "NET_ZONE0_SUBSTEPS",
+   "title_ru": "Подшаги в круге у сети за час",
+   "title_kk": "Ау маңындағы шеңбердегі сағаттық қадамшалар",
+   "type": "enum",
+   "default": "auto",
+   "category": "param",
+   "enum": [
+    {
+     "value": "auto",
+     "title_ru": "n = ⌈V / r0⌉ — путь рыбы за час, делённый на половину длины сети"
+    },
+    {
+     "value": "1",
+     "title_ru": "без подшагов"
+    }
+   ]
+  },
+  {
+   "code": "AGE_PSEUDOCOUNT_TOTAL",
+   "title_ru": "Сглаживание возрастной пробы: условных рыб на всю пробу",
+   "title_kk": "Жас сынамасын тегістеу: бүкіл сынамаға шартты балық",
+   "type": "number",
+   "default": 1.0,
+   "category": "param",
+   "min": 0,
+   "max": 100
+  },
+  {
+   "code": "AGE_POOL_MIN_SAMPLE",
+   "title_ru": "Объединять возрастную пробу с соседними годами, если рыб меньше",
+   "title_kk": "Балық аз болса, жас сынамасын көрші жылдармен біріктіру",
+   "type": "integer",
+   "default": 30,
+   "category": "param",
+   "min": 0,
+   "max": 1000
+  },
+  {
+   "code": "AGE_POOL_NEIGHBOURS",
+   "title_ru": "Соседних лет с каждой стороны",
+   "title_kk": "Әр жақтағы көрші жылдар",
+   "type": "integer",
+   "default": 1,
+   "category": "param",
+   "min": 0,
+   "max": 5
+  }
+ ],
+ "outputs": [
+  {
+   "code": "per_haul",
+   "title_ru": "Оценки запаса по ловам сетью",
+   "format": "table"
+  },
+  {
+   "code": "sigma",
+   "title_ru": "Доля σ балансовой модели",
+   "format": "table"
+  },
+  {
+   "code": "catch_by_age",
+   "title_ru": "Улов по ловам и возрастам",
+   "format": "table"
+  },
+  {
+   "code": "age_shares",
+   "title_ru": "Доли возрастной пробы",
+   "format": "table"
+  }
+ ],
+ "changes": "3.0.0 (25.10.2026): отдельный алгоритм каталога (решение № 66) — запускается сам по себе, входы — результаты других расчётов, параметры — из набора «Параметры алгоритма», расчёт за выбранный период; только с учётом возрастов; формулы и результаты при параметрах по умолчанию не меняются (эталон 22.10.2026)"
+}

@@ -1,16 +1,17 @@
-"""Этап 4. Байесовская когортная модель (перенос fish_stock_forecast, уравнения без изменений)."""
+"""i. Запас по математической модели — байесовская когортная модель (перенос fish_stock_forecast, уравнения без
+изменений; решение № 66)."""
+import copy
 import json
 from pathlib import Path
 
-from fishcore import stepkit, views
+from fishcore import config, stepkit, views
 from fishcore.bayes import config as bc
 from fishcore.bayes import parallel as P
 from fishcore.bayes import run as R
 from fishcore.data_source import load_fish_props
-from fishcore.pdu_npc import compute_pdu
-from fishcore.stock import compute_stock
+from fishcore.years import select_gear_state, select_pdu, select_stock
 
-DATASETS = ("catches", "age_samples", "species_props", "yearly_conditions", "mean_weights", "npc_pdu")
+DATASETS = ("species_props", "yearly_conditions", "mean_weights", "npc_pdu")
 RUN_KEYS = ("draws", "tune", "chains", "target_accept", "max_treedepth", "seed")
 
 
@@ -28,35 +29,40 @@ def _profiles(ctx) -> dict:
 def run(ctx):
     from fishrunner import UserError
     b = stepkit.bundle(ctx, *DATASETS)
-    prev3 = ctx.load_state("pdu_by_age")
-    if prev3 is not None:
-        res, props, pdu = prev3["res"], prev3["props"], prev3["pdu"]
-    else:
-        prev2 = ctx.load_state("stock_by_catch")
-        if prev2 is not None:
-            res, props = prev2["res"], prev2["props"]
-        else:
-            ctx.log("этапы 2–3 не переданы цепочкой — рассчитываются внутри шага")
-            props = load_fish_props(ctx.water_body, b)
-            res, _, _ = compute_stock(ctx.water_body, b, props=props)
-        pdu = compute_pdu(res, props, data_dir=b)
+    # входы (решение № 66): оценки по ловам — c и d, окончательный запас — g, ПДУ в штуках — h
+    c = stepkit.need_input(ctx, "seine_likelihood")
+    d = stepkit.need_input(ctx, "net_likelihood")
+    g = stepkit.need_input(ctx, "combined_stock")
+    h = stepkit.need_input(ctx, "pdu_by_age")
+    years = stepkit.years_for(ctx, stepkit.in_period(ctx, g["res"].years), seine_likelihood=c["years"],
+                              net_likelihood=d["years"], combined_stock=g["res"].years, pdu_by_age=h["pdu"].years)
+    res = copy.copy(select_stock(g["res"], years))
+    c, d = select_gear_state(c, years), select_gear_state(d, years)
+    stepkit.check_species(c["species"], res.species, "оценок по ловам неводом")
+    stepkit.check_species(d["species"], res.species, "оценок по ловам сетью")
+    res.catches = {**res.catches, config.GEAR_SEINE: c["catch"], config.GEAR_NET: d["catch"]}
+    res.per_haul = {**res.per_haul, (config.GEAR_SEINE, "with_ages"): c["per_haul"],
+                    (config.GEAR_NET, "with_ages"): d["per_haul"]}
+    pdu = select_pdu(h["pdu"], years)
+    props = load_fish_props(ctx.water_body, stepkit.keep_years(b, years))
 
     profiles = _profiles(ctx)
     code_by_ru = {ru: code for code, ru in ctx.species_names.items()}
     bc.register_tokens(code_by_ru)
     wanted = ctx.params.get("species") or [code_by_ru.get(s, s) for s in res.species if code_by_ru.get(s, s) in profiles]
     if not wanted:
-        raise UserError("Для водоёма нет профиля параметров байесовской модели ни для одного вида. "
-                        "Заполните профиль водоёма: Расчёты → Параметры водоёмов.")
+        raise UserError("В параметрах алгоритма нет значений ни для одного вида данных водоёма. "
+                        "Добавьте виды в набор параметров: Расчёты запасов рыб → Параметры алгоритмов.")
     missing = [s for s in wanted if s not in profiles]
     if missing:
-        raise UserError("Нет профиля параметров для видов: " + ", ".join(ctx.species_names.get(s, s) for s in missing))
+        raise UserError("В параметрах алгоритма нет значений для видов: " + ", ".join(ctx.species_names.get(s, s) for s in missing)
+                        + " (Расчёты запасов рыб → Параметры алгоритмов → Добавить вид)")
     run_over = {k: ctx.params[k] for k in RUN_KEYS if ctx.params.get(k) is not None}
     runtime = {}
     for code in wanted:
         ru = ctx.species_names.get(code, code)
         if ru not in res.species:
-            raise UserError(f"Вид «{ru}» отсутствует в данных этапов 1–3")
+            raise UserError(f"Вид «{ru}» отсутствует в окончательном запасе (расчёт g)")
         values = {**profiles[code], **run_over}
         errs = bc.validate(ru, values)
         if errs:

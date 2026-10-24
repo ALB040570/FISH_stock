@@ -1,16 +1,15 @@
 """
-Сервис 3. Администрирование алгоритмов расчёта.
+Сервис 3. Администрирование алгоритмов расчёта (решение № 66).
 
-Каталог опубликованных версий алгоритмов (включение/отключение), профили параметров водоёмов,
-расчёты — цепочки шагов с наборами данных и параметрами, очередь запусков с воркерами,
-статусы, история, результаты, выгрузка, основной запуск водоёма.
+Каталог алгоритмов a–k (версии кода, включение/отключение), параметры алгоритмов (наборы с версиями), расчёты —
+алгоритм с входами, периодом и параметрами, один результат на расчёт (новый затирает прежний), основной /
+альтернативный результат, устаревание, журнал расчёта, очередь с воркерами, результаты, выгрузка, отчёт водоёма.
 """
 from __future__ import annotations
 
 import io
 import json
 import zipfile
-from pathlib import Path
 
 from fastapi import Depends, File, Form, UploadFile
 from fastapi.responses import FileResponse, Response
@@ -19,20 +18,20 @@ from pydantic import BaseModel
 from fishcommon.app import create_app
 from fishcommon.auth import User, current_user, require
 from fishcommon.errors import AppError, not_found
-from fishcommon.storage import atomic_write_json, now_iso, read_json
+from fishcommon.storage import now_iso, read_json
 
 from . import classifiers
 from . import params as P
 from .clients import Clients
-from .engine import STEP_ORDER, TERMINAL, Engine, build
+from .engine import ACTIVE, CATALOG, CATALOG_BY_CODE, ORDER_ALL, STEP_ORDER, Engine, default_values, letter
+from .planning import algo_title, period_text, plan
 
 app = create_app("algo_admin", "Администрирование алгоритмов расчёта",
-                 "Каталог версий алгоритмов, профили водоёмов, расчёты, очередь запусков, результаты.")
+                 "Каталог алгоритмов, параметры алгоритмов, расчёты, очередь, результаты, журнал.")
 ST = app.state.settings
 ROOT = ST.service_dir()
 E = Engine(ROOT)
 CLIENTS = Clients(ST)
-MAIN_RUNS = ROOT / "main_runs.json"
 
 
 def audit(user, action, otype, oid, details=None):
@@ -43,26 +42,28 @@ E.seed_builtin()
 
 
 # ================================================================ каталог
-# «Проверки байесовской модели» скрыты везде — решение заказчика 24.10 (№ 65): нет в каталоге, выборе шагов и
-# шаблонах расчёта; пакет и прежние запуски сохраняются (вернуть — убрать код отсюда)
-HIDDEN_ALGOS = {"bayes_checks"}
-
-
 @app.get("/catalog", tags=["каталог"])
 def catalog(user: User = Depends(require("catalog.view"))):
+    """Алгоритмы каталога a–k по порядку; у планируемых (k) нет версий."""
     out = []
-    for a in E.catalog.list():
-        if a["code"] in HIDDEN_ALGOS:
+    for a in CATALOG:
+        code = a["code"]
+        base = {"code": code, "letter": a["letter"], "title_ru": a["title_ru"], "title_kk": a.get("title_kk", ""),
+                "planned": bool(a.get("planned")), "inputs": a.get("inputs", []), "order": ORDER_ALL[code]}
+        if a.get("planned") or not E.catalog.exists(code):
+            out.append({**base, "description": a.get("description", ""), "versions": [], "latest": None, "manifest": None,
+                        "classification": _classification({"code": code})})
             continue
-        vs = E.versions(a["code"])
+        meta = E.catalog.get(code)
+        vs = E.versions(code)
         latest = next((v for v in vs if v["enabled"]), None)
-        out.append({**a, "versions": [{k: v.get(k) for k in ("version", "checksum", "enabled", "source", "created_at",
-                                                            "created_by", "report")} for v in vs],
+        out.append({**meta, **base, "description": (latest or (vs[0] if vs else {})).get("manifest", {}).get("description", meta.get("description")),
+                    "versions": [{k: v.get(k) for k in ("version", "checksum", "enabled", "source", "created_at",
+                                                        "created_by", "report")} for v in vs],
                     "latest": latest["version"] if latest else None,
                     "manifest": latest["manifest"] if latest else (vs[0]["manifest"] if vs else None),
-                    "classification": _classification(a),
-                    "order": STEP_ORDER.get(a["code"], 99)})
-    return sorted(out, key=lambda a: (a["order"], a["code"]))
+                    "classification": _classification(meta)})
+    return out
 
 
 @app.get("/catalog/{code}", tags=["каталог"])
@@ -70,7 +71,7 @@ def catalog_item(code: str, user: User = Depends(require("catalog.view"))):
     a = E.catalog.get(code)
     if not a:
         raise not_found("Алгоритм")
-    return {**a, "classification": _classification(a), "versions": E.versions(code)}
+    return {**a, "letter": letter(code), "classification": _classification(a), "versions": E.versions(code)}
 
 
 def _classification(a: dict) -> dict:
@@ -155,70 +156,56 @@ async def internal_publish(package: UploadFile = File(...), report: str = Form("
         v = E.publish(manifest, files, actor=author or "algo_model", source="algo_model", report=json.loads(report))
     except ValueError as e:
         raise AppError("catalog.exists", str(e), 409)
+    if not E.default_set(manifest["code"]):
+        E._seed_default_set(manifest["code"], manifest, files)
     return {"ok": True, "version": v}
 
 
-# ================================================================ профили водоёмов
-def _waterbody_params(manifest):
-    return [p for p in manifest.get("parameters", []) if p.get("category") == "waterbody"]
+# ================================================================ параметры алгоритма
+def _latest_manifest(code: str):
+    v = E.latest_enabled(code) or (E.versions(code) or [None])[0]
+    if not v:
+        raise AppError("param_set.algorithm", "У алгоритма нет версий", 400)
+    return v["manifest"], v["version"]
 
 
 def _profile_schema(code: str):
     v = E.latest_enabled(code)
     if not v:
-        return None, []
+        return None
     files = E.package_files(code, v["version"])
     schema = json.loads(files["profile_schema.json"]) if "profile_schema.json" in files else None
     for row in schema or []:
         if row.get("type") == "float" and classifiers.value_kind(row.get("key")):
             row["value_kind"] = classifiers.value_kind(row["key"])
-    return schema, _waterbody_params(v["manifest"])
+    return schema
 
 
-@app.get("/profiles", tags=["профили водоёмов"])
-def list_profiles(water_body: str | None = None, algorithm: str | None = None,
-                  user: User = Depends(require("profile.view"))):
-    out = []
-    for p in E.profiles.list():
-        if water_body and p["water_body"] != water_body:
-            continue
-        if algorithm and p["algorithm"] != algorithm:
-            continue
-        out.append(p)
-    return out
+def _set_usage(sid: str) -> list[dict]:
+    return [{"id": c["id"], "title": c.get("title"), "water_body": c["water_body"]}
+            for c in E.calc_list() if c.get("param_set") == sid]
 
 
-@app.get("/profiles/{code}/{water_body}", tags=["профили водоёмов"])
-def get_profile(code: str, water_body: str, user: User = Depends(require("profile.view"))):
-    schema, wparams = _profile_schema(code)
-    prof = E.get_profile(code, water_body)
-    pid = E.profile_id(code, water_body)
-    return {"algorithm": code, "water_body": water_body, "profile": prof, "schema": schema, "parameters": wparams,
-            "versions": list(reversed(E.profiles.list_versions(pid))) if prof else [],
-            "available_sources": sorted({p["water_body"] for p in E.profiles.list() if p["algorithm"] == code}),
-            "water_body_species": _water_body_species(water_body)}
+def _set_pub(s: dict) -> dict:
+    return {**s, "letter": letter(s["algorithm"]), "algorithm_title": algo_title(s["algorithm"]),
+            "used_by": len(_set_usage(s["id"]))}
 
 
-def _water_body_species(water_body: str) -> list[str]:
-    """Коды видов, которые есть в текущих данных водоёма (уловы и возрастные пробы), — для «Добавить вид»."""
-    try:
-        cur = CLIENTS.current_datasets(water_body)
-    except Exception:                                   # сервис данных недоступен — список не нужен для чтения профиля
-        return []
-    out = []
-    for t in ("catches", "age_samples"):
-        for sp in ((cur.get(t) or {}).get("summary") or {}).get("species") or []:
-            if sp not in out:
-                out.append(sp)
-    return out
+def _sets(algorithm=None):
+    out = [s for s in E.param_sets.list() if not s.get("deleted") and (not algorithm or s["algorithm"] == algorithm)]
+    return sorted(out, key=lambda s: (STEP_ORDER.get(s["algorithm"], 99), not s.get("is_default"), s.get("name", "")))
 
 
-@app.get("/profiles/{code}/species-defaults/{species}", tags=["профили водоёмов"])
-def species_defaults(code: str, species: str, user: User = Depends(require("profile.view"))):
-    """Значения профиля по умолчанию для вида, добавляемого в профиль водоёма: для видов эталона —
-    значения эталона (оз. Жайсан), для остальных — общие значения модели. Научную пригодность подтверждает математик."""
-    if code != "bayes_cohort":
-        raise AppError("profile.species", "Добавление вида поддерживается для байесовской когортной модели", 400)
+@app.get("/param-sets", tags=["параметры алгоритма"])
+def list_sets(algorithm: str | None = None, user: User = Depends(require("run.view"))):
+    """Наборы параметров (названия и версии видны всем, кто видит расчёты; значения — profile.view)."""
+    return [_set_pub(s) for s in _sets(algorithm)]
+
+
+@app.get("/param-sets/species-defaults/{species}", tags=["параметры алгоритма"])
+def species_defaults(species: str, user: User = Depends(require("profile.view"))):
+    """Значения для вида, добавляемого в набор параметров модели (алгоритм i): для видов эталона — значения эталона
+    (оз. Жайсан), для остальных — общие значения модели. Научную пригодность подтверждает математик."""
     from dataclasses import asdict
     from fishcore.bayes import config as bc
     names = CLIENTS.species_names()
@@ -230,515 +217,551 @@ def species_defaults(code: str, species: str, user: User = Depends(require("prof
             "values": {k: d[k] for k in sorted(bc.EDITABLE)}}
 
 
-@app.get("/profiles/{code}/{water_body}/versions/{n}", tags=["профили водоёмов"])
-def profile_version(code: str, water_body: str, n: int, user: User = Depends(require("profile.view"))):
-    return E.profile_version_values(code, water_body, n)
+@app.get("/param-sets/{sid}", tags=["параметры алгоритма"])
+def get_set(sid: str, version: int | None = None, user: User = Depends(require("profile.view"))):
+    s = E.param_sets.get(sid)
+    if not s or s.get("deleted"):
+        raise not_found("Набор параметров")
+    m, mv = _latest_manifest(s["algorithm"])
+    n = version or s.get("current_version")
+    return {**_set_pub(s), "version": n, "values": E.set_values(sid, n),
+            "versions": list(reversed(E.param_sets.list_versions(sid))),
+            "parameters": [p for p in m.get("parameters", []) if p.get("category") != "calc"],
+            "algorithm_version": mv, "schema": _profile_schema(s["algorithm"]) if s["algorithm"] == "bayes_cohort" else None,
+            "defaults": default_values(m), "usage": _set_usage(sid)}
 
 
-class ProfileIn(BaseModel):
-    values: dict
+class SetIn(BaseModel):
+    algorithm: str | None = None
+    name: str
+    description: str = ""
+    values: dict | None = None
+    base: str | None = None             # «Создать на основе…» — значения текущей версии этого набора
     comment: str = ""
 
 
-def _validate_profile(code: str, values: dict) -> list[str]:
-    schema, wparams = _profile_schema(code)
-    errors = []
-    for p in wparams:
-        if p.get("type") == "profile":
-            prof = values.get(p["code"]) or {}
-            if not isinstance(prof, dict):
-                errors.append("Профиль по видам должен быть набором значений")
-                continue
-            if code == "bayes_cohort":
-                from fishcore.bayes import config as bc  # пакеты алгоритмов доступны сервису (algorithms/)
-                names = CLIENTS.species_names()
-                for sp, vals in prof.items():
-                    errs = bc.validate(names.get(sp, sp), vals)
-                    errors += [f"{names.get(sp, sp)}: {e}" for e in errs]
-        else:
-            _, err = P.check_value(p, values.get(p["code"]))
-            if err:
-                errors.append(err)
-    return errors
+def _validate_set(code: str, values: dict) -> tuple[dict, list[str]]:
+    m, _ = _latest_manifest(code)
+    names = CLIENTS.species_names()
+    out, errors = P.check_set(m, values, set(names))
+    if code == "bayes_cohort":
+        from fishcore.bayes import config as bc  # пакеты алгоритмов доступны сервису (algorithms/)
+        for sp, vals in (out.get("species_profiles") or {}).items():
+            errors += [f"{names.get(sp, sp)}: {e}" for e in bc.validate(names.get(sp, sp), vals)]
+    return out, errors
 
 
-@app.put("/profiles/{code}/{water_body}", tags=["профили водоёмов"])
-def save_profile(code: str, water_body: str, body: ProfileIn, user: User = Depends(require("profile.edit"))):
-    if not E.catalog.exists(code):
-        raise not_found("Алгоритм")
-    errors = _validate_profile(code, body.values)
+@app.post("/param-sets", tags=["параметры алгоритма"], status_code=201)
+def create_set(body: SetIn, user: User = Depends(require("profile.edit"))):
+    base = E.param_sets.get(body.base) if body.base else None
+    code = (base or {}).get("algorithm") or body.algorithm
+    if not code or code not in STEP_ORDER:
+        raise AppError("param_set.algorithm", "Укажите алгоритм каталога", 400)
+    if not body.name.strip():
+        raise AppError("param_set.name", "Укажите название набора", 400)
+    if any(s["name"].strip().lower() == body.name.strip().lower() for s in _sets(code)):
+        raise AppError("param_set.name", "Набор с таким названием у алгоритма уже есть", 409)
+    values = body.values if body.values is not None else (E.set_values(base["id"]) if base else default_values(_latest_manifest(code)[0]))
+    out, errors = _validate_set(code, values)
     if errors:
-        raise AppError("profile.invalid", "Профиль содержит ошибки", 422, errors)
-    p = E.save_profile(code, water_body, body.values, user.id, body.comment)
-    audit(user, "profile.save", "profile", E.profile_id(code, water_body), {"version": p["current_version"]})
-    return get_profile(code, water_body, user)
+        raise AppError("param_set.invalid", "Параметры заданы с ошибками", 422, errors)
+    s = E.param_sets.create({"algorithm": code, "name": body.name.strip(), "description": body.description,
+                             "is_default": False, "system": False, "based_on": (base or {}).get("id")}, actor=user.id)
+    E.param_sets.add_version(s["id"], {"values.json": json.dumps(out, ensure_ascii=False).encode()},
+                             {"comment": body.comment or (f"на основе «{base['name']}»" if base else "создание")}, user.id)
+    audit(user, "param_set.create", "param_set", s["id"], {"algorithm": code, "name": body.name})
+    return get_set(s["id"], user=user)
 
 
-@app.post("/profiles/{code}/{water_body}/copy-from/{source}", tags=["профили водоёмов"])
-def copy_profile(code: str, water_body: str, source: str, user: User = Depends(require("profile.edit"))):
-    src = E.get_profile(code, source)
-    if not src:
-        raise not_found("Профиль-источник")
-    E.save_profile(code, water_body, src["values"], user.id, f"скопирован из профиля водоёма «{source}» — проверьте значения")
-    audit(user, "profile.copy", "profile", E.profile_id(code, water_body), {"from": source})
-    return get_profile(code, water_body, user)
+@app.put("/param-sets/{sid}", tags=["параметры алгоритма"])
+def update_set(sid: str, body: SetIn, user: User = Depends(require("profile.edit"))):
+    s = E.param_sets.get(sid)
+    if not s or s.get("deleted"):
+        raise not_found("Набор параметров")
+    if s.get("system"):
+        raise AppError("param_set.system", "Набор «По умолчанию» не меняется — создайте набор на его основе", 400)
+    changes = {}
+    if body.name.strip() and body.name.strip() != s["name"]:
+        if any(x["id"] != sid and x["name"].strip().lower() == body.name.strip().lower() for x in _sets(s["algorithm"])):
+            raise AppError("param_set.name", "Набор с таким названием у алгоритма уже есть", 409)
+        changes["name"] = body.name.strip()
+    if body.description != s.get("description", ""):
+        changes["description"] = body.description
+    if changes:
+        E.param_sets.update(sid, changes, actor=user.id)
+    if body.values is not None:
+        out, errors = _validate_set(s["algorithm"], body.values)
+        if errors:
+            raise AppError("param_set.invalid", "Параметры заданы с ошибками", 422, errors)
+        if out != E.set_values(sid):
+            v = E.param_sets.add_version(sid, {"values.json": json.dumps(out, ensure_ascii=False).encode()},
+                                         {"comment": body.comment}, user.id)
+            audit(user, "param_set.version", "param_set", sid, {"version": v["n"]})
+    return get_set(sid, user=user)
+
+
+@app.delete("/param-sets/{sid}", tags=["параметры алгоритма"])
+def delete_set(sid: str, user: User = Depends(require("profile.edit"))):
+    s = E.param_sets.get(sid)
+    if not s or s.get("deleted"):
+        raise not_found("Набор параметров")
+    if s.get("system"):
+        raise AppError("param_set.system", "Набор «По умолчанию» удалить нельзя", 400)
+    used = _set_usage(sid)
+    if used:
+        raise AppError("param_set.used", "Набор используется в расчётах — сначала выберите в них другой набор", 409,
+                       [u["title"] for u in used])
+    E.param_sets.delete(sid)
+    audit(user, "param_set.delete", "param_set", sid)
+    return {"ok": True}
 
 
 # ================================================================ расчёты
-class StepIn(BaseModel):
-    algorithm: str
-    version: str | None = None      # None — последняя включённая версия на момент запуска
-
-
 class CalcIn(BaseModel):
-    title: str
+    algorithm: str
     water_body: str
-    description: str = ""
-    steps: list[StepIn]
-    params: dict = {}               # {код алгоритма: {параметр запуска: значение}}
-    datasets: dict = {}             # {тип набора: {"dataset_id", "version"}} — пусто: текущие версии
-    result_formats: list[str] = ["json", "xlsx", "nc"]
+    title: str = ""
+    version: str | None = None          # None — последняя включённая версия на момент запуска
+    period: dict | None = None          # {"from": год, "to": год}; пусто — все годы
+    inputs: dict = {}                   # {алгоритм-вход: "main" | id расчёта}
+    param_set: str | None = None        # пусто — набор «По умолчанию»
+    param_version: int | None = None    # пусто — текущая версия набора (закрепляется при сохранении)
+    calc_params: dict = {}              # параметры расчёта (виды модели и прогноза)
     comment: str = ""
+    run: bool = False                   # сразу поставить в очередь
 
 
 def _calc(cid):
-    c = E.calculations.get(cid)
-    if not c or c.get("deleted"):
+    c = E.calc(cid)
+    if not c:
         raise not_found("Расчёт")
     return c
 
 
-def _check_steps(steps: list[dict]) -> list[str]:
-    errs = []
-    codes = [s["algorithm"] for s in steps]
-    if not codes:
-        errs.append("В расчёте нет ни одного шага")
-    if len(codes) != len(set(codes)):
-        errs.append("Алгоритм повторяется в цепочке")
-    for s in steps:
-        if not E.catalog.exists(s["algorithm"]):
-            errs.append(f"Алгоритм «{s['algorithm']}» не найден в каталоге")
-            continue
-        if s.get("version"):
-            v = next((x for x in E.versions(s["algorithm"]) if x["version"] == s["version"]), None)
-            if not v and not E.latest_enabled(s["algorithm"]):
-                errs.append(f"{s['algorithm']}: версии {s['version']} нет")
-            elif not v:
-                pass                                       # версия удалена из каталога — в плане запуска будет новая
-            elif not v["enabled"]:
-                errs.append(f"{s['algorithm']} {s['version']}: версия отключена")
-        elif not E.latest_enabled(s["algorithm"]):
-            errs.append(f"{s['algorithm']}: нет включённых версий")
-    known = [c for c in codes if c in STEP_ORDER]
-    if known != sorted(known, key=lambda c: STEP_ORDER[c]):
-        errs.append("Шаги идут не в порядке методики (уловистость невода → запас → ПДУ по возрастам → модель → прогноз → проверки модели)")
-    return errs
+def _wb_names() -> dict:
+    try:
+        return {k: v.get("name_ru", k) for k, v in CLIENTS.water_bodies().items()}
+    except AppError:
+        return {}
 
 
-@app.get("/calculations", tags=["расчёты"])
-def list_calcs(water_body: str | None = None, user: User = Depends(require("run.view"))):
-    return [c for c in E.calculations.list() if not c.get("deleted") and (not water_body or c["water_body"] == water_body)]
+def _norm_period(p) -> dict | None:
+    if not p:
+        return None
+    try:
+        lo = int(p["from"]) if p.get("from") not in (None, "") else None
+        hi = int(p["to"]) if p.get("to") not in (None, "") else None
+    except (TypeError, ValueError):
+        raise AppError("calc.period", "Период — годы числами", 422)
+    if lo and hi and lo > hi:
+        raise AppError("calc.period", "Начало периода позже конца", 422)
+    return {"from": lo, "to": hi} if (lo or hi) else None
 
 
-@app.post("/calculations", tags=["расчёты"], status_code=201)
+def _definition(body: CalcIn, cur: dict | None = None) -> dict:
+    code = body.algorithm
+    a = CATALOG_BY_CODE.get(code)
+    if not a:
+        raise AppError("calc.algorithm", "Алгоритм не найден в каталоге", 404)
+    if a.get("planned"):
+        raise AppError("calc.algorithm", f"Алгоритм «{algo_title(code)}» ещё не реализован (планируется)", 400)
+    wbs = _wb_names()
+    if wbs and body.water_body not in wbs:
+        raise AppError("calc.water_body", "Водоём не найден в справочнике", 404)
+    if body.version and not E.find_version(code, body.version):
+        raise AppError("calc.version", f"Версии {body.version} нет в каталоге", 422)
+    m, _ = _latest_manifest(code)
+    deps = m.get("requires", {}).get("steps", [])
+    inputs = {}
+    for dep in deps:
+        ref = (body.inputs or {}).get(dep) or "main"
+        if ref != "main":
+            ic = E.calc(ref)
+            if not ic or ic["algorithm"] != dep or ic["water_body"] != body.water_body:
+                raise AppError("calc.input", f"Вход «{algo_title(dep)}»: выберите расчёт этого алгоритма для того же водоёма", 422)
+        inputs[dep] = ref
+    sid = body.param_set or (E.default_set(code) or {}).get("id")
+    s = E.param_sets.get(sid) if sid else None
+    if not s or s.get("deleted") or s["algorithm"] != code:
+        raise AppError("calc.param_set", "Выберите параметры алгоритма (набор этого алгоритма)", 422)
+    pv = body.param_version or s.get("current_version")
+    if not any(v["n"] == pv for v in E.param_sets.list_versions(sid)):
+        raise AppError("calc.param_set", f"У набора нет версии {pv}", 422)
+    period = _norm_period(body.period)
+    title = body.title.strip() or (f"{algo_title(code)} — {wbs.get(body.water_body, body.water_body)}, {period_text(period)}"
+                                   + ("" if s.get("is_default") else f" · {s['name']}"))
+    return {"algorithm": code, "water_body": body.water_body, "title": title, "version": body.version or None,
+            "period": period, "inputs": inputs, "param_set": sid, "param_version": pv,
+            "calc_params": body.calc_params or {}, "comment": body.comment}
+
+
+def _stale_map(water_bodies) -> dict:
+    cur = {}
+    for wb in set(water_bodies):
+        try:
+            cur[wb] = CLIENTS.current_datasets(wb)
+        except AppError:
+            cur[wb] = {}
+    return E.staleness(cur) if cur else {}
+
+
+def _pub(c: dict, stale: dict | None = None, wbs: dict | None = None) -> dict:
+    s = E.param_sets.get(c.get("param_set")) if c.get("param_set") else None
+    mains = E.mains().get(c["water_body"]) or {}
+    inp = {}
+    for dep, ref in (c.get("inputs") or {}).items():
+        rid = E.resolve_input(c, dep)
+        ic = E.calc(rid) if rid else None
+        inp[dep] = {"ref": ref, "calc_id": rid, "title": (ic or {}).get("title"), "letter": letter(dep),
+                    "has_result": bool((ic or {}).get("result")), "state": (ic or {}).get("state")}
+    return {**{k: v for k, v in c.items() if k not in ("worker",)}, "letter": letter(c["algorithm"]),
+            "algorithm_title": algo_title(c["algorithm"]), "is_main": (mains.get(c["algorithm"]) or {}).get("calc_id") == c["id"],
+            "param_set_name": (s or {}).get("name"), "param_set_current": (s or {}).get("current_version"),
+            "param_set_default": bool((s or {}).get("is_default")), "inputs_resolved": inp,
+            "stale": (stale or {}).get(c["id"], []), "has_result": bool(c.get("result")),
+            "water_body_name": (wbs or {}).get(c["water_body"], c["water_body"]), "period_text": period_text(c.get("period")),
+            "version_effective": E.calc_version(c)}
+
+
+@app.get("/calcs", tags=["расчёты"])
+def list_calcs(water_body: str | None = None, algorithm: str | None = None, user: User = Depends(require("run.view"))):
+    cs = [c for c in E.calc_list() if (not water_body or c["water_body"] == water_body)
+          and (not algorithm or c["algorithm"] == algorithm)]
+    stale = _stale_map(c["water_body"] for c in cs)
+    wbs = _wb_names()
+    cs.sort(key=lambda c: (c["water_body"], STEP_ORDER.get(c["algorithm"], 99), c.get("created_at", "")))
+    return [_pub(c, stale, wbs) for c in cs]
+
+
+@app.post("/calcs", tags=["расчёты"], status_code=201)
 def create_calc(body: CalcIn, user: User = Depends(require("run.execute"))):
-    d = body.model_dump()
-    comment = d.pop("comment")
-    errs = _check_steps(d["steps"])
-    if errs:
-        raise AppError("calc.invalid", "Расчёт задан с ошибками", 422, errs)
-    c = E.calculations.create(d, actor=user.id)
-    E.calculations.add_version(c["id"], {"definition.json": json.dumps(d, ensure_ascii=False).encode()},
-                               {"comment": comment or "создание"}, user.id)
-    audit(user, "calc.create", "calculation", c["id"], {"title": d["title"], "water_body": d["water_body"]})
-    return E.calculations.get(c["id"])
+    d = _definition(body)
+    c = E.calcs.create({**d, "state": "new"}, actor=user.id)
+    E.add_journal(c["id"], {"action": "create", "by": user.id, "by_name": user.name, "message": "расчёт создан"})
+    audit(user, "calc.create", "calculation", c["id"], {"algorithm": d["algorithm"], "water_body": d["water_body"]})
+    if body.run:
+        return run_calc(c["id"], user)
+    return get_calc(c["id"], user)
 
 
-@app.get("/calculations/{cid}", tags=["расчёты"])
+@app.get("/calcs/{cid}", tags=["расчёты"])
 def get_calc(cid: str, user: User = Depends(require("run.view"))):
     c = _calc(cid)
-    return {**c, "versions": list(reversed(E.calculations.list_versions(cid)))}
+    stale = _stale_map([c["water_body"]])
+    q = E.queue()
+    pos = next((i + 1 for i, x in enumerate(q) if x["id"] == cid), None)
+    try:
+        _, errors, warnings = plan(E, CLIENTS, c)
+    except AppError as e:
+        errors, warnings = [e.message], []
+    dependents = [{"id": x["id"], "title": x.get("title"), "letter": letter(x["algorithm"])}
+                  for x in E.calc_list() if x["water_body"] == c["water_body"]
+                  and any(E.resolve_input(x, dep) == cid for dep in (x.get("inputs") or {}))]
+    return {**_pub(c, stale, _wb_names()), "queue_position": pos, "check": {"errors": errors, "warnings": warnings},
+            "dependents": dependents}
 
 
-@app.put("/calculations/{cid}", tags=["расчёты"])
+@app.put("/calcs/{cid}", tags=["расчёты"])
 def update_calc(cid: str, body: CalcIn, user: User = Depends(require("run.execute"))):
-    _calc(cid)
-    d = body.model_dump()
-    comment = d.pop("comment")
-    errs = _check_steps(d["steps"])
-    if errs:
-        raise AppError("calc.invalid", "Расчёт задан с ошибками", 422, errs)
-    E.calculations.update(cid, d, actor=user.id)
-    v = E.calculations.add_version(cid, {"definition.json": json.dumps(d, ensure_ascii=False).encode()},
-                                   {"comment": comment}, user.id)
-    audit(user, "calc.update", "calculation", cid, {"version": v["n"]})
+    c = _calc(cid)
+    if c.get("state") in ACTIVE:
+        raise AppError("calc.active", "Расчёт выполняется или в очереди — изменить можно после него", 400)
+    if body.algorithm != c["algorithm"] or body.water_body != c["water_body"]:
+        raise AppError("calc.fixed", "Алгоритм и водоём расчёта не меняются — создайте новый расчёт", 400)
+    d = _definition(body)
+    if not body.title.strip():
+        d["title"] = c.get("title") or d["title"]
+    changed = {k: v for k, v in d.items() if c.get(k) != v}
+    E.calcs.update(cid, d, actor=user.id)
+    if changed:
+        E.add_journal(cid, {"action": "edit", "by": user.id, "by_name": user.name, "message": "изменены: " + ", ".join(changed)})
+    audit(user, "calc.update", "calculation", cid, {"changed": list(changed)})
+    if body.run:
+        return run_calc(cid, user)
     return get_calc(cid, user)
 
 
-@app.delete("/calculations/{cid}", tags=["расчёты"])
+@app.delete("/calcs/{cid}", tags=["расчёты"])
 def delete_calc(cid: str, user: User = Depends(require("run.execute"))):
-    _calc(cid)
-    E.calculations.delete(cid)
+    c = _calc(cid)
+    if c.get("state") in ACTIVE:
+        raise AppError("calc.active", "Расчёт выполняется или в очереди — сначала отмените его", 400)
+    users = [x.get("title") for x in E.calc_list() if x["id"] != cid and cid in (x.get("inputs") or {}).values()]
+    if users:
+        raise AppError("calc.used", "Расчёт указан входом в других расчётах — сначала выберите в них другой вход", 409, users)
+    E.calcs.delete(cid)
+    if E.main_of(c["water_body"], c["algorithm"]) == cid:
+        E.set_main(c["water_body"], c["algorithm"], None, user.id, user.name)
     audit(user, "calc.delete", "calculation", cid)
     return {"ok": True}
 
 
-TEMPLATES = {
-    "full": ("Полный расчёт ПДУ (этапы 1–5)", build.ORDER[:5]),
-    "stock": ("Запас по уловам и ПДУ НПЦ по возрастам (этапы 1–3)", build.ORDER[:3]),
-    "bayes_forecast": ("Байесовская модель и прогноз (этапы 1–5, модель — только выбранные виды)", build.ORDER[:5]),
-}
+@app.post("/calcs/{cid}/check", tags=["расчёты"])
+def check_calc(cid: str, user: User = Depends(require("run.view"))):
+    p, errors, warnings = plan(E, CLIENTS, _calc(cid))
+    return {"ok": not errors, "errors": errors, "warnings": warnings,
+            "plan": {k: v for k, v in p.items() if k != "params"} if p else {}}
 
 
-class TemplateIn(BaseModel):
-    water_body: str
-    template: str = "full"
+def _queue(c: dict, user: User) -> None:
+    E.update_calc(c["id"], state="queued", queued_at=now_iso(), queued_by=user.id, queued_by_name=user.name,
+                  message=None, cancel_requested=False, progress=None)
 
 
-@app.post("/calculations/from-template", tags=["расчёты"], status_code=201)
-def from_template(body: TemplateIn, user: User = Depends(require("run.execute"))):
-    if body.template not in TEMPLATES:
-        raise AppError("calc.template", "Неизвестный шаблон расчёта", 400)
-    title, steps = TEMPLATES[body.template]
-    wbs = CLIENTS.water_bodies()
-    if body.water_body not in wbs:
-        raise AppError("calc.water_body", "Водоём не найден в справочнике", 404)
-    return create_calc(CalcIn(title=f"{title} — {wbs[body.water_body]['name_ru']}", water_body=body.water_body,
-                              steps=[StepIn(algorithm=s) for s in steps]), user)
-
-
-def _plan(c: dict, overrides: dict | None = None) -> tuple[dict, list[str], list[str]]:
-    """План запуска: версии, параметры, наборы данных. Возвращает (план, ошибки, предупреждения)."""
-    errors, warnings = [], []
-    errors += _check_steps(c["steps"])
-    if errors:
-        return {}, errors, warnings
-    current = CLIENTS.current_datasets(c["water_body"])
-    names = CLIENTS.species_names()
-    datasets = {}
-    steps = []
-    need = set()
-    for s in c["steps"]:
-        v = s.get("version")
-        if v and not E.find_version(s["algorithm"], v):
-            nv = E.latest_enabled(s["algorithm"])["version"]
-            warnings.append(f"Версия {v} шага «{s['algorithm']}» удалена из каталога — используется {nv}")
-            v = nv
-        v = v or E.latest_enabled(s["algorithm"])["version"]
-        m = E.manifest(s["algorithm"], v)
-        need |= set(m.get("requires", {}).get("datasets", []))
-        run_vals = {**(c.get("params", {}).get(s["algorithm"]) or {}), **((overrides or {}).get(s["algorithm"]) or {})}
-        prof = E.get_profile(s["algorithm"], c["water_body"])
-        if _waterbody_params(m) and not prof:
-            if s["algorithm"] == "bayes_cohort":
-                errors.append("Нет профиля параметров байесовской модели для этого водоёма: "
-                              "Расчёты → Параметры водоёмов (можно скопировать профиль другого водоёма и проверить)")
-        if s["algorithm"] == "bayes_cohort" and prof and not run_vals.get("species"):
-            in_prof = set(((prof.get("values") or {}).get("species_profiles") or {}))
-            data_sp = (((current.get("catches") or {}).get("summary") or {}).get("species")) or []
-            miss = [names.get(x, x) for x in data_sp if x not in in_prof]
-            if miss:
-                warnings.append("Байесовская модель: видов нет в профиле водоёма, они не будут рассчитаны — "
-                                + ", ".join(miss) + " (Расчёты → Параметры водоёмов → Добавить вид)")
-        merged, errs = P.merge(m, (prof or {}).get("values"), run_vals, set(names))
-        errors += [f"{m['title_ru']}: {e}" for e in errs]
-        steps.append({"algorithm": s["algorithm"], "version": v, "title": m["title_ru"], "params": merged,
-                      "profile_version": (prof or {}).get("current_version"), "status": "pending",
-                      "checksum": E.find_version(s["algorithm"], v)["checksum"]})
-        for dep in m.get("requires", {}).get("steps", []):
-            if dep not in [x["algorithm"] for x in c["steps"]]:
-                warnings.append(f"«{m['title_ru']}»: шаг «{dep}» не входит в цепочку — будет рассчитан внутри шага"
-                                if s["algorithm"] != "forecast_pdu" else
-                                f"«{m['title_ru']}» требует шаг «Байесовская когортная модель» в цепочке")
-                if s["algorithm"] == "forecast_pdu" and dep == "bayes_cohort":
-                    errors.append("Прогноз требует шаг «Байесовская когортная модель» в цепочке")
-    for t in sorted(need):
-        pinned = (c.get("datasets") or {}).get(t)
-        if pinned:
-            datasets[t] = pinned
-        elif t in current:
-            datasets[t] = {"dataset_id": current[t]["dataset_id"], "version": current[t]["version"]}
-        elif t not in ("npc_stock",):
-            errors.append(f"Для водоёма не загружен набор данных «{t}»")
-    for t in ("npc_stock",):
-        if t in need and t not in datasets and t in current:
-            datasets[t] = {"dataset_id": current[t]["dataset_id"], "version": current[t]["version"]}
-    return {"steps": steps, "datasets": datasets}, errors, warnings
-
-
-class RunIn(BaseModel):
-    params: dict = {}
-    from_step: str | None = None      # начать с шага (предыдущие — из базового запуска)
-    base_run: str | None = None
-    comment: str = ""
-
-
-@app.post("/calculations/{cid}/check", tags=["расчёты"])
-def check_calc(cid: str, body: RunIn = RunIn(), user: User = Depends(require("run.view"))):
-    plan, errors, warnings = _plan(_calc(cid), body.params)
-    return {"ok": not errors, "errors": errors, "warnings": warnings, "plan": plan}
-
-
-@app.post("/calculations/{cid}/run", tags=["запуски"], status_code=201)
-def start_run(cid: str, body: RunIn, user: User = Depends(require("run.execute"))):
+@app.post("/calcs/{cid}/run", tags=["расчёты"])
+def run_calc(cid: str, user: User = Depends(require("run.execute"))):
     c = _calc(cid)
-    plan, errors, warnings = _plan(c, body.params)
+    if c.get("state") in ACTIVE:
+        raise AppError("calc.active", "Расчёт уже в очереди или выполняется", 400)
+    _, errors, _ = plan(E, CLIENTS, c)
     if errors:
-        raise AppError("run.invalid", "Расчёт нельзя запустить", 422, errors)
-    if body.from_step:
-        if not body.base_run:
-            raise AppError("run.base", "Для запуска с шага нужен базовый запуск", 400)
-        base = E.runs.get(body.base_run)
-        if not base or base.get("status") != "done":
-            raise AppError("run.base", "Базовый запуск не найден или не завершён", 400)
-        codes = [s["algorithm"] for s in plan["steps"]]
-        if body.from_step not in codes:
-            raise AppError("run.base", "Шаг не входит в расчёт", 400)
-        k = codes.index(body.from_step)
-        for i in range(k):
-            ps = plan["steps"][i]
-            bs = next((x for x in base["steps"] if x["algorithm"] == ps["algorithm"]), None)
-            bv = E.find_version(ps["algorithm"], bs["version"]) if bs and bs.get("version") else None
-            if (bs and bv and bs.get("checksum") != ps["checksum"] and bv["checksum"] == bs.get("checksum")
-                    and not c["steps"][i].get("version")):
-                # шаг не пересчитывается — его версия та, с которой он выполнен в базовом запуске
-                ps.update(version=bs["version"], checksum=bs["checksum"], params=bs.get("params", ps["params"]))
-                warnings.append(f"«{ps['title']}» — из базового запуска, версия {bs['version']}")
-            if not bs or bs.get("checksum") != ps["checksum"] or base["datasets"] != plan["datasets"]:
-                raise AppError("run.base", f"Шаг «{plan['steps'][i]['title']}» базового запуска выполнен с другой версией "
-                                           "алгоритма или данных — запустите расчёт целиком", 400)
-            ps.update(skip=True, reuse_from=str(E.run_dir(base["id"]) / bs["dir"]), reused_run=base["id"])
-    cv = c.get("current_version")
-    r = E.runs.create({"calculation_id": cid, "calculation_version": cv, "calculation_title": c["title"],
-                       "water_body": c["water_body"], "status": "queued", "author": user.id, "author_name": user.name,
-                       "comment": body.comment, "warnings": warnings, "result_formats": c.get("result_formats"),
-                       **plan}, actor=user.id)
-    audit(user, "run.start", "run", r["id"], {"calculation": cid, "water_body": c["water_body"],
-                                             "steps": [s["algorithm"] for s in plan["steps"]]})
-    return r
+        raise AppError("calc.invalid", "Расчёт нельзя запустить", 422, errors)
+    _queue(c, user)
+    audit(user, "calc.run", "calculation", cid, {"algorithm": c["algorithm"], "water_body": c["water_body"]})
+    return get_calc(cid, user)
 
 
-# ================================================================ запуски
-def _run(rid):
-    r = E.runs.get(rid)
-    if not r:
-        raise not_found("Запуск")
-    return r
+@app.post("/calcs/{cid}/cancel", tags=["расчёты"])
+def cancel(cid: str, user: User = Depends(require("run.execute"))):
+    c = _calc(cid)
+    if c.get("state") not in ACTIVE:
+        raise AppError("calc.finished", "Расчёт не выполняется", 400)
+    if c["state"] == "queued":
+        E.update_calc(cid, state="cancelled" if not c.get("result") else "done", message="Отменён до начала выполнения",
+                      finished_at=c.get("finished_at"))
+        E.add_journal(cid, {"action": "run", "status": "cancelled", "message": "отменён до начала выполнения",
+                            "by": user.id, "by_name": user.name})
+    else:
+        E.update_calc(cid, cancel_requested=True)
+    audit(user, "calc.cancel", "calculation", cid)
+    return get_calc(cid, user)
 
 
-def _progress(r):
-    i = r.get("current_step")
-    if r.get("status") != "running" or i is None:
-        return None
-    st = r["steps"][i]
-    d = E.run_dir(r["id"]) / st.get("dir", "")
-    return read_json(d / "progress.json")
+@app.post("/calcs/{cid}/main", tags=["расчёты"])
+def set_main(cid: str, user: User = Depends(require("run.execute"))):
+    c = _calc(cid)
+    if not c.get("result"):
+        raise AppError("calc.no_result", "Основным можно сделать только расчёт с результатом", 400)
+    prev = E.main_of(c["water_body"], c["algorithm"])
+    E.set_main(c["water_body"], c["algorithm"], cid, user.id, user.name)
+    E.add_journal(cid, {"action": "main", "by": user.id, "by_name": user.name, "message": "сделан основным"})
+    if prev and prev != cid and E.calc(prev):
+        E.add_journal(prev, {"action": "main", "by": user.id, "by_name": user.name,
+                             "message": f"стал альтернативным (основной — «{c.get('title')}»)"})
+    audit(user, "calc.set_main", "calculation", cid, {"water_body": c["water_body"], "algorithm": c["algorithm"]})
+    return get_calc(cid, user)
 
 
-@app.get("/runs", tags=["запуски"])
-def list_runs(water_body: str | None = None, calculation: str | None = None, status: str | None = None,
-              limit: int = 200, user: User = Depends(require("run.view"))):
-    rs = [r for r in E.runs.list()
-          if (not water_body or r["water_body"] == water_body) and (not calculation or r["calculation_id"] == calculation)
-          and (not status or r["status"] == status)]
-    rs.sort(key=lambda r: r["created_at"], reverse=True)
-    mains = read_json(MAIN_RUNS, {})
-    for r in rs:
-        r["is_main"] = mains.get(r["water_body"], {}).get("run_id") == r["id"]
-    return rs[:limit]
+class RecalcIn(BaseModel):
+    water_body: str | None = None
+    ids: list[str] = []
 
 
-@app.get("/runs/{rid}", tags=["запуски"])
-def get_run(rid: str, user: User = Depends(require("run.view"))):
-    r = _run(rid)
-    mains = read_json(MAIN_RUNS, {})
-    q = E.queue()
-    pos = next((i + 1 for i, x in enumerate(q) if x["id"] == rid), None)
-    return {**r, "progress": _progress(r), "queue_position": pos,
-            "is_main": mains.get(r["water_body"], {}).get("run_id") == rid}
+@app.post("/calcs/recalc-stale", tags=["расчёты"])
+def recalc_stale(body: RecalcIn, user: User = Depends(require("run.execute"))):
+    """Поставить в очередь устаревшие расчёты (водоёма или указанные) по порядку алгоритмов a → j; зависимые
+    расчёты ждут свои входы."""
+    cs = [c for c in E.calc_list() if not body.water_body or c["water_body"] == body.water_body]
+    stale = _stale_map(c["water_body"] for c in cs)
+    ids = [c["id"] for c in cs if c["id"] in stale and (not body.ids or c["id"] in body.ids)]
+    picked = sorted((E.calc(i) for i in ids), key=lambda c: STEP_ORDER.get(c["algorithm"], 99))
+    queued, skipped = [], []
+    for c in picked:
+        if c.get("state") in ACTIVE:
+            continue
+        _, errors, _ = plan(E, CLIENTS, c)
+        if errors:
+            skipped.append({"id": c["id"], "title": c.get("title"), "errors": errors})
+            continue
+        _queue(c, user)
+        queued.append({"id": c["id"], "title": c.get("title")})
+    audit(user, "calc.recalc_stale", "calculation", body.water_body or "*", {"queued": len(queued)})
+    return {"queued": queued, "skipped": skipped}
 
 
-def _step(r, i):
-    if not 0 <= i < len(r["steps"]):
-        raise not_found("Шаг")
-    st = r["steps"][i]
-    if st.get("status") == "reused":
-        return st, Path(st["reuse_from"])
-    if not st.get("dir"):
-        raise AppError("run.step_pending", "Шаг ещё не выполнялся", 404)
-    return st, E.run_dir(r["id"]) / st["dir"]
+def _result_dir(c):
+    d = E.result_dir(c["id"])
+    if not c.get("result") or not (d / "out" / "result.json").exists():
+        raise AppError("calc.no_result", "У расчёта нет результата", 404)
+    return d
 
 
-@app.get("/runs/{rid}/steps/{i}/result", tags=["запуски"])
-def step_result(rid: str, i: int, user: User = Depends(require("results.view"))):
-    st, d = _step(_run(rid), i)
-    res = read_json(d / "out" / "result.json")
-    if res is None:
-        raise AppError("run.no_result", "У шага нет результатов", 404)
-    return {"step": st, **res}
+@app.get("/calcs/{cid}/result", tags=["расчёты"])
+def calc_result(cid: str, user: User = Depends(require("results.view"))):
+    c = _calc(cid)
+    d = _result_dir(c)
+    return {"calc": _pub(c), **(read_json(d / "out" / "result.json") or {})}
 
 
-@app.get("/runs/{rid}/steps/{i}/log", tags=["запуски"])
-def step_log(rid: str, i: int, user: User = Depends(require("results.view"))):
-    st, d = _step(_run(rid), i)
-    log = (d / "log.txt").read_text(encoding="utf-8") if (d / "log.txt").exists() else ""
-    status = read_json(d / "status.json", {})
-    tb = status.get("traceback") if user.role in ("admin", "mathematician") else None
-    return {"log": log[-200_000:], "status": status.get("status"), "message": status.get("message"), "traceback": tb}
+@app.get("/calcs/{cid}/log", tags=["расчёты"])
+def calc_log(cid: str, user: User = Depends(require("results.view"))):
+    c = _calc(cid)
+    base = E.calcs.obj_dir(cid)
+    log = (base / "last_log.txt").read_text(encoding="utf-8") if (base / "last_log.txt").exists() else ""
+    tb = None
+    if user.role in ("admin", "mathematician") and c.get("state") == "failed" and (base / "last_traceback.txt").exists():
+        tb = (base / "last_traceback.txt").read_text(encoding="utf-8")
+    return {"log": log[-200_000:], "state": c.get("state"), "message": c.get("message"), "traceback": tb}
 
 
-@app.get("/runs/{rid}/steps/{i}/files/{name}", tags=["запуски"])
-def step_file(rid: str, i: int, name: str, user: User = Depends(require("results.view"))):
-    st, d = _step(_run(rid), i)
+@app.get("/calcs/{cid}/journal", tags=["расчёты"])
+def calc_journal(cid: str, user: User = Depends(require("run.view"))):
+    _calc(cid)
+    return list(reversed(E.journal(cid)))
+
+
+@app.get("/calcs/{cid}/files/{name}", tags=["расчёты"])
+def calc_file(cid: str, name: str, user: User = Depends(require("results.view"))):
+    d = _result_dir(_calc(cid))
     f = d / "out" / name
     if "/" in name or "\\" in name or name.startswith(".") or not f.is_file() or name == "state.pkl":
         raise not_found("Файл")
     return FileResponse(f, filename=name)
 
 
-@app.post("/runs/{rid}/cancel", tags=["запуски"])
-def cancel(rid: str, user: User = Depends(require("run.execute"))):
-    r = _run(rid)
-    if r["status"] in TERMINAL:
-        raise AppError("run.finished", "Запуск уже завершён", 400)
-    if r["status"] == "queued":
-        E.update_run(rid, status="cancelled", finished_at=now_iso(), message="Отменён до начала выполнения")
-    else:
-        E.update_run(rid, cancel_requested=True)
-    audit(user, "run.cancel", "run", rid)
-    return get_run(rid, user)
-
-
-@app.post("/runs/{rid}/main", tags=["запуски"])
-def set_main(rid: str, user: User = Depends(require("run.execute"))):
-    r = _run(rid)
-    if r["status"] != "done":
-        raise AppError("run.not_done", "Основным можно отметить только выполненный запуск", 400)
-    data = read_json(MAIN_RUNS, {})
-    data[r["water_body"]] = {"run_id": rid, "set_by": user.id, "set_by_name": user.name, "set_at": now_iso()}
-    atomic_write_json(MAIN_RUNS, data)
-    audit(user, "run.set_main", "run", rid, {"water_body": r["water_body"]})
-    return get_run(rid, user)
-
-
-@app.get("/runs/{rid}/export.zip", tags=["запуски"])
-def export_zip(rid: str, user: User = Depends(require("results.view"))):
-    r = _run(rid)
+@app.get("/calcs/{cid}/export.zip", tags=["расчёты"])
+def export_zip(cid: str, user: User = Depends(require("results.view"))):
+    c = _calc(cid)
+    d = _result_dir(c)
+    folder = f"{letter(c['algorithm'])}_{c['algorithm']}"
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("run.json", json.dumps(r, ensure_ascii=False, indent=1))
-        for i, st in enumerate(r["steps"]):
-            if not st.get("dir") and st.get("status") != "reused":
-                continue
-            _, d = _step(r, i)
-            for f in sorted((d / "out").glob("*")):
-                if f.is_file() and f.name != "state.pkl":
-                    z.write(f, f"{i + 1:02d}_{st['algorithm']}/{f.name}")
-            if (d / "log.txt").exists():
-                z.write(d / "log.txt", f"{i + 1:02d}_{st['algorithm']}/log.txt")
-    audit(user, "run.export", "run", rid)
+        z.writestr("calc.json", json.dumps({k: v for k, v in c.items() if k != "worker"}, ensure_ascii=False, indent=1))
+        z.writestr("journal.json", json.dumps(E.journal(cid), ensure_ascii=False, indent=1))
+        for f in sorted((d / "out").rglob("*")):
+            if f.is_file() and f.name != "state.pkl":
+                z.write(f, f"{folder}/{f.relative_to(d / 'out')}")
+        if (d / "log.txt").exists():
+            z.write(d / "log.txt", f"{folder}/log.txt")
+    audit(user, "calc.export", "calculation", cid)
     return Response(buf.getvalue(), media_type="application/zip",
-                    headers={"Content-Disposition": f'attachment; filename="run_{rid}.zip"'})
+                    headers={"Content-Disposition": f'attachment; filename="calc_{cid}.zip"'})
 
 
-@app.get("/runs/{rid}/report.{fmt}", tags=["запуски"])
-def report(rid: str, fmt: str, lang: str = "ru", user: User = Depends(require("results.view"))):
-    from . import report as rep
-    r = _run(rid)
-    if r["status"] != "done":
-        raise AppError("run.not_done", "Отчёт доступен для выполненного запуска", 400)
-    results = {}
-    for i, st in enumerate(r["steps"]):
-        try:
-            _, d = _step(r, i)
-            results[st["algorithm"]] = read_json(d / "out" / "result.json")
-        except AppError:
-            pass
-    wb = CLIENTS.water_bodies().get(r["water_body"], {"name_ru": r["water_body"]})
-    if fmt == "docx":
-        data, mt = rep.docx_report(r, results, wb), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    elif fmt == "pdf":
-        data, mt = rep.pdf_report(r, results, wb), "application/pdf"
-    else:
-        raise AppError("report.format", "Формат отчёта: docx или pdf", 400)
-    audit(user, "run.report", "run", rid, {"format": fmt})
-    return Response(data, media_type=mt, headers={"Content-Disposition": f'attachment; filename="pdu_report_{rid}.{fmt}"'})
-
-
-@app.get("/queue", tags=["запуски"])
+@app.get("/queue", tags=["расчёты"])
 def queue(user: User = Depends(require("run.view"))):
-    running = [r for r in E.runs.list() if r.get("status") == "running"]
-    return {"queued": E.queue(), "running": running}
+    wbs = _wb_names()
+    running = [_pub(c, None, wbs) for c in E.calc_list() if c.get("state") == "running"]
+    return {"queued": [_pub(c, None, wbs) for c in E.queue()], "running": running}
 
 
-# ================================================================ сводка по водоёмам
-def _pdu_summary(r):
-    """Итог ПДУ основного/последнего запуска: прогноз (F = k·M) или ПДУ НПЦ по возрастам."""
-    for i, st in enumerate(r["steps"]):
-        if st["algorithm"] == "forecast_pdu" and st.get("status") in ("done", "reused"):
-            _, d = _step(r, i)
-            res = read_json(d / "out" / "result.json") or {}
-            rows = res.get("tables", {}).get("forecast_summary", {}).get("rows", [])
-            return {"source": "forecast", "rows": [{"species": x["species"], "pdu_t": x["pdu_next_t"],
-                                                    "year": x.get("year_first_fc")} for x in rows]}
-    return None
+# ================================================================ водоёмы: основные расчёты, сводка, отчёт
+def _main_calcs(wb: str) -> dict:
+    out = {}
+    for code, m in (E.mains().get(wb) or {}).items():
+        c = E.calc(m["calc_id"])
+        if c:
+            out[code] = c
+    return out
 
 
-def _pdu_npc_summary(r):
-    """ПДУ НПЦ (официальный) последнего года из шага «ПДУ НПЦ по возрастам» — для ролей без права на результаты модели."""
-    for i, st in enumerate(r["steps"]):
-        if st["algorithm"] == "pdu_by_age" and st.get("status") in ("done", "reused"):
-            _, d = _step(r, i)
-            pl = (read_json(d / "out" / "result.json") or {}).get("payload") or {}
-            years = pl.get("years") or []
-            if not years:
-                return None
-            rows = [{"species": k, "pdu_t": (v.get("pdu_t") or [None])[-1], "year": years[-1]}
-                    for k, v in (pl.get("species") or {}).items()]
-            return {"source": "npc", "rows": sorted(rows, key=lambda x: -(x["pdu_t"] or 0))}
-    return None
+def _payload(c):
+    d = E.result_dir(c["id"])
+    return read_json(d / "out" / "result.json") or {}
+
+
+def _pdu_summary(mains):
+    """ПДУ приложения (F = k·M) основного расчёта прогноза j."""
+    c = mains.get("forecast_pdu")
+    if not c or not c.get("result"):
+        return None
+    rows = (_payload(c).get("tables", {}).get("forecast_summary") or {}).get("rows", [])
+    return {"source": "forecast", "calc_id": c["id"],
+            "rows": [{"species": x["species"], "pdu_t": x["pdu_next_t"], "year": x.get("year_first_fc")} for x in rows]}
+
+
+def _pdu_npc_summary(mains):
+    """ПДУ НПЦ (официальный) последнего года из основного расчёта h — для ролей без права на результаты модели."""
+    c = mains.get("pdu_by_age")
+    if not c or not c.get("result"):
+        return None
+    pl = _payload(c).get("payload") or {}
+    years = pl.get("years") or []
+    if not years:
+        return None
+    rows = [{"species": k, "pdu_t": (v.get("pdu_t") or [None])[-1], "year": years[-1]}
+            for k, v in (pl.get("species") or {}).items()]
+    return {"source": "npc", "calc_id": c["id"], "rows": sorted(rows, key=lambda x: -(x["pdu_t"] or 0))}
+
+
+def _brief(c, stale=None):
+    return {"id": c["id"], "title": c.get("title"), "algorithm": c["algorithm"], "letter": letter(c["algorithm"]),
+            "state": c.get("state"), "finished_at": (c.get("result") or {}).get("finished_at") or c.get("finished_at"),
+            "stale": (stale or {}).get(c["id"], [])}
 
 
 @app.get("/water-bodies/status", tags=["сводка"])
 def wb_status(user: User = Depends(require("run.view"))):
-    mains = read_json(MAIN_RUNS, {})
+    """По водоёмам: расчёты, основные расчёты алгоритмов, устаревшие, активные, ПДУ (для карты и «Потока»)."""
+    calcs = E.calc_list()
+    wbs = sorted({c["water_body"] for c in calcs} | set(E.mains()))
+    stale = _stale_map(wbs)
     out = {}
-    runs = sorted(E.runs.list(), key=lambda r: r["created_at"], reverse=True)
-    for r in runs:
-        s = out.setdefault(r["water_body"], {"last_run": None, "last_done": None, "main_run": None, "runs": 0})
-        s["runs"] += 1
-        if s["last_run"] is None:
-            s["last_run"] = {k: r.get(k) for k in ("id", "status", "created_at", "finished_at", "calculation_title")}
-        if r["status"] == "done" and s["last_done"] is None:
-            s["last_done"] = {k: r.get(k) for k in ("id", "created_at", "finished_at", "calculation_title")}
-    for wb, m in mains.items():
-        r = E.runs.get(m["run_id"])
-        if r:
-            out.setdefault(wb, {"last_run": None, "last_done": None, "runs": 0})["main_run"] = {
-                **{k: r.get(k) for k in ("id", "created_at", "finished_at", "calculation_title")}, **m}
-    for wb, s in out.items():
-        ref = s.get("main_run") or s.get("last_done")
-        if ref:
-            r = E.runs.get(ref["id"])
-            s["pdu_npc"] = _pdu_npc_summary(r)
-            # ПДУ приложения (F = k·M) — результат модели; без права — ПДУ НПЦ (№ 62)
-            s["pdu"] = _pdu_summary(r) if user.can("results.summary") else s["pdu_npc"]
+    for wb in wbs:
+        cs = [c for c in calcs if c["water_body"] == wb]
+        mains = _main_calcs(wb)
+        done = sorted((c for c in cs if c.get("result")), key=lambda c: c["result"]["finished_at"], reverse=True)
+        failed = sorted((c for c in cs if c.get("state") == "failed"), key=lambda c: c.get("finished_at") or "", reverse=True)
+        s = {"calcs": len(cs), "with_result": len(done),
+             "active": [_brief(c) for c in cs if c.get("state") in ACTIVE],
+             "main": {code: _brief(c, stale) for code, c in mains.items()},
+             "stale": sorted({c["id"] for c in mains.values() if c["id"] in stale}),
+             "last_done": _brief(done[0]) if done else None,
+             "last_failed": _brief(failed[0]) if failed and (not done or (failed[0].get("finished_at") or "") >
+                                                              done[0]["result"]["finished_at"]) else None}
+        s["pdu_npc"] = _pdu_npc_summary(mains)
+        # ПДУ приложения (F = k·M) — результат модели; без права — ПДУ НПЦ (№ 62)
+        s["pdu"] = _pdu_summary(mains) if user.can("results.summary") else s["pdu_npc"]
+        out[wb] = s
     return out
 
 
-@app.get("/water-bodies/{water_body}/monitoring-run", tags=["сводка"])
-def monitoring_run(water_body: str, algorithm: str | None = None, user: User = Depends(require("run.view"))):
-    """Запуск для мониторинга: основной; если его нет — последний успешный (с пометкой), при указании
-    algorithm — последний успешный, в котором есть этот шаг."""
-    mains = read_json(MAIN_RUNS, {})
-    m = mains.get(water_body)
-    if m and E.runs.get(m["run_id"]):
-        return {"run": get_run(m["run_id"], user), "is_main": True}
-    done = sorted((r for r in E.runs.list() if r["water_body"] == water_body and r["status"] == "done"),
-                  key=lambda r: r["created_at"], reverse=True)
-    if algorithm:
-        done = [r for r in done if any(s["algorithm"] == algorithm and s.get("status") in ("done", "reused")
-                                       for s in r["steps"])] or done
-    if done:
-        return {"run": get_run(done[0]["id"], user), "is_main": False}
-    return {"run": None, "is_main": False}
+@app.get("/water-bodies/{water_body}/mains", tags=["сводка"])
+def wb_mains(water_body: str, user: User = Depends(require("run.view"))):
+    """Основные расчёты водоёма по алгоритмам a–j (для шапки мониторинга)."""
+    mains = _main_calcs(water_body)
+    stale = _stale_map([water_body]) if mains else {}
+    return {code: {**_brief(c, stale), "period_text": period_text(c.get("period")),
+                   "param_set_name": (E.param_sets.get(c.get("param_set")) or {}).get("name")}
+            for code, c in mains.items()}
+
+
+@app.get("/water-bodies/{water_body}/main-result", tags=["сводка"])
+def main_result(water_body: str, algorithm: str, user: User = Depends(require("run.view"))):
+    """Результат основного расчёта алгоритма для мониторинга (результат — с правом results.view)."""
+    cid = E.main_of(water_body, algorithm)
+    c = E.calc(cid) if cid else None
+    if not c:
+        return {"calc": None, "result": None}
+    stale = _stale_map([water_body])
+    out = {"calc": {**_brief(c, stale), "period_text": period_text(c.get("period")), "inputs": (c.get("result") or {}).get("inputs"),
+                    "param_set_name": (E.param_sets.get(c.get("param_set")) or {}).get("name"),
+                    "result_id": (c.get("result") or {}).get("result_id")}, "result": None}
+    if c.get("result") and user.can("results.view"):
+        out["result"] = _payload(c)
+    return out
+
+
+@app.get("/water-bodies/{water_body}/report.{fmt}", tags=["сводка"])
+def report(water_body: str, fmt: str, lang: str = "ru", user: User = Depends(require("results.view"))):
+    """Отчёт водоёма (Word/PDF) по основным расчётам алгоритмов."""
+    from . import report as rep
+    mains = {code: c for code, c in _main_calcs(water_body).items() if c.get("result")}
+    if not mains:
+        raise AppError("report.no_calcs", "У водоёма нет основных расчётов с результатом", 400)
+    stale = _stale_map([water_body])
+    results = {code: _payload(c) for code, c in mains.items()}
+    info = [{**_brief(c, stale), "version": c["result"].get("version"), "period_text": period_text(c.get("period")),
+             "param_set_name": c["result"].get("param_set_name"), "param_version": c["result"].get("param_version"),
+             "datasets": c["result"].get("datasets") or {}, "by_name": c["result"].get("by_name"),
+             "warnings": c["result"].get("warnings") or []}
+            for code, c in sorted(mains.items(), key=lambda kv: STEP_ORDER.get(kv[0], 99))]
+    wb = CLIENTS.water_bodies().get(water_body, {"name_ru": water_body})
+    if fmt == "docx":
+        data, mt = rep.docx_report(water_body, info, results, wb), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    elif fmt == "pdf":
+        data, mt = rep.pdf_report(water_body, info, results, wb), "application/pdf"
+    else:
+        raise AppError("report.format", "Формат отчёта: docx или pdf", 400)
+    audit(user, "wb.report", "water_body", water_body, {"format": fmt})
+    return Response(data, media_type=mt, headers={"Content-Disposition": f'attachment; filename="pdu_report_{water_body}.{fmt}"'})

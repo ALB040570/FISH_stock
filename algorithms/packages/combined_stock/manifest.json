@@ -1,0 +1,82 @@
+{
+ "version": "3.0.0",
+ "author": "FishStock",
+ "entrypoint": "algorithm:run",
+ "language": "python",
+ "runtime": {
+  "python": ">=3.11",
+  "timeout_minutes": 20
+ },
+ "code": "combined_stock",
+ "letter": "g",
+ "title_ru": "Ежегодный запас, усреднённый по неводу и сети (шт и т)",
+ "title_kk": "Сүзекі мен ау бойынша орташаланған жылдық қор (дана және т)",
+ "description": "Окончательный запас по возрастам из годовых запасов неводом (алгоритм e) и сетью (алгоритм f): средневзвешенное по числу ловов орудия в году или простое среднее; если у одного орудия оценки нет — оценка другого. Тонны — запас × средний вес возраста года. Сравнение с оценкой запаса НПЦ.",
+ "requires": {
+  "datasets": [
+   "species_props",
+   "yearly_conditions",
+   "mean_weights",
+   "npc_stock"
+  ],
+  "steps": [
+   "seine_stock",
+   "net_stock"
+  ]
+ },
+ "parameters": [
+  {
+   "code": "COMBINE_GEARS",
+   "title_ru": "Объединение сети и невода",
+   "type": "enum",
+   "default": "hauls",
+   "category": "param",
+   "enum": [
+    {
+     "value": "hauls",
+     "title_ru": "средневзвешенное по числу ловов"
+    },
+    {
+     "value": "mean",
+     "title_ru": "простое среднее"
+    }
+   ]
+  },
+  {
+   "code": "NPC_STOCK_MULTIPLIER",
+   "title_ru": "Множитель оценки запаса НПЦ",
+   "type": "number",
+   "default": 1000,
+   "category": "param",
+   "min": 0
+  }
+ ],
+ "outputs": [
+  {
+   "code": "yearly_stock",
+   "title_ru": "Годовой запас по уловам, шт",
+   "format": "table"
+  },
+  {
+   "code": "stock_by_age",
+   "title_ru": "Окончательный запас по возрастам, шт",
+   "format": "table"
+  },
+  {
+   "code": "tonnes",
+   "title_ru": "Запас в тоннах",
+   "format": "table"
+  },
+  {
+   "code": "npc_stock",
+   "title_ru": "Оценка запаса НПЦ, шт",
+   "format": "table"
+  },
+  {
+   "code": "combined_stock.xlsx",
+   "title_ru": "Excel",
+   "format": "xlsx"
+  }
+ ],
+ "changes": "3.0.0 (25.10.2026): отдельный алгоритм каталога (решение № 66) — запускается сам по себе, входы — результаты других расчётов, параметры — из набора «Параметры алгоритма», расчёт за выбранный период; только с учётом возрастов; формулы и результаты при параметрах по умолчанию не меняются (эталон 22.10.2026)"
+}
