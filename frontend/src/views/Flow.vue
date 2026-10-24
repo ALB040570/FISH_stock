@@ -55,7 +55,7 @@
             <div v-if="flow.lastUpload"><b>{{ shortDate(flow.lastUpload.at) }}</b><span>{{ $t('flow.last_upload') }} · {{ short(flow.lastUpload.name) }}</span></div>
           </div>
           <div v-if="flow?.total" class="note">{{ $t('flow.no_data', { a: flow.withData, b: flow.total }) }}</div>
-          <span class="act">{{ $t('flow.act_input') }} →</span>
+          <span class="act">{{ $t(auth.can('data.edit') ? 'flow.act_input' : 'flow.act_input_view') }} →</span>
         </div>
 
         <!-- труба: ждут расчёта -->
@@ -139,7 +139,7 @@
       <template v-if="flow">
         <div class="section-label">{{ $t('flow.res_title') }}</div>
         <div v-if="flow.results.length" class="results">
-          <a v-for="r in flow.results" :key="r.code" class="res" :href="resultLink(r)" :data-result="r.code">
+          <a v-for="r in flow.results" :key="r.code" class="res" :href="resultLink(r, auth.can('results.view'))" :data-result="r.code">
             <div class="rname">{{ r.name }}</div>
             <template v-if="r.rows.length">
               <div class="runit">{{ $t('flow.res_unit', { y: r.year }) }}</div>

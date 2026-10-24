@@ -116,7 +116,7 @@ import StateBlock from '../components/StateBlock.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 const { t, locale } = useI18n()
 const auth = useAuth()
-const roles = ['admin', 'ichthyologist', 'mathematician', 'operator', 'viewer']
+const roles = ['admin', 'ichthyologist', 'mathematician', 'operator', 'viewer', 'presenter']
 const items = ref([])
 const orgs = ref([])
 const loading = ref(true)

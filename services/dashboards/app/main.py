@@ -21,7 +21,7 @@ from fishcommon.auth import User, require
 from fishcommon.errors import AppError, not_found
 from fishcommon.storage import Collection, dumps
 
-from . import explain, export, insights, kk, templates
+from . import access, explain, export, insights, kk, templates
 
 app = create_app("dashboards", "Администрирование дашбордов",
                  "Шаблоны мониторинга, конструктор дашбордов, данные виджетов, доступ.")
@@ -129,15 +129,16 @@ def list_boards(user: User = Depends(require("dashboard.view"))):
     for d in boards.list():
         if d.get("deleted") or not _can_view(d, user):
             continue
-        out.append({k: d.get(k) for k in ("id", "title_ru", "title_kk", "description", "visibility", "is_template",
-                                           "system", "owner", "owner_name", "updated_at", "current_version")}
-                   | {"can_edit": _can_edit(d, user), "widgets": len(d.get("widgets", []))})
+        fb = access.filter_board(d, user)
+        out.append({k: fb.get(k) for k in ("id", "title_ru", "title_kk", "description", "visibility", "is_template",
+                                            "system", "owner", "owner_name", "updated_at", "current_version")}
+                   | {"can_edit": _can_edit(d, user), "widgets": len(fb.get("widgets", []))})
     return sorted(out, key=lambda d: (not d["is_template"], d["title_ru"]))
 
 
 @app.get("/dashboards/{did}", tags=["дашборды"])
 def get_board(did: str, user: User = Depends(require("dashboard.view"))):
-    return _get(did, user)
+    return access.filter_board(_get(did, user), user)
 
 
 @app.post("/dashboards", tags=["дашборды"], status_code=201)
@@ -334,6 +335,7 @@ def _filter(rows, flt, ctx):
 @app.post("/widgets/data", tags=["данные виджетов"])
 def widget_data(body: DataIn, user: User = Depends(require("dashboard.view"))):
     src, flt, opt = body.source, body.filters, body.options
+    access.check_source(user, src)
     kind = src.get("kind")
     sp_names = _species_names()
     species = flt.get("species")
@@ -342,12 +344,13 @@ def widget_data(body: DataIn, user: User = Depends(require("dashboard.view"))):
     if kind in ("dataset", "run", "payload", "insight") and not wbs:
         return {"empty": True, "reason": "no_water_body", "message": "Выберите водоём"}  # noqa
     if kind == "insight":
-        return _insight(src, flt, opt, wbs[0])
+        res = _insight(src, flt, opt, wbs[0])
+        return res if access.full(user) else access.filter_explain(res, _HIDDEN_MON)
     if kind == "status":
         wb = wbs[0]
         data = SVC["data_admin"].get("/water-bodies/status") or {}
         runs = SVC["algo_admin"].get("/water-bodies/status") or {}
-        return {"data": data.get(wb), "runs": runs.get(wb)}
+        return {"data": data.get(wb), "runs": access.strip_status(runs.get(wb), user)}
     if kind == "payload":
         res, meta = _rows_run(wbs[0], src["algorithm"], None, src.get("run_id"))
         if res is None:
@@ -423,6 +426,17 @@ def _all_wbs(lang):
     return [(c, names.get(c, c), insights.Data(c, SVC, lang)) for c in st if "species_props" in (st[c].get("datasets") or {})]
 
 
+_HIDDEN_MON = access.hidden_widgets(templates.MONITORING)
+
+
+def _hidden_comments(board, user):
+    """Комментарии к скрытым от роли виджетам не показываются (в них могут быть числа модели)."""
+    if access.full(user):
+        return set()
+    d = boards.get(board)
+    return access.hidden_widgets(d) if d else set()
+
+
 def _insight(src, flt, opt, wb):
     view = src.get("view")
     fn = insights.VIEWS.get(view)
@@ -467,6 +481,7 @@ class DrillIn(BaseModel):
 @app.post("/widgets/drill", tags=["данные виджетов"])
 def widget_drill(body: DrillIn, user: User = Depends(require("dashboard.view"))):
     """Строки исходных данных, из которых сложилась точка, столбец или клетка представления."""
+    access.check_source(user, body.source)
     wb = body.filters.get("water_body")
     if not wb:
         raise AppError("widget.wb", "Выберите водоём", 400)
@@ -597,8 +612,11 @@ def comment_counts(board: str, water_body: str | None = None, species: str | Non
                    user: User = Depends(require("dashboard.view"))):
     """Число комментариев к каждому виджету дашборда для водоёма и вида."""
     out: dict[str, int] = {}
+    hid = _hidden_comments(board, user)
     for c in comments.list():
         if c.get("deleted") or c.get("board") != board or c.get("water_body") != water_body or (c.get("species") or None) != (species or None):
+            continue
+        if c.get("widget") in hid:
             continue
         out[c["widget"]] = out.get(c["widget"], 0) + 1
     return out
@@ -608,6 +626,8 @@ def comment_counts(board: str, water_body: str | None = None, species: str | Non
 def list_comments(board: str, widget: str, water_body: str | None = None, species: str | None = None,
                   user: User = Depends(require("dashboard.view"))):
     key = (board, widget, water_body, species or None)
+    if widget in _hidden_comments(board, user):
+        raise AppError("auth.forbidden", access.FORBIDDEN_MSG, 403)
     out = [{**c, "can_delete": c.get("author_id") == user.id or user.role == "admin"}
            for c in comments.list() if not c.get("deleted") and _ckey(c) == key]
     return sorted(out, key=lambda c: (c.get("created_at") or "", c.get("id") or ""), reverse=True)

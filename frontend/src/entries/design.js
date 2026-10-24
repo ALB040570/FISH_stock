@@ -14,5 +14,7 @@ boot('design', [
   { path: '/design/dashboards', component: view('Dashboards'), meta: { design: true, perm: 'dashboard.edit' } },
   { path: '/design/dashboards/:id', component: view('DashboardView'), meta: { design: true, perm: 'dashboard.edit' } },
   { path: '/design/signal-rules', component: view('SignalRules'), meta: { perm: 'dashboard.edit' } },
+  // каталог для тех, кто не входит в «Администрирование» (ихтиолог, «Презентация»): только просмотр
+  { path: '/design/catalog', component: view('Catalog') },
   ...helpRoutes('/design/'),
 ])

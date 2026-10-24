@@ -146,3 +146,27 @@ def test_install_doc_in_sync(svc):
     c = svc("help")
     md = c.get("/export.md?lang=ru&section=install", headers=H()).text
     assert (REPO / "docs" / "install.md").read_text(encoding="utf-8") == md
+
+
+def test_presenter_overview_only(svc):
+    """«Презентация» (№ 62): только обзорные статьи, без формул и установки; ссылки на закрытые статьи — текстом."""
+    c = svc("help")
+    P = H("presenter")
+    toc = c.get("/sections", headers=P).json()
+    ids = {a["id"] for s in toc for a in s["articles"]}
+    assert ids == {"intro", "interface", "roles", "map", "workflow", "method-scheme"}
+    assert all(s["articles"] for s in toc)                                     # пустых разделов нет
+    for aid in ("method-overview", "method-bayes", "install-docker", "verification", "stock-trust"):
+        assert c.get(f"/articles/{aid}", headers=P).status_code == 404, aid
+        assert c.get(f"/articles/{aid}/versions", headers=P).status_code == 404, aid
+    sch = c.get("/articles/method-scheme", headers=P, params={"expand": 1}).json()["markdown"]
+    assert "$" not in sch and "F = k" not in sch and "bundled:" not in sch       # без формул
+    wf = c.get("/articles/workflow", headers=P, params={"expand": 1}).json()["markdown"]
+    assert "help:method-overview" not in wf and "help:data-upload" not in wf and "Методика расчёта" in wf
+    assert all(x["id"] in ids for x in c.get("/search", headers=P, params={"q": "уловистость"}).json())
+    assert c.get("/context", headers=P, params={"route": "/runs/1"}).json()["id"] in ids
+    md = c.get("/export.md", headers=P).text
+    assert "Байесовская когортная модель" in md and "$" not in md
+    # остальные роли видят всё
+    full = {a["id"] for s in c.get("/sections", headers=H("viewer")).json() for a in s["articles"]}
+    assert full > ids and "method-overview" in full

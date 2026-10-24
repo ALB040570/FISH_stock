@@ -7,6 +7,6 @@ boot('calc', [
   { path: '/calc/calculations/:id', component: view('CalculationView') },
   { path: '/calc/runs', component: view('Runs') },
   { path: '/calc/runs/:id', component: view('RunView') },
-  { path: '/calc/profiles', component: view('Profiles') },
+  { path: '/calc/profiles', component: view('Profiles'), meta: { perm: 'profile.view' } },
   ...helpRoutes('/calc/'),
 ])

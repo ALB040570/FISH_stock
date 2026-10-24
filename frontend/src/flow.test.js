@@ -51,5 +51,6 @@ describe('состояние водоёма', () => {
     expect(fl.results[0].year).toBe(2025)
     expect(resultLink(fl.results[0])).toBe('/monitoring/waterbody/z?tab=pdu&s=app')
     expect(resultLink({ code: 'q', rows: [] })).toBe('/monitoring/waterbody/q?tab=pdu&s=npc')
+    expect(resultLink(fl.results[0], false)).toBe('/monitoring/waterbody/z?tab=pdu&s=npc')   // без права на результаты (№ 62)
   })
 })

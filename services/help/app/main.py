@@ -77,7 +77,8 @@ def _seed() -> None:
         seen.add(aid)
         texts = bundle_text(aid)
         h = _hash(texts)
-        struct = {"section": a["section"], "order": a["order"], "routes": a.get("routes", []), "bundled": True}
+        struct = {"section": a["section"], "order": a["order"], "routes": a.get("routes", []), "bundled": True,
+                  "presenter": bool(a.get("presenter"))}
         cur = articles.get(aid)
         if cur is None:
             articles.create({**struct, "bundled_hash": h, "edited": False}, actor="system", obj_id=aid)
@@ -135,14 +136,38 @@ def _sections_title(code: str, lang: str) -> str:
     return code
 
 
-def _live() -> list[dict]:
-    return sorted([a for a in articles.list() if not a.get("deleted")], key=lambda a: (a["section"], a["order"], a["id"]))
+def _visible(a: dict, user: User | None) -> bool:
+    """«Презентация» видит только обзорные статьи (отметка presenter в поставке), без формул и установки (№ 62)."""
+    return user is None or user.can("help.full") or bool(a.get("presenter"))
 
 
-def toc(lang: str) -> list[dict]:
+def _live(user: User | None = None) -> list[dict]:
+    return sorted([a for a in articles.list() if not a.get("deleted") and _visible(a, user)],
+                  key=lambda a: (a["section"], a["order"], a["id"]))
+
+
+HELP_LINK = re.compile(r"\[([^\]]*)\]\(help:([\w-]+)(#[^)]*)?\)")
+
+
+def _unlink_hidden(md: str, user: User | None) -> str:
+    """Ссылки на статьи, закрытые для роли, остаются текстом без ссылки."""
+    if user is None or user.can("help.full"):
+        return md
+    vis = {a["id"] for a in _live(user)}
+    return HELP_LINK.sub(lambda m: m.group(0) if m.group(2) in vis else m.group(1), md)
+
+
+def _article(aid: str, user: User) -> dict:
+    a = articles.get(aid)
+    if a is None or not _visible(a, user):
+        raise not_found("Статья")
+    return a
+
+
+def toc(lang: str, user: User | None = None) -> list[dict]:
     out = []
     by_sec: dict[str, list] = {}
-    for a in _live():
+    for a in _live(user):
         texts = _texts(a["id"])
         md, fb = _text_in(texts, lang)
         by_sec.setdefault(a["section"], []).append(
@@ -150,6 +175,8 @@ def toc(lang: str) -> list[dict]:
              "edited": a.get("edited", False), "bundle_update": a.get("bundle_update", False)})
     for s in sorted(bundle_sections(), key=lambda s: s["order"]):
         items = sorted(by_sec.pop(s["code"], []), key=lambda x: (x["order"], x["id"]))
+        if not items and user is not None and not user.can("help.full"):
+            continue
         out.append({"code": s["code"], "title": s.get(f"title_{lang}") or s["title_ru"], "articles": items})
     for code, items in by_sec.items():  # разделы, которых нет в поставке
         out.append({"code": code, "title": code, "articles": sorted(items, key=lambda x: (x["order"], x["id"]))})
@@ -165,7 +192,7 @@ def _lang(lang: str) -> str:
 @app.get("/sections", tags=["справка"])
 def get_sections(lang: str = "ru", user: User = Depends(require("help.view"))):
     """Оглавление: разделы и статьи."""
-    return toc(_lang(lang))
+    return toc(_lang(lang), user)
 
 
 @app.get("/articles/{aid}", tags=["справка"])
@@ -173,14 +200,13 @@ def get_article(aid: str, lang: str = "ru", version: int | None = None, expand_:
                 wb: str | None = None, species: str | None = None, year: int | None = None,
                 wb_name: str | None = None, user: User = Depends(require("help.view"))):
     """expand=1 — подставить таблицы параметров и пример на числах (для чтения); без него — исходный текст."""
-    a = articles.get(aid)
-    if a is None:
-        raise not_found("Статья")
+    a = _article(aid, user)
     texts = _texts(aid, version)
     md, fb = _text_in(texts, _lang(lang))
     has_example = "{{example}}" in md
     if expand_:
         md = expand(md, lang, {"wb": wb, "species": species, "year": year, "wb_name": wb_name})
+    md = _unlink_hidden(md, user)
     return {"id": aid, "section": a["section"], "section_title": _sections_title(a["section"], lang),
             "order": a["order"], "routes": a.get("routes", []), "title": title_of(md, aid), "markdown": md,
             "fallback": fb, "version": version or a.get("current_version"), "current_version": a.get("current_version"),
@@ -192,8 +218,7 @@ def get_article(aid: str, lang: str = "ru", version: int | None = None, expand_:
 
 @app.get("/articles/{aid}/versions", tags=["справка"])
 def get_versions(aid: str, user: User = Depends(require("help.view"))):
-    if articles.get(aid) is None:
-        raise not_found("Статья")
+    _article(aid, user)
     return list(reversed(articles.list_versions(aid)))
 
 
@@ -214,7 +239,7 @@ def search(q: str, lang: str = "ru", user: User = Depends(require("help.view")))
     if not terms:
         return []
     out = []
-    for a in _live():
+    for a in _live(user):
         md, _ = _text_in(_texts(a["id"]), _lang(lang))
         title = title_of(md, a["id"])
         plain = _plain(md)
@@ -246,7 +271,7 @@ def _route_match(pattern: str, route: str) -> int:
 def context(route: str, lang: str = "ru", user: User = Depends(require("help.view"))):
     """Статья для экрана приложения (значок «?»)."""
     best, best_len = None, 0
-    for a in _live():
+    for a in _live(user):
         for p in a.get("routes", []):
             n = _route_match(p, route)
             if n > best_len:
@@ -534,9 +559,10 @@ def image_path(name: str) -> Path | None:
 
 
 # ------------------------------------------------------------------ выгрузка
-def _collect(lang: str, section: str | None, article: str | None, ctx: dict | None = None) -> tuple[str, list[dict]]:
+def _collect(lang: str, section: str | None, article: str | None, ctx: dict | None = None,
+             user: User | None = None) -> tuple[str, list[dict]]:
     parts = []
-    for s in toc(lang):
+    for s in toc(lang, user):
         if section and s["code"] != section:
             continue
         items = []
@@ -544,7 +570,7 @@ def _collect(lang: str, section: str | None, article: str | None, ctx: dict | No
             if article and it["id"] != article:
                 continue
             md, _ = _text_in(_texts(it["id"]), lang)
-            items.append({"id": it["id"], "title": it["title"], "markdown": expand(md, lang, ctx or {})})
+            items.append({"id": it["id"], "title": it["title"], "markdown": _unlink_hidden(expand(md, lang, ctx or {}), user)})
         if items:
             parts.append({"title": s["title"], "articles": items})
     if not parts:
@@ -566,7 +592,7 @@ def _filename(lang: str, section: str | None, article: str | None, ext: str) -> 
 def export_docx(lang: str = "ru", section: str | None = None, article: str | None = None, wb: str = "zhaysan",
                 species: str | None = None, year: int | None = None,
                 user: User = Depends(require("help.view"))):
-    title, parts = _collect(_lang(lang), section, article, {"wb": wb, "species": species, "year": year})
+    title, parts = _collect(_lang(lang), section, article, {"wb": wb, "species": species, "year": year}, user)
     data = export.to_docx(title, parts, lang, image_path)
     return Response(data, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     headers={"Content-Disposition": f'attachment; filename="{_filename(lang, section, article, "docx")}"'})
@@ -576,7 +602,7 @@ def export_docx(lang: str = "ru", section: str | None = None, article: str | Non
 def export_pdf(lang: str = "ru", section: str | None = None, article: str | None = None, wb: str = "zhaysan",
                 species: str | None = None, year: int | None = None,
                user: User = Depends(require("help.view"))):
-    title, parts = _collect(_lang(lang), section, article, {"wb": wb, "species": species, "year": year})
+    title, parts = _collect(_lang(lang), section, article, {"wb": wb, "species": species, "year": year}, user)
     data = export.to_pdf(title, parts, lang, image_path)
     return Response(data, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{_filename(lang, section, article, "pdf")}"'})
@@ -587,5 +613,5 @@ def export_md(lang: str = "ru", section: str | None = None, article: str | None 
                 species: str | None = None, year: int | None = None,
               user: User = Depends(require("help.view"))):
     """Markdown одним файлом (так получен docs/install.md)."""
-    title, parts = _collect(_lang(lang), section, article, {"wb": wb, "species": species, "year": year})
+    title, parts = _collect(_lang(lang), section, article, {"wb": wb, "species": species, "year": year}, user)
     return Response(export.to_markdown(title, parts), media_type="text/markdown; charset=utf-8")

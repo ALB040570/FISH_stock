@@ -12,7 +12,7 @@ from fastapi import Depends, Header, Request
 
 from .errors import AppError
 
-ROLES = ("admin", "ichthyologist", "mathematician", "operator", "viewer")
+ROLES = ("admin", "ichthyologist", "mathematician", "operator", "viewer", "presenter")
 
 ROLE_TITLES = {
     "admin": "Администратор",
@@ -20,12 +20,15 @@ ROLE_TITLES = {
     "mathematician": "Математик",
     "operator": "Оператор ввода данных",
     "viewer": "Наблюдатель",
+    "presenter": "Презентация",
 }
 
 _ALL = set(ROLES)
 _WORK = {"admin", "ichthyologist", "mathematician"}
 # оператор ввода данных: вводит и правит наборы данных, остальное — только просмотр (docs/decisions.md, № 54)
 _DATA = _WORK | {"operator"}
+# «Презентация»: только показ — без параметров водоёмов, результатов модели, кода алгоритмов и формул (№ 62)
+_SHOW = _ALL - {"presenter"}
 
 PERMISSIONS: dict[str, set[str]] = {
     "users.manage": {"admin"},
@@ -34,17 +37,24 @@ PERMISSIONS: dict[str, set[str]] = {
     "dict.edit": _WORK,
     "data.view": _ALL,
     "data.edit": _DATA,
-    "profile.view": _ALL,
+    "profile.view": _SHOW,
     "profile.edit": _WORK,
     "algo.develop": {"admin", "mathematician"},
     "catalog.view": _ALL,
+    "catalog.files": _SHOW,          # код, файлы и пакет алгоритма
     "catalog.manage": {"admin", "mathematician"},
     "run.view": _ALL,
+    # результаты модели: уловистость, запасы, ПДУ приложения, таблицы и файлы шагов, отчёты запусков (№ 62);
+    # остальным — исходные данные и ПДУ НПЦ
+    "results.view": _WORK,
+    # итог ПДУ приложения на «Потоке данных» (карточки «ПДУ по основным расчётам»): так решил заказчик (№ 62)
+    "results.summary": _WORK | {"presenter"},
     "run.execute": _WORK,
     "dashboard.view": _ALL,
     "dashboard.edit": _WORK,
     "dashboard.template": {"admin", "mathematician"},
     "help.view": _ALL,
+    "help.full": _SHOW,              # все статьи; «Презентация» — только обзорные
     "help.edit": {"admin", "mathematician"},
 }
 

@@ -83,8 +83,8 @@ export function buildFlow({ names = {}, data = {}, runs = {}, queue = null }) {
   }
 }
 
-/** ПДУ водоёма в мониторинге: рассчитанный в приложении (если есть прогноз) или официальный НПЦ. */
-export const resultLink = (r) => `/monitoring/waterbody/${r.code}?tab=pdu&s=${r.rows.length ? 'app' : 'npc'}`
+/** ПДУ водоёма в мониторинге: рассчитанный в приложении (если есть прогноз и он доступен роли) или официальный НПЦ. */
+export const resultLink = (r, full = true) => `/monitoring/waterbody/${r.code}?tab=pdu&s=${full && r.rows.length ? 'app' : 'npc'}`
 
 /** Куда ведёт водоём в трубе: следующее действие этапа. */
 export function stageLink(item) {

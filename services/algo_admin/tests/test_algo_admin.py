@@ -21,6 +21,11 @@ def test_catalog_and_profiles(calc_stack):
     assert any(f["path"] == "fishcore/bayes/dynamics.py" for f in files)
     p = aa.get("/profiles/bayes_cohort/zhaysan", headers=H("viewer")).json()
     assert set(p["profile"]["values"]["species_profiles"]) == {"lesh", "sudak", "okun", "plotva", "shuka", "sazan", "karas", "yaz"}
+    # «Презентация» (№ 62): каталог — названия, версии, описания; без кода, пакета и параметров водоёмов
+    assert len(aa.get("/catalog", headers=H("presenter")).json()) == 6
+    for url in ("/catalog/bayes_cohort/versions/2.0.1/files", "/catalog/bayes_cohort/versions/2.0.1/package.zip",
+                "/profiles/bayes_cohort/zhaysan"):
+        assert aa.get(url, headers=H("presenter")).status_code == 403, url
     # копия профиля для другого водоёма, проверка значений
     r = aa.post("/profiles/bayes_cohort/balkhash/copy-from/zhaysan", headers=H("ichthyologist")); assert r.status_code == 200
     vals = r.json()["profile"]["values"]
@@ -51,21 +56,31 @@ def test_run_stock_chain(calc_stack):
     run = aa.get(f"/runs/{r['id']}", headers=H("viewer")).json()
     assert run["status"] == "done", run.get("message")
     assert [s["status"] for s in run["steps"]] == ["done", "done", "done"]
-    res = aa.get(f"/runs/{r['id']}/steps/2/result", headers=H("viewer")).json()
+    res = aa.get(f"/runs/{r['id']}/steps/2/result", headers=H("ichthyologist")).json()
     assert res["tables"]["pdu_by_age"]["rows"]
-    f = aa.get(f"/runs/{r['id']}/steps/2/files/pdu_by_age.xlsx", headers=H("viewer")); assert f.status_code == 200
-    assert aa.get(f"/runs/{r['id']}/steps/2/files/state.pkl", headers=H("viewer")).status_code == 404
+    f = aa.get(f"/runs/{r['id']}/steps/2/files/pdu_by_age.xlsx", headers=H("ichthyologist")); assert f.status_code == 200
+    assert aa.get(f"/runs/{r['id']}/steps/2/files/state.pkl", headers=H("ichthyologist")).status_code == 404
+    # результаты, файлы, журнал, выгрузка и отчёты шагов — только с правом results.view (№ 62);
+    # список и статусы шагов видны всем
+    for role in ("viewer", "operator", "presenter"):
+        assert aa.get(f"/runs/{r['id']}", headers=H(role)).status_code == 200
+        for url in (f"/runs/{r['id']}/steps/2/result", f"/runs/{r['id']}/steps/0/log", f"/runs/{r['id']}/steps/2/files/pdu_by_age.xlsx",
+                    f"/runs/{r['id']}/export.zip", f"/runs/{r['id']}/report.pdf"):
+            assert aa.get(url, headers=H(role)).status_code == 403, (role, url)
     z = zipfile.ZipFile(io.BytesIO(aa.get(f"/runs/{r['id']}/export.zip", headers=H()).content))
     assert any(n.endswith("zhaysan_pdu_pieces_3d.nc") for n in z.namelist())
     # основной запуск и сводка для карты
     assert aa.post(f"/runs/{r['id']}/main", headers=H("ichthyologist")).status_code == 200
     st = aa.get("/water-bodies/status", headers=H("viewer")).json()["zhaysan"]
     assert st["main_run"]["run_id"] == r["id"]
+    # ПДУ на карте: без права на результаты — ПДУ НПЦ последнего года (из шага 3), не ПДУ приложения
+    assert st["pdu"]["source"] == "npc" and st["pdu"] == st["pdu_npc"] and st["pdu"]["rows"][0]["pdu_t"] > 0
+    assert aa.get("/water-bodies/status", headers=H("ichthyologist")).json()["zhaysan"]["pdu"] is None  # прогноза нет
     mon = aa.get("/water-bodies/zhaysan/monitoring-run", headers=H("viewer")).json()
     assert mon["is_main"] and mon["run"]["id"] == r["id"]
     # отчёты
-    d = aa.get(f"/runs/{r['id']}/report.docx", headers=H("viewer")); assert d.status_code == 200 and d.content[:2] == b"PK"
-    p = aa.get(f"/runs/{r['id']}/report.pdf", headers=H("viewer")); assert p.status_code == 200 and p.content[:4] == b"%PDF"
+    d = aa.get(f"/runs/{r['id']}/report.docx", headers=H("ichthyologist")); assert d.status_code == 200 and d.content[:2] == b"PK"
+    p = aa.get(f"/runs/{r['id']}/report.pdf", headers=H("ichthyologist")); assert p.status_code == 200 and p.content[:4] == b"%PDF"
     # повтор с шага 3 по базовому запуску: шаги 1–2 берутся из него
     r2 = aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"),
                  json={"from_step": "pdu_by_age", "base_run": r["id"]}).json()

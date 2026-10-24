@@ -79,7 +79,7 @@
             </div>
             <div v-if="!design" class="card">
               <h2 style="margin-top:0">{{ $t('runs.title') }}</h2>
-              <el-form v-if="lastDone" label-position="top">
+              <el-form v-if="lastDone && auth.can('run.execute')" label-position="top">
                 <el-form-item :label="$t('calc.from_step')">
                   <div class="row">
                     <el-select v-model="fromStep" clearable style="width:240px"><el-option v-for="s in def.steps.slice(1)" :key="s.algorithm" :label="titleOf(s.algorithm)" :value="s.algorithm" /></el-select>
