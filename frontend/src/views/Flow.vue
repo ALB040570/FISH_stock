@@ -40,7 +40,7 @@
         </a>
       </div>
 
-      <div class="section-label on-hero">{{ $t('flow.path') }}</div>
+      <div class="section-label on-hero"><b>{{ $t('flow.path') }}:</b> {{ $t('flow.path_hint') }}</div>
     </section>
 
     <main class="body">
@@ -53,7 +53,7 @@
             <div><b>{{ flow.datasets }}</b><span>{{ $t('flow.datasets') }}</span></div>
             <div v-if="flow.lastUpload"><b>{{ shortDate(flow.lastUpload.at) }}</b><span>{{ $t('flow.last_upload') }} · {{ short(flow.lastUpload.name) }}</span></div>
           </div>
-          <div v-if="flow?.byStage.no_data.length" class="note">{{ $t('flow.no_data', { n: flow.byStage.no_data.length }) }}</div>
+          <div v-if="flow?.total" class="note">{{ $t('flow.no_data', { a: flow.withData, b: flow.total }) }}</div>
           <span class="act">{{ $t('flow.act_input') }} →</span>
         </div>
 
@@ -134,6 +134,24 @@
         <span><i class="dot" :style="{ background: MAP_STATE.has_run }" />{{ $t('flow.legend_ready') }}</span>
       </div>
 
+      <!-- итог для первого взгляда: ПДУ по основным расчётам (золото — только ПДУ, тема «Степь и небо») -->
+      <template v-if="flow">
+        <div class="section-label">{{ $t('flow.res_title') }}</div>
+        <div v-if="flow.results.length" class="results">
+          <a v-for="r in flow.results" :key="r.code" class="res" :href="resultLink(r)" :data-result="r.code">
+            <div class="rname">{{ r.name }}</div>
+            <template v-if="r.rows.length">
+              <div class="runit">{{ $t('flow.res_unit', { y: r.year }) }}</div>
+              <div v-for="x in r.rows.slice(0, 3)" :key="x.species" class="rrow"><span>{{ x.species }}</span><b>{{ fmtT(x.pdu_t) }}</b></div>
+              <div v-if="r.rows.length > 3" class="rmore">{{ $t('flow.res_more', { n: r.rows.length - 3 }) }}</div>
+            </template>
+            <div v-else class="runit">{{ $t('flow.res_npc') }}</div>
+            <span class="act">{{ $t('flow.res_open') }} →</span>
+          </a>
+        </div>
+        <div v-else class="note">{{ $t('flow.res_empty') }}</div>
+      </template>
+
       <template v-if="baseCabs.length">
         <div class="section-label">{{ $t('flow.base') }}</div>
         <div class="base">
@@ -147,7 +165,6 @@
         </div>
       </template>
       <el-alert v-if="error" type="warning" :closable="false" :title="error" style="margin-top:14px" />
-      <div class="faint small keys">{{ $t('flow.keys', { n: order.length }) }}</div>
     </main>
     <PasswordDialog v-model="pwd" :forced="forced" />
   </div>
@@ -160,7 +177,7 @@ import { setLang, tr } from '../i18n'
 import { api } from '../api'
 import { MAP_STATE, RUN_STEP } from '../theme'
 import { FLOW_BASE, FLOW_PATH, cabinet, cabinetsFor, canEnter, hardGo, hasFlow, helpPath, mainPage } from '../cabinets'
-import { buildFlow, runProgress, stageLink } from '../flow'
+import { buildFlow, resultLink, runProgress, stageLink } from '../flow'
 import { loadLast } from '../lastPlace'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import PasswordDialog from '../components/PasswordDialog.vue'
@@ -194,6 +211,7 @@ const lastLabel = computed(() => {
   if (!l) return ''
   return [l.cab ? i18n.t('cab.' + l.cab) : '', l.item, l.wb ? wbNames.value[l.wb] || l.wb : ''].filter(Boolean).join(' · ')
 })
+const fmtT = (v) => (v >= 100 ? Math.round(v) : Math.round(v * 10) / 10).toLocaleString('ru-RU')
 const shortDate = (s) => (s ? new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) : '')
 
 const loading = ref(true)
@@ -352,6 +370,16 @@ kbd { margin-left: auto; font: 500 11px/1 inherit; color: var(--fs-faint); borde
 .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 12px 0 22px; font-size: 12px; color: var(--fs-muted); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend { margin-top: 14px; }
+.results { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-bottom: 22px; }
+.res { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border-radius: var(--fs-radius); background: var(--fs-card);
+  border: 1px solid var(--fs-line); border-left: 4px solid var(--fs-accent); color: var(--fs-text); text-decoration: none; }
+.res:hover { box-shadow: var(--fs-shadow-pop); border-color: var(--fs-accent); }
+.rname { font-size: 16px; font-weight: 600; }
+.runit { font-size: 12px; color: var(--fs-muted); }
+.rrow { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.rrow b { color: var(--fs-accent-text); font-variant-numeric: tabular-nums; }
+.rmore { font-size: 12px; color: var(--fs-faint); }
+.section-label.on-hero b { color: var(--fs-nav-text); font-weight: 600; }
 .base { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
 .tile.row { flex-direction: row; align-items: center; gap: 14px; background: var(--fs-card); }
 .bicon { color: var(--fs-nav-text); background: var(--fs-nav); width: 42px; height: 42px; border-radius: 50%; flex: none; }
