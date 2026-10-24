@@ -79,8 +79,10 @@ class Engine:
         параметров, которых больше нет в модели, в профиле не остаётся. Каждый профиль получает новую версию
         (прежняя — в истории профиля). Выполняется один раз на версию алгоритма."""
         tag = f"defaults {version}"
+        major = version.split(".")[0] + "."
         for p in self.profiles.list():
-            if p.get("algorithm") != code or p.get("migrated_to") == tag:
+            # один раз на основную версию: переход 1.x → 2.x; исправления 2.0.x значений по умолчанию не меняют
+            if p.get("algorithm") != code or str(p.get("migrated_to") or "").startswith(f"defaults {major}"):
                 continue
             cur = self.get_profile(code, p["water_body"])
             if not cur:
@@ -108,13 +110,14 @@ class Engine:
     def _drop_old_builtin(self, code: str, keep: str) -> None:
         """Прежние эталонные версии удаляются из каталога (решение заказчика 23.10.2026: новый эталон).
         Запуски по ним остаются: в запуске хранятся версия, параметры и результаты. Версии, опубликованные
-        пользователями, не трогаются."""
+        пользователями, не трогаются. Эталонные версии той же основной версии (2.0.0 при 2.0.1) остаются —
+        для воспроизводимости и запуска «с шага» от прежних запусков."""
         import shutil
         cur = self.catalog.get(code) or {}
         st = dict(cur.get("versions_state", {}))
         removed = []
         for v in self.catalog.list_versions(code):
-            if v.get("source") == "builtin" and v.get("version") != keep:
+            if v.get("source") == "builtin" and str(v.get("version")).split(".")[0] != keep.split(".")[0]:
                 shutil.rmtree(self.catalog.version_dir(code, v["n"]), ignore_errors=True)
                 st.pop(v.get("version"), None)
                 removed.append(v.get("version"))
@@ -200,7 +203,10 @@ class Engine:
     def save_profile(self, code: str, water_body: str, values: dict, actor: str, comment: str = "") -> dict:
         pid = self.profile_id(code, water_body)
         if not self.profiles.exists(pid):
-            self.profiles.create({"algorithm": code, "water_body": water_body}, actor=actor, obj_id=pid)
+            # новый профиль уже на значениях текущей версии — перенос значений по умолчанию к нему не применяется
+            cur = self.latest_enabled(code) if self.catalog.exists(code) else None
+            self.profiles.create({"algorithm": code, "water_body": water_body,
+                                  "migrated_to": f"defaults {cur['version']}" if cur else None}, actor=actor, obj_id=pid)
         self.profiles.add_version(pid, {"values.json": dumps(values).encode()}, {"comment": comment}, actor)
         return self.get_profile(code, water_body)
 

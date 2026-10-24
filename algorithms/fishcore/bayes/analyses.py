@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import config as app_config
-from .config import TOKENS
+from .config import token
 from .dynamics import NumpyOps, expected_observations, mu_floor, prior_means, simulate, zero_log_lambda
 from .inputs import build_inputs
 
@@ -32,7 +32,7 @@ MORTALITY_SIGMAS = ("s_base_sigma", "s_juv_sigma", "s_age_sigma", "s_year_sigma"
 
 
 def analysis_dir(species: str, name: str, results_dir: Path | None = None) -> Path:
-    d = Path(results_dir or app_config.RESULTS_DIR) / TOKENS[species] / name
+    d = Path(results_dir or app_config.RESULTS_DIR) / token(species) / name
     d.mkdir(parents=True, exist_ok=True)
     return d
 

@@ -42,10 +42,11 @@ def run(ctx):
 
     profiles = _profiles(ctx)
     code_by_ru = {ru: code for code, ru in ctx.species_names.items()}
+    bc.register_tokens(code_by_ru)
     wanted = ctx.params.get("species") or [code_by_ru.get(s, s) for s in res.species if code_by_ru.get(s, s) in profiles]
     if not wanted:
         raise UserError("Для водоёма нет профиля параметров байесовской модели ни для одного вида. "
-                        "Заполните профиль водоёма (Каталог → Профили водоёмов).")
+                        "Заполните профиль водоёма: Расчёты → Параметры водоёмов.")
     missing = [s for s in wanted if s not in profiles]
     if missing:
         raise UserError("Нет профиля параметров для видов: " + ", ".join(ctx.species_names.get(s, s) for s in missing))

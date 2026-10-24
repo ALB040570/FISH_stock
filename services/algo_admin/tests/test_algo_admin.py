@@ -14,8 +14,10 @@ def test_catalog_and_profiles(calc_stack):
     dm, da, aa, mod = calc_stack
     cat = aa.get("/catalog", headers=H("viewer")).json()
     assert [a["code"] for a in cat] == ["seine_catchability", "stock_by_catch", "pdu_by_age", "bayes_cohort", "forecast_pdu", "bayes_checks"]
-    assert all(a["latest"] == "2.0.0" for a in cat)
-    files = aa.get("/catalog/bayes_cohort/versions/2.0.0/files", headers=H("viewer")).json()
+    latest = {a["code"]: a["latest"] for a in cat}
+    assert latest == {"seine_catchability": "2.0.0", "stock_by_catch": "2.0.0", "pdu_by_age": "2.0.0",
+                      "bayes_cohort": "2.0.1", "forecast_pdu": "2.0.0", "bayes_checks": "2.0.1"}
+    files = aa.get("/catalog/bayes_cohort/versions/2.0.1/files", headers=H("viewer")).json()
     assert any(f["path"] == "fishcore/bayes/dynamics.py" for f in files)
     p = aa.get("/profiles/bayes_cohort/zhaysan", headers=H("viewer")).json()
     assert set(p["profile"]["values"]["species_profiles"]) == {"lesh", "sudak", "okun", "plotva", "shuka", "sazan", "karas", "yaz"}
@@ -127,6 +129,7 @@ def test_reference_change_migration(tmp_path, monkeypatch):
     old_vals = json.loads(json.dumps(prev))
     old_vals["lesh"]["draws"] = 3000                       # изменено пользователем
     E.save_profile("bayes_cohort", "balkhash", {"species_profiles": old_vals}, "u1", "до обновления")
+    E.profiles.update(E.profile_id("bayes_cohort", "balkhash"), {"migrated_to": None}, actor="system")  # профиль версии 1.x
     E.seed_builtin()
     assert [v["version"] for v in E.versions("seine_catchability")] == ["2.0.0"]
     lesh = E.get_profile("bayes_cohort", "balkhash")["values"]["species_profiles"]["lesh"]
@@ -162,3 +165,81 @@ def test_recover_stale_after_restart(tmp_path, monkeypatch):
     assert r["status"] == "failed" and "перезапуск" in r["message"]
     assert E.runs.get(mine["id"])["status"] == "running"
     assert E.runs.get(queued["id"])["status"] == "queued"
+
+
+def test_fix_version_keeps_previous_and_profiles(tmp_path, monkeypatch):
+    """Исправление 2.0.1 поверх 2.0.0 (как на сервере 24.10): 2.0.0 остаётся в каталоге, профили водоёмов
+    повторно не переносятся (значения пользователей не трогаются, новых версий профиля нет)."""
+    import json
+    from conftest import load_service
+    mod = load_service("algo_admin", tmp_path, monkeypatch)
+    E = mod.E
+    files = E.package_files("bayes_cohort", "2.0.1")
+    man = json.loads(files["manifest.json"])
+    man["version"] = "2.0.0"
+    old = dict(files, **{"manifest.json": json.dumps(man).encode(), "algorithm.py": files["algorithm.py"] + b"\n# 2.0.0\n"})
+    E.publish(man, old, actor="system", source="builtin")
+    pid = E.profile_id("bayes_cohort", "zhaysan")
+    E.profiles.update(pid, {"migrated_to": "defaults 2.0.0"}, actor="system")   # перенесён при переходе на 2.0.0
+    vals = E.get_profile("bayes_cohort", "zhaysan")["values"]
+    vals["species_profiles"]["lesh"]["draws"] = 1234
+    E.save_profile("bayes_cohort", "zhaysan", vals, "u1", "правка математика")
+    n = len(E.profiles.list_versions(pid))
+    E.seed_builtin()
+    assert [v["version"] for v in E.versions("bayes_cohort")] == ["2.0.1", "2.0.0"]
+    assert E.latest_enabled("bayes_cohort")["version"] == "2.0.1"
+    assert len(E.profiles.list_versions(pid)) == n
+    assert E.get_profile("bayes_cohort", "zhaysan")["values"]["species_profiles"]["lesh"]["draws"] == 1234
+    # профиль, созданный пользователем на версии 2.x, переносом не затрагивается
+    E.save_profile("bayes_cohort", "kapshagay", vals, "u1", "новый")
+    assert E.profiles.get(E.profile_id("bayes_cohort", "kapshagay"))["migrated_to"] == "defaults 2.0.1"
+
+
+def test_profile_species_add_remove(calc_stack):
+    """«Добавить вид» / «Убрать вид»: значения по умолчанию для вида, виды в данных водоёма, предупреждение
+    в запуске о видах данных, которых нет в профиле."""
+    dm, da, aa, mod = calc_stack
+    p = aa.get("/profiles/bayes_cohort/zhaysan", headers=H("viewer")).json()
+    assert {"lesh", "sudak", "yaz"} <= set(p["water_body_species"])
+    ref = aa.get("/profiles/bayes_cohort/species-defaults/lesh", headers=H("viewer")).json()
+    assert ref["source"] == "reference" and ref["name"] == "лещ"
+    assert ref["values"] == p["profile"]["values"]["species_profiles"]["lesh"]
+    gen = aa.get("/profiles/bayes_cohort/species-defaults/zherekh", headers=H("viewer")).json()
+    assert gen["source"] == "general" and set(gen["values"]) == {r["key"] for r in p["schema"]}
+    assert aa.get("/profiles/bayes_cohort/species-defaults/nope", headers=H()).status_code == 404
+    assert aa.get("/profiles/seine_catchability/species-defaults/lesh", headers=H()).status_code == 400
+    # профиль Балхаша с нуля: жерех и сом (общие значения), без видов Жайсана, которых в Балхаше нет
+    body = {"values": {"species_profiles": {"zherekh": gen["values"], "lesh": ref["values"]}}, "comment": "проба"}
+    assert aa.put("/profiles/bayes_cohort/balkhash", headers=H("ichthyologist"), json=body).status_code == 200
+    assert aa.put("/profiles/bayes_cohort/balkhash", headers=H("viewer"), json=body).status_code == 403
+    got = aa.get("/profiles/bayes_cohort/balkhash", headers=H()).json()["profile"]["values"]["species_profiles"]
+    assert set(got) == {"zherekh", "lesh"}
+    # Жайсан без язя: расчёт возможен, но с предупреждением, что язь не будет рассчитан
+    zh = p["profile"]["values"]
+    del zh["species_profiles"]["yaz"]
+    assert aa.put("/profiles/bayes_cohort/zhaysan", headers=H("mathematician"), json={"values": zh}).status_code == 200
+    c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan"}).json()
+    chk = aa.post(f"/calculations/{c['id']}/check", headers=H()).json()
+    assert chk["ok"], chk["errors"]
+    assert any("язь" in w and "Добавить вид" in w for w in chk["warnings"]), chk["warnings"]
+
+
+def test_from_step_takes_base_versions(calc_stack):
+    """Запуск «с шага»: пропущенные шаги без закреплённой версии берут версию базового запуска,
+    даже если в каталоге появилась более новая (исправление алгоритма после базового запуска)."""
+    import json
+    dm, da, aa, mod = calc_stack
+    E = mod.E
+    c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "stock"}).json()
+    r = aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"), json={}).json()
+    assert mod_process(mod)
+    files = E.package_files("seine_catchability", "2.0.0")
+    man = json.loads(files["manifest.json"]); man["version"] = "2.0.9"
+    E.publish(man, dict(files, **{"manifest.json": json.dumps(man).encode()}), actor="system", source="builtin")
+    r2 = aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"),
+                 json={"from_step": "pdu_by_age", "base_run": r["id"]})
+    assert r2.status_code == 201, r2.json()
+    r2 = r2.json()
+    assert r2["steps"][0]["version"] == "2.0.0" and any("из базового запуска" in w for w in r2["warnings"])
+    assert mod_process(mod)
+    assert [s["status"] for s in aa.get(f"/runs/{r2['id']}", headers=H()).json()["steps"]] == ["reused", "reused", "done"]

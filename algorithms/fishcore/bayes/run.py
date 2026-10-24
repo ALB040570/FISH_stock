@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import config as app_config
-from .config import DEFAULTS, TOKENS, SpeciesConfig, get_config
+from .config import DEFAULTS, TOKENS, SpeciesConfig, get_config, token
 from .dynamics import NumpyOps, simulate
 from .inputs import BayesInputs, build_inputs
 
@@ -42,7 +42,7 @@ MODE_TITLES = {"new": "новый расчёт", "check": "сверка с ис�
 
 def result_stem(species: str, mode: str, tag: str = "") -> str:
     suffix = {"new": "", "check": "_check", "prior": "_prior", "legacy": "_legacy"}[mode]
-    return f"{app_config.WATERBODY}_bayes_{TOKENS.get(species, species)}{suffix}{tag}"
+    return f"{app_config.WATERBODY}_bayes_{token(species)}{suffix}{tag}"
 
 
 def result_path(species: str, mode: str, ext: str = "npz", results_dir: Path | None = None, tag: str = "") -> Path:
@@ -436,7 +436,7 @@ def run(species: str, mode: str = "new", progress=None, log=print, results_dir: 
             "tag": tag, "year_max": year_max}
     from .diagnostics import diag_dir, monotonicity, run_diagnostics
 
-    ddir = diag_dir(TOKENS[species], rdir, mode, tag)
+    ddir = diag_dir(token(species), rdir, mode, tag)
     diag = None
     if mode == "prior":
         draws = sample_prior(inp, cfg)

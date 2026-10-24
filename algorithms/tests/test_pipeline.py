@@ -119,3 +119,33 @@ def test_failing_step_reports_error(tmp_path):
     executor.prepare_step(d, files, {"water_body": "x", "params": {}})
     st = executor.run_step(d, timeout_s=60)
     assert st["status"] == "failed" and st["message"] == "нет данных за 2024 год" and "traceback" not in st
+
+
+def test_species_outside_reference(data_stack, tmp_path):
+    """Виды, которых нет в профиле Жайсана (жерех, сом), считаются моделью: Балхаш, априорная проверка (секунды).
+    Значения профиля — общие значения модели (как при «Добавить вид»), только для проверки работоспособности."""
+    from dataclasses import asdict
+    from fishcore.bayes import config as bc
+    dm, da, _ = data_stack
+    tables = upload_samples(da, "balkhash", REPO / "samples" / "balkhash")
+    (tmp_path / "tables.json").write_text(json.dumps(tables, ensure_ascii=False))
+    sp, gk = dict_maps(dm)
+
+    def step_wb(code, inputs=None, params=None):
+        d = tmp_path / code
+        ctx = {"run_id": "test", "step": code, "water_body": "balkhash",
+               "params": {**manifest_defaults(code), **(params or {})}, "species_names": sp, "gear_kinds": gk,
+               "inputs": {k: str(v / "out") for k, v in (inputs or {}).items()}, "tables_path": str(tmp_path / "tables.json")}
+        executor.prepare_step(d, PKG[code], ctx)
+        st = executor.run_step(d, timeout_s=900)
+        assert st["status"] == "done", (st.get("message"), (d / "log.txt").read_text()[-2000:])
+        return d, executor.read_result(d)
+
+    general = {k: v for k, v in asdict(bc.SpeciesConfig()).items() if k in bc.EDITABLE}
+    d2, _ = step_wb("stock_by_catch")
+    d3, _ = step_wb("pdu_by_age", {"stock_by_catch": d2})
+    d4, r4 = step_wb("bayes_cohort", {"stock_by_catch": d2, "pdu_by_age": d3},
+                     {"mode": "prior", "species_profiles": {"zherekh": general, "som": general}})
+    assert set(r4["payload"]["species"]) == {"жерех", "сом"}
+    names = {f["name"] for f in r4["files"]}
+    assert {"balkhash_bayes_zherekh_prior.npz", "balkhash_bayes_som_prior.npz"} <= names, names

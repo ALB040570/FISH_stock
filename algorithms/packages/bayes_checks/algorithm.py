@@ -36,6 +36,7 @@ def run(ctx):
                         "в цепочку расчёта перед проверками")
     res, props, pdu = prev["res"], prev["props"], prev["pdu"]
     stage23 = (res, pdu, props)
+    bc.register_tokens({ru: code for code, ru in ctx.species_names.items()})
     done = [ru for ru in prev.get("species", []) if R.result_path(ru, "new", "npz", bdir).exists()]
     run_over = {k: ctx.params[k] for k in RUN_KEYS if ctx.params.get(k) is not None}
     runtime = {ru: {**(prev.get("runtime") or {}).get(ru, {}), **run_over} for ru in prev.get("species", [])}
