@@ -10,6 +10,7 @@ import shutil
 from fishcore import stepkit
 from fishcore.bayes import analyses as A
 from fishcore.bayes import config as bc
+from fishcore.bayes import parallel as P
 from fishcore.bayes import run as R
 from fishcore.net_sensitivity import species_table
 
@@ -75,14 +76,6 @@ def run(ctx):
                "year_max": year_max, "prior_factor": factor, "runs": {}}
     step = 0
 
-    def prog(name, ru):
-        def f(d):
-            frac = None
-            if d.get("total") and d.get("chains"):
-                frac = (step + min(1.0, sum(d["chains"].values()) / max(1, len(d["chains"])) / d["total"])) / max(1, total)
-            ctx.progress(frac if frac is not None else step / max(1, total), check=name, species=ru, **d)
-        return f
-
     # ---- чувствительность балансового метода (без MCMC, по всем видам водоёма)
     if on["check_net"]:
         y = sorted(props.net_hours)[-1]
@@ -103,39 +96,51 @@ def run(ctx):
         step += 1
 
     retro_rows, prior_rows, pad_rows, rec_rows = [], [], [], []
+    # каждая проверка вида (и каждый вариант пустых ловов) — независимый расчёт модели: они идут одновременно в
+    # пределах лимита ядер (FISH_CALC_CORES), иначе по очереди; seed и настройки те же (решение № 63)
+    kw = dict(stage23=stage23, results_dir=str(ctx.out_dir), plots=False)
+    tasks = []
     for name, ru in plan:
-        ctx.log(f"проверка «{name}», вид {ru} ({step + 1} из {total})")
-        kw = dict(stage23=stage23, results_dir=ctx.out_dir, log=ctx.log, plots=False)
-        progress = prog(name, ru)
-        orig_run = R.run
+        if name == "retro":
+            tasks.append((f"retro-{ru}", {"name": name, "species": ru, "kw": {**kw, "year_max": year_max}}))
+        elif name == "prior":
+            tasks.append((f"prior-{ru}", {"name": name, "species": ru, "kw": {**kw, "factor": factor}}))
+        elif name == "pad":
+            tasks += [(f"pad{p:g}-{ru}", {"name": name, "species": ru, "kw": {**kw, "pads": (p,)}}) for p in pads]
+        else:
+            tasks.append((f"recovery-{ru}", {"name": name, "species": ru, "kw": kw}))
+    done0 = step
+    chains = max([int((runtime.get(ru) or {}).get("chains") or 4) for _, ru in plan] or [4])
 
-        def run_with_progress(*a, **k):
-            k.setdefault("progress", progress)
-            return orig_run(*a, **k)
-        R.run = run_with_progress
-        try:
-            if name == "retro":
-                out = A.retro(ru, year_max=year_max, **kw)
-                payload["retro"][ru] = {"metrics": out["metrics"], "forecast_years": out["forecast_years"]}
-                retro_rows += [{"species": ru, **m} for m in out["metrics"]]
-                meta = out["run"]
-            elif name == "prior":
-                out = A.prior_sensitivity(ru, factor=factor, **kw)
-                payload["prior"][ru] = out["compare"]
-                prior_rows += [{"species": ru, **m} for m in out["compare"]]
-                meta = out["run"]
-            elif name == "pad":
-                out = A.pad_sensitivity(ru, pads=tuple(pads), **kw)
-                payload["pad"][ru] = out["compare"]
-                pad_rows += [{"species": ru, **m} for m in out["compare"]]
-                meta = next(iter(out["runs"].values()), {})
-            else:
-                out = A.recovery(ru, **kw)
-                payload["recovery"][ru] = {"coverage": out["coverage"], "truth_source": out["truth_source"]}
-                rec_rows += [{"species": ru, **m} for m in out["coverage"]]
-                meta = out["run"]
-        finally:
-            R.run = orig_run
+    def on_progress(frac, info):
+        now = [k for k in frac if 0 < frac[k] < 1 or k in info]
+        ctx.progress((done0 + sum(frac.values()) / max(1, len(tasks)) * len(plan)) / max(1, total),
+                     check=", ".join(now) or None, phase="выборка" if now else None)
+
+    outs = P.run_tasks(tasks, "fishcore.bayes.parallel:check_species", on_progress, ctx.log, ctx.check_cancel, chains=chains)
+    for name, ru in plan:
+        if name == "retro":
+            out = outs[f"retro-{ru}"]
+            payload["retro"][ru] = {"metrics": out["metrics"], "forecast_years": out["forecast_years"]}
+            retro_rows += [{"species": ru, **m} for m in out["metrics"]]
+            meta = out["run"]
+        elif name == "prior":
+            out = outs[f"prior-{ru}"]
+            payload["prior"][ru] = out["compare"]
+            prior_rows += [{"species": ru, **m} for m in out["compare"]]
+            meta = out["run"]
+        elif name == "pad":
+            parts = [outs[f"pad{p:g}-{ru}"] for p in pads]          # как один расчёт по вариантам подряд
+            out = {"runs": {k: v for o in parts for k, v in o["runs"].items()}, "compare": [r for o in parts for r in o["compare"]]}
+            A._write_csv(A.analysis_dir(ru, "sens_pad", ctx.out_dir) / "compare_pad.csv", out["compare"])
+            payload["pad"][ru] = out["compare"]
+            pad_rows += [{"species": ru, **m} for m in out["compare"]]
+            meta = next(iter(out["runs"].values()), {})
+        else:
+            out = outs[f"recovery-{ru}"]
+            payload["recovery"][ru] = {"coverage": out["coverage"], "truth_source": out["truth_source"]}
+            rec_rows += [{"species": ru, **m} for m in out["coverage"]]
+            meta = out["run"]
         dg = (meta or {}).get("diagnostics") or {}
         payload["runs"].setdefault(name, {})[ru] = {"rhat": dg.get("rhat_max_params"), "ess_bulk": dg.get("ess_bulk_min_params"),
                                                     "ess_tail": dg.get("ess_tail_min_params"), "divergences": (meta or {}).get("divergences"),
