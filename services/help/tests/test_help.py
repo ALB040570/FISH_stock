@@ -171,3 +171,20 @@ def test_presenter_overview_only(svc):
     # остальные роли видят всё
     full = {a["id"] for s in c.get("/sections", headers=H("viewer")).json() for a in s["articles"]}
     assert full > ids and "method-overview" in full
+
+
+def test_param_notes_cover_all_parameters(svc):
+    """У каждого параметра алгоритмов каталога a–j есть пояснение простыми словами (RU и KK, content/param_notes.json);
+    оно показывается в таблицах {{params:…}} и отдаётся экрану «Параметры алгоритмов»."""
+    notes = json.loads((CONTENT / "param_notes.json").read_text(encoding="utf-8"))
+    cat = json.loads((REPO / "algorithms" / "catalog.json").read_text(encoding="utf-8"))
+    for a in cat:
+        if a.get("planned"):
+            continue
+        man = json.loads((REPO / "algorithms" / "packages" / a["code"] / "manifest.json").read_text(encoding="utf-8"))
+        for p in man["parameters"]:
+            n = notes.get(a["code"], {}).get(p["code"]) or notes["_common"].get(p["code"])
+            assert n and n.get("ru") and n.get("kk"), (a["code"], p["code"])
+    c = svc("help")
+    r = c.get("/param-notes/net_catchability", params={"lang": "kk"}, headers=H("ichthyologist")).json()
+    assert r["NET_END_LEFT_FRAC"] and r["AGE_POOL_NEIGHBOURS"]

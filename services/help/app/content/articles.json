@@ -388,5 +388,17 @@
   "section": "methodology",
   "order": 12,
   "routes": []
+ },
+ {
+  "id": "monitoring-slides",
+  "section": "ichthyologist",
+  "order": 45,
+  "routes": []
+ },
+ {
+  "id": "param-guide",
+  "section": "ichthyologist",
+  "order": 35,
+  "routes": []
  }
 ]

@@ -507,4 +507,16 @@ def test_calcs_catalog_params(browser):
     page.locator("[data-test=set-save]").click()
     page.wait_for_selector("text=Сохранена новая версия набора")
     assert "v2" in page.locator(".list .item.sel").inner_text()
+    # пояснения к параметрам простыми словами (справка) — под названием параметра
+    assert page.locator(".prow", has_text="SEINE_C_UPPER").locator("[data-test=param-note]").inner_text().strip()
+    # графики результата c–g на странице расчёта: оценки по ловам (c), годовой запас в тоннах (g)
+    page.goto(URL + "/calc/calculations?wb=zhaysan")
+    page.wait_for_selector("[data-test=calcs-table] .el-table__row")
+    for letter in ("c", "g"):
+        page.goto(URL + "/calc/calculations?wb=zhaysan")
+        page.wait_for_selector("[data-test=calcs-table] .el-table__row")
+        page.locator("[data-test=calcs-table] .el-table__row", has=page.locator(".letter", has_text=letter)).first.click()
+        page.wait_for_selector(".csv canvas", timeout=30000)
+    page.locator("[data-test=csv-unit] .el-radio-button", has_text="т, промысловые").click()
+    page.wait_for_timeout(300)
     assert not errors, errors

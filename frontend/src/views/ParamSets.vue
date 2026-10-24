@@ -40,11 +40,18 @@
           <el-alert v-else-if="version !== cur.current_version" type="info" :closable="false" :title="$t('params.readonly_old')" style="margin:10px 0" />
           <div v-if="versionComment" class="muted small" style="margin:6px 0">{{ versionComment }}</div>
 
+          <!-- пояснения к параметрам простыми словами (справка, param_notes.json) -->
+          <div class="row notes-bar">
+            <el-switch v-model="showNotes" size="small" :active-text="$t('params.show_notes')" data-test="params-notes" @change="saveNotesPref" />
+            <div class="grow" />
+            <router-link v-if="METHOD[algo]" :to="helpPath(METHOD[algo])" class="small"><el-icon><QuestionFilled /></el-icon> {{ $t('params.notes_help') }}</router-link>
+          </div>
           <!-- обычные параметры алгоритма -->
-          <div v-if="plain.length" class="pgrid" style="margin-top:10px">
+          <div v-if="plain.length" class="pgrid" :class="{ wide: showNotes }" style="margin-top:10px">
             <div v-for="p in plain" :key="p.code" class="prow" :class="{ changed: differs(p.code) }">
               <div class="small">{{ tr(p, 'title') || p.code }}
                 <div class="mono muted small">{{ p.code }}<span v-if="differs(p.code)" class="chg"> · {{ $t('params.changed') }} ({{ show(cur.defaults[p.code]) }})</span></div>
+                <div v-if="showNotes && notes[p.code]" class="pnote" data-test="param-note">{{ notes[p.code] }}</div>
               </div>
               <ParamField :p="p" v-model="values[p.code]" :species="speciesList" :disabled="!editable" />
             </div>
@@ -58,6 +65,7 @@
               </el-select>
               <el-button :disabled="!newSp" :loading="adding" @click="addSpecies">{{ $t('common.add') }}</el-button>
             </div>
+            <div v-if="showNotes" class="pnote" style="margin:4px 0 8px">{{ $t('params.profile_note') }} <router-link :to="helpPath('method-priors')">{{ $t('params.profile_link') }}</router-link></div>
             <el-tabs v-if="profSpecies.length" v-model="sp">
               <el-tab-pane v-for="s in profSpecies" :key="s" :name="s" :label="spNames[s] || s" />
             </el-tabs>
@@ -103,11 +111,12 @@ import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import { tr } from '../i18n'
 import { useAuth } from '../store/auth'
-import { algoLabel, dt, loadCatalog } from '../calcs'
+import { METHOD, algoLabel, dt, loadCatalog } from '../calcs'
+import { helpPath } from '../cabinets'
 import StateBlock from '../components/StateBlock.vue'
 import ParamField from '../components/ParamField.vue'
 const auth = useAuth()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const algos = ref([])
@@ -132,6 +141,14 @@ const saveErr = ref(null)
 const spNames = ref({})
 const speciesList = ref([])
 const kinds = ref({})
+const notes = ref({})
+const NOTES_KEY = 'fishstock.params.notes'
+function readPref() { try { return localStorage.getItem(NOTES_KEY) !== '0' } catch { return true } }
+const showNotes = ref(readPref())
+function saveNotesPref(v) { try { localStorage.setItem(NOTES_KEY, v ? '1' : '0') } catch { /* нет хранилища — только на этот раз */ } }
+async function loadNotes() {
+  try { notes.value = algo.value ? await api.get('help', `/param-notes/${algo.value}`, { lang: locale.value }) : {} } catch { notes.value = {} }
+}
 const editable = computed(() => auth.can('profile.edit') && cur.value && !cur.value.system && version.value === cur.value.current_version)
 const plain = computed(() => (cur.value?.parameters || []).filter((p) => p.type !== 'profile'))
 const schema = computed(() => cur.value?.schema)
@@ -143,6 +160,7 @@ const kindName = (k) => (kinds.value[k] ? tr(kinds.value[k], 'name') : k)
 const show = (v) => (v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v))
 const differs = (code) => cur.value && !cur.value.is_default && JSON.stringify(values.value[code] ?? null) !== JSON.stringify(cur.value.defaults?.[code] ?? null)
 async function pickAlgo() {
+  loadNotes()
   sets.value = await api.get('algo-admin', '/param-sets', { algorithm: algo.value })
   const want = sets.value.find((s) => s.id === sid.value) || sets.value.find((s) => s.is_default) || sets.value[0]
   if (want) await open(want.id)
@@ -230,4 +248,7 @@ onMounted(async () => {
 .chg { color: var(--fs-warning); }
 .vk { margin-left: 8px; font-family: inherit; color: var(--fs-muted); }
 @media (max-width: 900px) { .ps { grid-template-columns: 1fr; } }
+.notes-bar { margin-top: 10px; gap: 10px; align-items: center; }
+.pnote { margin-top: 4px; font-size: 12px; line-height: 1.45; color: var(--fs-muted); max-width: 640px; }
+.pgrid.wide { grid-template-columns: 1fr; }
 </style>

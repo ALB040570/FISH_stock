@@ -57,6 +57,7 @@
               <el-table-column :label="$t('common.type')" width="120" prop="type" />
               <el-table-column label="Где задаётся" width="170"><template #default="{ row }"><el-tag size="small" :type="row.category === 'calc' ? 'success' : 'info'">{{ $t('catalog.cat_' + row.category) }}</el-tag></template></el-table-column>
               <el-table-column label="По умолчанию" min-width="140"><template #default="{ row }"><span class="mono">{{ row.type === 'profile' ? '…' : row.default === null || row.default === undefined ? '—' : JSON.stringify(row.default) }}</span></template></el-table-column>
+              <el-table-column :label="$t('catalog.meaning')" min-width="320"><template #default="{ row }"><span class="small">{{ notes[a.code]?.[row.code] || '' }}</span></template></el-table-column>
             </el-table>
           </el-collapse-item>
           <el-collapse-item :title="$t('common.versions') + ` (${a.versions.length})`">
@@ -125,6 +126,7 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { api, download } from '../api'
 import { tr } from '../i18n'
 import { useAuth } from '../store/auth'
@@ -133,6 +135,7 @@ import StateBlock from '../components/StateBlock.vue'
 import WaterBodySelect from '../components/WaterBodySelect.vue'
 import CalcForm from '../components/CalcForm.vue'
 const auth = useAuth()
+const { locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const items = ref([])
@@ -147,6 +150,7 @@ const fileText = ref('')
 let cur = null
 const cls = ref({})
 const dtypes = ref({})
+const notes = ref({})                                    // пояснения к параметрам простыми словами (справка)
 const fModel = ref('')
 const fMethod = ref('')
 const shown = computed(() => items.value.filter((a) => (!fModel.value || a.classification?.model_type === fModel.value) &&
@@ -170,6 +174,7 @@ async function saveCls() {
   clsOpen.value = false; await load()
 }
 async function load() {
+  api.get('help', '/param-notes', { lang: locale.value }).then((r) => { notes.value = r }).catch(() => {})
   try {
     const [c, k, dt] = await Promise.all([api.get('algo-admin', '/catalog'), api.get('algo-admin', '/classifiers'),
       api.get('data-model', '/dataset-types').catch(() => [])])

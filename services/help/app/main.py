@@ -267,6 +267,18 @@ def _route_match(pattern: str, route: str) -> int:
     return len(pattern) + 2 if route.rstrip("/") == pattern.rstrip("/") else 0
 
 
+@app.get("/param-notes", tags=["справка"])
+def get_all_param_notes(lang: str = "ru", user: User = Depends(require("help.view"))):
+    """Пояснения к параметрам всех алгоритмов: {код алгоритма: {код параметра: текст}} — для каталога."""
+    return {code: notes_for(code, _lang(lang)) for code in param_notes() if not code.startswith("_")}
+
+
+@app.get("/param-notes/{algorithm}", tags=["справка"])
+def get_param_notes(algorithm: str, lang: str = "ru", user: User = Depends(require("help.view"))):
+    """Пояснения к параметрам алгоритма простыми словами — для экрана «Параметры алгоритмов» (значок «?»)."""
+    return notes_for(algorithm, _lang(lang))
+
+
 @app.get("/context", tags=["справка"])
 def context(route: str, lang: str = "ru", user: User = Depends(require("help.view"))):
     """Статья для экрана приложения (значок «?»)."""
@@ -289,7 +301,7 @@ def context(route: str, lang: str = "ru", user: User = Depends(require("help.vie
 # {{example}} — пример распределения ПДУ НПЦ по возрастам из основного расчёта h выбранного водоёма (решение № 70).
 DIRECTIVE = re.compile(r"^\{\{(params|example)(?::([\w-]+))?\}\}[ \t]*$", re.M)
 L = {
-    "ru": {"param": "Параметр", "default": "По умолчанию", "cat": "Категория", "desc": "Описание",
+    "ru": {"p_head": "Параметр (как на экране)", "default": "По умолчанию", "cat": "Где задаётся", "desc": "Описание", "meaning": "Что означает и на что влияет",
            "fixed": "неизменяемый", "waterbody": "водоём (профиль)", "run": "запуск", "version": "Версия алгоритма",
            "param": "набор «Параметры алгоритма»", "calc": "в расчёте",
            "no_algo": "Алгоритм не найден в каталоге.", "none": "—", "no_run": "Для водоёма ещё нет основного "
@@ -299,7 +311,7 @@ L = {
            "bio": "Биомасса, т", "load": "Нагрузка j/m1", "pcs": "ПДУ, шт", "t": "ПДУ, т", "expl": "Изъятие, %",
            "immature": "не вылавливается", "P": "ПДУ НПЦ", "dist": "распределено", "left": "не распределено",
            "fish_bio": "промысловая биомасса", "iters": "итераций", "stop": "остановка", "cap": "ограничение 75 %"},
-    "kk": {"param": "Параметр", "default": "Әдепкі мәні", "cat": "Санаты", "desc": "Сипаттамасы",
+    "kk": {"p_head": "Параметр (экрандағыдай)", "default": "Әдепкі мәні", "cat": "Қайда беріледі", "desc": "Сипаттамасы", "meaning": "Нені білдіреді және неге әсер етеді",
            "fixed": "өзгермейтін", "waterbody": "су айдыны (профиль)", "run": "іске қосу", "version": "Алгоритм нұсқасы",
            "param": "«Алгоритм параметрлері» жиыны", "calc": "есептеуде",
            "no_algo": "Алгоритм каталогта табылмады.", "none": "—", "no_run": "Су айдыны үшін «h. Дарақ данасымен лимиттер» "
@@ -328,6 +340,21 @@ def _num(v, digits=0) -> str:
     return s.replace(".", ",") if digits else s
 
 
+def param_notes() -> dict:
+    """Пояснения к параметрам простыми словами (content/param_notes.json): что означает, зачем, на что влияет."""
+    return json.loads((CONTENT / "param_notes.json").read_text(encoding="utf-8"))
+
+
+def notes_for(code: str, lang: str) -> dict[str, str]:
+    """{код параметра: пояснение} для алгоритма; общие параметры — из _common; нет перевода — русский текст."""
+    allp = param_notes()
+    out = {}
+    for src in (allp.get("_common", {}), allp.get(code, {})):
+        for k, v in src.items():
+            out[k] = v.get(lang) or v.get("ru") or ""
+    return out
+
+
 def _params_table(code: str, lang: str) -> str:
     t = L[lang]
     cat = _svc("algo_admin", "/catalog")
@@ -336,14 +363,22 @@ def _params_table(code: str, lang: str) -> str:
     item = next((a for a in (cat or []) if a["code"] == code), None)
     if not item or not item.get("manifest"):
         return f"> {t['no_algo']}"
-    rows = [f"| {t['param']} | {t['default']} | {t['cat']} | {t['desc']} |", "|---|---|---|---|"]
+    notes = notes_for(code, lang)
+    rows = [f"| {t['p_head']} | {t['default']} | {t['cat']} | {t['meaning']} |", "|---|---|---|---|"]
     for p in item["manifest"].get("parameters", []):
         d = p.get("default")
-        dv = t["none"] if d in (None, "", {}, []) else (str(d).replace(".", ",") if isinstance(d, float) else str(d))
+        opt = next((o for o in (p.get("enum") or []) if isinstance(o, dict) and o.get("value") == d), None)
+        if opt:
+            dv = (opt.get("title_kk") if lang == "kk" else None) or opt.get("title_ru") or str(d)
+        else:
+            dv = t["none"] if d in (None, "", {}, []) else (str(d).replace(".", ",") if isinstance(d, float) else str(d))
+        if isinstance(d, float) and abs(d * 3 - round(d * 3)) < 1e-6 and round(d * 3) % 3:
+            dv = f"{round(d * 3)}/3"                       # 1/3 и 2/3 вместо 0,3333333333
         title = (p.get("title_kk") if lang == "kk" else None) or p.get("title_ru") or ""
         title = re.sub(r"\s*\(\d{1,2}\)(\s*[–-]\s*\(\d{1,2}\))?", "", title)   # номера формул источника
-        rows.append(f"| `{p['code']}` | {dv} | {t.get(p.get('category'), p.get('category'))} | "
-                    f"{title.replace('|', '/')} |")
+        note = notes.get(p["code"]) or p.get("description") or ""
+        rows.append(f"| {title.replace('|', '/')} (`{p['code']}`) | {dv.replace('|', '/')} | "
+                    f"{t.get(p.get('category'), p.get('category'))} | {note.replace('|', '/')} |")
     return f"*{t['version']}: {item.get('latest')}*\n\n" + "\n".join(rows)
 
 
