@@ -89,6 +89,7 @@ def test_cabinets_flow(browser):
     assert page.locator("[data-pipe]").count() == 2
     assert page.locator("[data-pipe] .plabel:visible").count() == 0           # стрелки: подписи — в подсказке
     assert page.locator("[data-test=credits]").count() == 1                 # строка разработчиков
+    assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")  # «Главная» без прокрутки (24.10)
     page.keyboard.press("2")
     page.wait_for_url(URL + "/calc/calculations")
     assert page.locator(".cab-title").inner_text().strip() == "Расчёт запасов рыб"

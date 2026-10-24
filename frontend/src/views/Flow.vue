@@ -353,12 +353,12 @@ kbd { margin-left: auto; font: 500 11px/1 inherit; color: var(--fs-faint); borde
 .bottom.no-base { grid-template-columns: minmax(0, 1fr); }
 .res-zone { min-width: 0; }
 /* один ряд карточек; если водоёмов больше, чем помещается, — листание по горизонтали */
-.results { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, 1fr); gap: 12px; overflow-x: auto;
+.results { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(176px, 1fr); gap: 12px; overflow-x: auto;
   padding-bottom: 4px; scrollbar-width: thin; }
 .res { display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; border-radius: var(--fs-radius); background: var(--fs-card);
   border: 1px solid var(--fs-line); border-left: 4px solid var(--fs-accent); color: var(--fs-text); text-decoration: none; min-width: 0; }
 .res:hover { box-shadow: var(--fs-shadow-pop); border-color: var(--fs-accent); }
-.rname { font-size: 15px; font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rname { font-size: 15px; font-weight: 600; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .runit { font-size: 11px; color: var(--fs-muted); line-height: 1.3; }
 .rrow { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; line-height: 1.35; }
 .rrow b { color: var(--fs-accent-text); font-variant-numeric: tabular-nums; }
