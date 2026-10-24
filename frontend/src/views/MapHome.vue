@@ -66,9 +66,9 @@
             </div>
             <el-button text @click="sel = null"><el-icon><Close /></el-icon></el-button>
           </div>
-          <div class="kpis" style="margin-top:10px">
-            <div class="kpi"><div class="v">{{ sel.years.length ? sel.years[0] + '–' + sel.years[sel.years.length - 1] : '—' }}</div><div class="l">{{ $t('map.years') }}</div></div>
-            <div class="kpi"><div class="v">{{ sel.ndatasets }}</div><div class="l">{{ $t('map.datasets') }}</div></div>
+          <div class="fs-tiles compact" style="margin-top:10px">
+            <div class="fs-tile"><div class="ft-l">{{ $t('map.years') }}</div><div class="ft-v">{{ sel.years.length ? sel.years[0] + '–' + sel.years[sel.years.length - 1] : '—' }}</div></div>
+            <div class="fs-tile"><div class="ft-l">{{ $t('map.datasets') }}</div><div class="ft-v">{{ sel.ndatasets }}</div></div>
           </div>
           <div v-if="sel.speciesList.length" class="small" style="margin-top:8px"><span class="muted">{{ $t('map.species_in_data') }}:</span> {{ sel.speciesList.join(', ') }}</div>
           <div v-if="shownRun(sel)" class="small" style="margin-top:8px">

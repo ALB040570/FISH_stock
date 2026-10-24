@@ -1,11 +1,11 @@
 <template>
   <div>
-    <div class="kpis">
-      <div class="kpi"><div class="v">{{ years }}</div><div class="l">{{ $t('w.years') }}</div></div>
-      <div class="kpi"><div class="v">{{ nsets }}</div><div class="l">{{ $t('w.datasets') }}</div></div>
-      <div class="kpi"><div class="v">{{ rows }}</div><div class="l">{{ $t('w.hauls') }}</div></div>
-      <div class="kpi"><div class="v">{{ lastRun }}</div><div class="l">{{ $t('w.last_run') }}</div></div>
-      <div class="kpi"><div class="v">{{ mainRun }}</div><div class="l">{{ $t('w.main_run') }}</div></div>
+    <div class="fs-tiles">
+      <div class="fs-tile"><div class="ft-l">{{ $t('w.years') }}</div><div class="ft-v">{{ years }}</div></div>
+      <div class="fs-tile"><div class="ft-l">{{ $t('w.datasets') }}</div><div class="ft-v">{{ nsets }}</div></div>
+      <div class="fs-tile"><div class="ft-l">{{ $t('w.hauls') }}</div><div class="ft-v">{{ rows }}</div></div>
+      <div class="fs-tile"><div class="ft-l">{{ $t('w.last_run') }}</div><div class="ft-v">{{ lastRun }}</div></div>
+      <div class="fs-tile"><div class="ft-l">{{ $t('w.main_run') }}</div><div class="ft-v">{{ mainRun }}</div></div>
     </div>
     <div v-if="missing.length" class="small" style="margin-top:8px"><el-tag type="warning" size="small">{{ $t('w.not_loaded') }}</el-tag> {{ missing.join(', ') }}</div>
   </div>

@@ -11,11 +11,11 @@
     <div v-else-if="mode === 'tiles' && data.warnings?.length" class="warns">
       <div v-for="(w, i) in data.warnings" :key="i" class="sig lv-warning"><el-icon class="si"><WarningFilled /></el-icon><span>{{ w.text }}</span></div>
     </div>
-    <div v-if="mode === 'tiles'" class="tiles">
-      <div v-for="(t, i) in tiles" :key="i" class="tile" :class="{ link: t.section, warn: t.level === 'warning' }" @click="t.section && $emit('section', t.section)">
-        <div class="tv" :class="signCls(t)">{{ tileValue(t) }}<span v-if="t.unit" class="tu">{{ t.unit === '%' ? ' %' : ' ' + shortUnit(t.unit) }}</span></div>
-        <div class="tl">{{ t.label }}</div>
-        <div v-if="t.hint" class="th">{{ t.hint }}</div>
+    <div v-if="mode === 'tiles'" class="fs-tiles tiles">
+      <div v-for="(t, i) in tiles" :key="i" class="fs-tile tile" :class="{ link: t.section, warn: t.level === 'warning' }" @click="t.section && $emit('section', t.section)">
+        <div class="ft-l">{{ t.label }}</div>
+        <div class="ft-v" :class="signCls(t)">{{ tileValue(t) }}<span v-if="t.unit" class="ft-u">{{ t.unit === '%' ? ' %' : ' ' + shortUnit(t.unit) }}</span></div>
+        <div v-if="t.hint" class="ft-h">{{ t.hint }}</div>
       </div>
       <div v-if="!tiles.length" class="state muted small">{{ $t('common.empty') }}</div>
     </div>
@@ -172,17 +172,11 @@ defineExpose({ image })
 .warns .sig { cursor: default; }
 :deep(.clickable) { cursor: pointer; }
 :deep(.warn-row) td:first-child { box-shadow: inset 3px 0 0 var(--fs-warning); }
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-.tile { border: 1px solid var(--fs-line); border-radius: 8px; padding: 10px 12px; background: var(--fs-card-soft); }
 .tile.link { cursor: pointer; }
 .tile.link:hover { background: var(--fs-hover); border-color: var(--fs-primary-2); }
-.tile.warn .tv { color: var(--fs-warning); }
-.tv { font-size: 22px; font-weight: 600; color: var(--fs-primary); line-height: 1.2; }
-.tv.neg { color: var(--fs-danger); }
-.tv.pos { color: var(--fs-success); }
-.tu { font-size: 12px; font-weight: 400; color: var(--fs-muted); }
-.tl { font-size: 12.5px; color: var(--fs-text); margin-top: 2px; }
-.th { font-size: 11.5px; color: var(--fs-muted); }
+.tile.warn .ft-v { color: var(--fs-warning); }
+.ft-v.neg { color: var(--fs-danger); }
+.ft-v.pos { color: var(--fs-success); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
 .sp-card { border: 1px solid var(--fs-line); border-radius: 8px; padding: 10px 12px; }
 .sp-t { font-weight: 600; margin-bottom: 6px; }
