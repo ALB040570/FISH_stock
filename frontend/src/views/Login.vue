@@ -3,7 +3,8 @@
     <div class="side">
       <svg viewBox="0 0 64 64" width="54" height="54"><path class="logo-body" d="M6 32c10-14 30-16 42-6l10-8v28l-10-8c-12 10-32 8-42-6z"/><circle class="logo-eye" cx="20" cy="29" r="3"/></svg>
       <h1>FishStock</h1>
-      <p>{{ $t('app.subtitle') }}</p>
+      <p class="title-full">{{ $t('app.title_full') }}</p>
+      <p class="credits" data-test="credits">{{ $t('app.credits') }}</p>
       <div class="waves" />
     </div>
     <div class="form">
@@ -60,7 +61,9 @@ async function submit() {
 .side h1 { font-size: 34px; margin: 14px 0 6px; letter-spacing: -0.02em; }
 .logo-body { fill: var(--fs-accent); }
 .logo-eye { fill: var(--fs-nav); }
-.side p { color: var(--fs-nav-text); font-size: 16px; max-width: 420px; line-height: 1.45; }
+.side p { color: var(--fs-nav-text); font-size: 16px; max-width: 460px; line-height: 1.45; position: relative; }
+.side .title-full { font-size: 20px; font-weight: 500; line-height: 1.35; }
+.side .credits { margin-top: 28px; font-size: 13px; color: var(--fs-nav-muted); }
 .waves { position: absolute; left: -10%; right: -10%; bottom: -40px; height: 180px; border-radius: 50%; background: rgba(255,255,255,.06); box-shadow: 0 -40px 0 rgba(255,255,255,.04); }
 .form { padding: 12vh 8vw; background: var(--fs-card); position: relative; }
 .form h2 { font-size: 22px; margin-bottom: 18px; }

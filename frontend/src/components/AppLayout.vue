@@ -58,6 +58,7 @@
         </el-dropdown>
       </el-header>
       <el-main class="main"><slot /></el-main>
+      <el-footer class="footer" height="26px"><AppCredits :title="$t('app.credits')" /></el-footer>
     </el-container>
     <PasswordDialog v-model="pwd" :forced="forced" />
     <ProfileDialog v-model="prof" @password="prof = false; pwd = true" />
@@ -78,6 +79,7 @@ import { setLang, tr } from '../i18n'
 import { cabinet, cabinetsFor, canEnter, currentCabinet, hardGo, hasFlow, helpPath, helpRoute } from '../cabinets'
 import { saveLast } from '../lastPlace'
 import ThemeToggle from './ThemeToggle.vue'
+import AppCredits from './AppCredits.vue'
 import PasswordDialog from './PasswordDialog.vue'
 import ProfileDialog from './ProfileDialog.vue'
 import UserAvatar from './UserAvatar.vue'
@@ -192,6 +194,9 @@ function onCmd(c) {
 .uname { font-size: 13px; line-height: 1.15; }
 .urole { color: var(--fs-muted); font-size: 11px; }
 .main { padding: 0; overflow: auto; }
+/* строка разработчиков: высота 26 px учтена в MapHome.vue (высота карты) */
+.footer { padding: 0; border-top: 1px solid var(--fs-line); background: var(--fs-card); overflow: hidden; }
+.footer :deep(.fs-credits) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 25px; }
 .header > * { flex-shrink: 0; }
 .header > .grow { flex: 1 1 0; min-width: 0; }
 /* телефон: значки без подписей, без имени пользователя; справка по экрану — из «Справки» */

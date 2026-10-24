@@ -87,12 +87,14 @@ def test_cabinets_flow(browser):
     page.wait_for_selector(".flow .tile")
     assert page.locator("[data-cabinet]").count() == 5
     assert page.locator("[data-pipe]").count() == 2
+    assert page.locator("[data-pipe] .plabel:visible").count() == 0           # стрелки: подписи — в подсказке
+    assert page.locator("[data-test=credits]").count() == 1                 # строка разработчиков
     page.keyboard.press("2")
     page.wait_for_url(URL + "/calc/calculations")
-    assert page.locator(".cab-title").inner_text().strip() == "Расчёты"
+    assert page.locator(".cab-title").inner_text().strip() == "Расчёт запасов рыб"
     # переключатель кабинетов в шапке
     page.locator(".cab-switch button").click()
-    page.locator(".el-dropdown-menu__item").filter(has_text="Конструктор").click()
+    page.locator(".el-dropdown-menu__item").filter(has_text="Моделирование").click()
     page.wait_for_url(URL + "/design/dictionaries")
     # старые адреса единого интерфейса
     for old, new in (("/data?wb=zhaysan", "/input/datasets?wb=zhaysan"), ("/runs", "/calc/runs"),

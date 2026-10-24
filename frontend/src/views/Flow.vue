@@ -58,23 +58,9 @@
           <span class="act">{{ $t(auth.can('data.edit') ? 'flow.act_input' : 'flow.act_input_view') }} →</span>
         </div>
 
-        <!-- труба: ждут расчёта -->
-        <div class="pipe" data-pipe="wait_calc">
-          <div class="pbody">
-          <div class="plabel">{{ $t('flow.pipe_calc') }}</div>
-          <div class="pchips">
-            <template v-if="flow?.byStage.wait_calc.length">
-              <a v-for="w in shown('wait_calc')" :key="w.code" class="chip" :href="href(w)" :title="w.name + ' — ' + $t(w.failed ? 'flow.hint_failed' : 'flow.hint_calc')">
-                <span class="dot" :style="{ background: w.failed ? RUN_STEP.failed : MAP_STATE.stale }" /><span class="cn">{{ short(w.name) }}</span>
-                <el-icon v-if="w.failed" class="ci"><WarningFilled /></el-icon>
-              </a>
-              <button v-if="rest('wait_calc')" class="chip more" @click="toggle('wait_calc')">{{ open.wait_calc ? $t('flow.less') : $t('flow.more', { n: rest('wait_calc') }) }}</button>
-            </template>
-            <span v-else-if="flow" class="free">{{ $t('flow.free') }}</span>
-          </div>
-          </div>
-          <div class="pline" aria-hidden="true"><el-icon><ArrowRight /></el-icon></div>
-        </div>
+        <!-- стрелка: ждут расчёта -->
+        <FlowPipe stage="wait_calc" :label="$t('flow.pipe_calc')" :items="flow?.byStage.wait_calc || []" :loaded="!!flow"
+          :color="(w) => w.failed ? RUN_STEP.failed : MAP_STATE.stale" :hint="(w) => $t(w.failed ? 'flow.hint_failed' : 'flow.hint_calc')" :href="href" />
 
         <!-- Расчёты -->
         <div class="tile" role="link" tabindex="0" data-cabinet="calc" @click="go('calc')" @keydown.enter="go('calc')">
@@ -94,22 +80,9 @@
           <span class="act">{{ $t('flow.act_calc') }} →</span>
         </div>
 
-        <!-- труба: ждут отметки основного -->
-        <div class="pipe" data-pipe="wait_main">
-          <div class="pbody">
-          <div class="plabel">{{ $t('flow.pipe_main') }}</div>
-          <div class="pchips">
-            <template v-if="flow?.byStage.wait_main.length">
-              <a v-for="w in shown('wait_main')" :key="w.code" class="chip" :href="href(w)" :title="w.name + ' — ' + $t('flow.hint_main')">
-                <span class="dot" :style="{ background: MAP_STATE.has_data }" /><span class="cn">{{ short(w.name) }}</span>
-              </a>
-              <button v-if="rest('wait_main')" class="chip more" @click="toggle('wait_main')">{{ open.wait_main ? $t('flow.less') : $t('flow.more', { n: rest('wait_main') }) }}</button>
-            </template>
-            <span v-else-if="flow" class="free">{{ $t('flow.free') }}</span>
-          </div>
-          </div>
-          <div class="pline" aria-hidden="true"><el-icon><ArrowRight /></el-icon></div>
-        </div>
+        <!-- стрелка: ждут отметки основного -->
+        <FlowPipe stage="wait_main" :label="$t('flow.pipe_main')" :items="flow?.byStage.wait_main || []" :loaded="!!flow"
+          :color="() => MAP_STATE.has_data" :hint="() => $t('flow.hint_main')" :href="href" />
 
         <!-- Мониторинг -->
         <div class="tile" role="link" tabindex="0" data-cabinet="monitoring" @click="go('monitoring')" @keydown.enter="go('monitoring')">
@@ -167,6 +140,7 @@
       </template>
       <el-alert v-if="error" type="warning" :closable="false" :title="error" style="margin-top:14px" />
     </main>
+    <AppCredits class="credits" />
     <PasswordDialog v-model="pwd" :forced="forced" />
     <ProfileDialog v-model="prof" @password="prof = false; pwd = true" />
   </div>
@@ -185,6 +159,8 @@ import ThemeToggle from '../components/ThemeToggle.vue'
 import PasswordDialog from '../components/PasswordDialog.vue'
 import ProfileDialog from '../components/ProfileDialog.vue'
 import UserAvatar from '../components/UserAvatar.vue'
+import AppCredits from '../components/AppCredits.vue'
+import FlowPipe from '../components/FlowPipe.vue'
 
 // Стартовая страница «Поток» (docs/decisions.md, № 53): путь данных Ввод → Расчёты → Мониторинг, между кабинетами —
 // «трубы» с водоёмами, ждущими следующего этапа. Состояния — только факты из сервисов (src/flow.js).
@@ -291,7 +267,9 @@ function onCmd(c) {
 }
 </script>
 <style scoped>
-.flow-page { min-height: 100vh; background: var(--fs-bg); color: var(--fs-text); }
+.flow-page { min-height: 100vh; display: flex; flex-direction: column; background: var(--fs-bg); color: var(--fs-text); }
+.flow-page > .body { flex: 1; width: 100%; box-sizing: border-box; }
+.credits { border-top: 1px solid var(--fs-line); padding: 8px 16px; }
 /* полоса «Степь и небо»: тёмно-синий фон меню, светлый текст, волны как на экране входа */
 .hero { position: relative; overflow: hidden; color: var(--fs-nav-text); padding-bottom: 92px;
   background: linear-gradient(160deg, var(--fs-nav-active) 0%, var(--fs-nav) 60%, var(--fs-nav) 100%); }
@@ -329,7 +307,7 @@ function onCmd(c) {
 .muted { color: var(--fs-muted); font-size: 14px; }
 .faint { color: var(--fs-faint); }
 .small { font-size: 12px; }
-.flow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, .95fr) minmax(0, 1fr) minmax(190px, .95fr) minmax(0, 1fr); align-items: stretch; }
+.flow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(72px, .4fr) minmax(0, 1fr) minmax(72px, .4fr) minmax(0, 1fr); align-items: stretch; }
 .flow.loading { opacity: .6; }
 .tile { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 8px; padding: 18px 18px 16px; border-radius: var(--fs-radius);
   background: var(--fs-card); border: 1px solid var(--fs-line); color: var(--fs-text); text-decoration: none; min-width: 0;
@@ -351,14 +329,6 @@ kbd { margin-left: auto; font: 500 11px/1 inherit; color: var(--fs-faint); borde
 .act { margin-top: auto; padding-top: 6px; font-size: 13px; color: var(--fs-primary); font-weight: 500; }
 .inner { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 
-.pipe { position: relative; display: flex; align-items: center; justify-content: center; padding: 0 10px; min-width: 0; }
-.pipe::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px dashed var(--fs-primary-2); opacity: .6; z-index: 0; }
-.pbody { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 100%;
-  padding: 10px 12px; border-radius: 16px; background: color-mix(in srgb, var(--fs-primary-2) 9%, var(--fs-bg));
-  border: 1px solid color-mix(in srgb, var(--fs-primary-2) 45%, var(--fs-line)); }
-.plabel { font-size: 12px; color: var(--fs-primary); font-weight: 500; text-align: center; line-height: 1.3; }
-.pchips { display: flex; flex-direction: column; align-items: stretch; gap: 6px; max-width: 100%; min-width: 0; }
-.pline { position: absolute; right: -4px; top: 50%; transform: translateY(-50%); color: var(--fs-primary-2); z-index: 2; display: flex; }
 .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 10px; font-size: 13px; line-height: 1.3;
   background: var(--fs-card); border: 1px solid var(--fs-line); color: var(--fs-text); text-decoration: none; cursor: pointer; font-family: inherit;
   border-radius: 12px; overflow-wrap: anywhere; }
@@ -370,7 +340,6 @@ kbd { margin-left: auto; font: 500 11px/1 inherit; color: var(--fs-faint); borde
 .pulse { animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
-.free { font-size: 12px; color: var(--fs-faint); background: var(--fs-card-soft); padding: 2px 8px; border-radius: 999px; }
 .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 12px 0 22px; font-size: 12px; color: var(--fs-muted); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend { margin-top: 14px; }
@@ -390,10 +359,6 @@ kbd { margin-left: auto; font: 500 11px/1 inherit; color: var(--fs-faint); borde
 .keys { margin-top: 18px; }
 @media (max-width: 900px) {
   .flow { grid-template-columns: minmax(0, 1fr); }
-  .pipe { padding: 12px 0 18px; }
-  .pipe::before { left: 50%; right: auto; top: 0; bottom: 0; border-top: none; border-left: 2px dashed var(--fs-line); }
-  .pchips { flex-direction: row; flex-wrap: wrap; justify-content: center; }
-  .pline { right: auto; left: 50%; top: auto; bottom: -2px; transform: translateX(-50%) rotate(90deg); }
   .top { flex-wrap: wrap; padding: 10px 16px; }
   .hello { padding: 20px 16px 0; }
   .section-label.on-hero { padding: 0 16px; }
