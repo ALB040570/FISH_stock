@@ -33,7 +33,7 @@ def test_dashboards(calc_stack, tmp_path, monkeypatch):
             # модель и прогноз: в расчёте «stock» шагов нет
             assert j.get("empty") and "полный расчёт" in j["message"], w["id"]
         elif str(w["source"].get("view", "")).startswith("bc_"):            # проверки модели — отдельный шаг
-            assert j.get("empty") and "«Полный расчёт и проверки модели»" in j["message"] and "часов" in j["message"], w["id"]
+            assert j.get("empty") and "«Полный расчёт и проверки модели»" in j["message"] and "час" in j["message"], w["id"]
         else:
             assert not j.get("empty"), (w["id"], j)
     j = db.post("/widgets/data", headers=H(), json={"source": {"kind": "dataset", "dataset_type": "npc_pdu"}, "filters": f,

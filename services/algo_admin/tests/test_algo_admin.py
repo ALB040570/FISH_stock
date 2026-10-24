@@ -16,14 +16,14 @@ def test_catalog_and_profiles(calc_stack):
     assert [a["code"] for a in cat] == ["seine_catchability", "stock_by_catch", "pdu_by_age", "bayes_cohort", "forecast_pdu", "bayes_checks"]
     latest = {a["code"]: a["latest"] for a in cat}
     assert latest == {"seine_catchability": "2.0.0", "stock_by_catch": "2.0.0", "pdu_by_age": "2.0.0",
-                      "bayes_cohort": "2.0.1", "forecast_pdu": "2.0.0", "bayes_checks": "2.0.1"}
-    files = aa.get("/catalog/bayes_cohort/versions/2.0.1/files", headers=H("viewer")).json()
+                      "bayes_cohort": "2.0.2", "forecast_pdu": "2.0.0", "bayes_checks": "2.0.2"}
+    files = aa.get("/catalog/bayes_cohort/versions/2.0.2/files", headers=H("viewer")).json()
     assert any(f["path"] == "fishcore/bayes/dynamics.py" for f in files)
     p = aa.get("/profiles/bayes_cohort/zhaysan", headers=H("viewer")).json()
     assert set(p["profile"]["values"]["species_profiles"]) == {"lesh", "sudak", "okun", "plotva", "shuka", "sazan", "karas", "yaz"}
     # «Презентация» (№ 62): каталог — названия, версии, описания; без кода, пакета и параметров водоёмов
     assert len(aa.get("/catalog", headers=H("presenter")).json()) == 6
-    for url in ("/catalog/bayes_cohort/versions/2.0.1/files", "/catalog/bayes_cohort/versions/2.0.1/package.zip",
+    for url in ("/catalog/bayes_cohort/versions/2.0.2/files", "/catalog/bayes_cohort/versions/2.0.2/package.zip",
                 "/profiles/bayes_cohort/zhaysan"):
         assert aa.get(url, headers=H("presenter")).status_code == 403, url
     # копия профиля для другого водоёма, проверка значений
@@ -189,7 +189,7 @@ def test_fix_version_keeps_previous_and_profiles(tmp_path, monkeypatch):
     from conftest import load_service
     mod = load_service("algo_admin", tmp_path, monkeypatch)
     E = mod.E
-    files = E.package_files("bayes_cohort", "2.0.1")
+    files = E.package_files("bayes_cohort", "2.0.2")
     man = json.loads(files["manifest.json"])
     man["version"] = "2.0.0"
     old = dict(files, **{"manifest.json": json.dumps(man).encode(), "algorithm.py": files["algorithm.py"] + b"\n# 2.0.0\n"})
@@ -201,13 +201,13 @@ def test_fix_version_keeps_previous_and_profiles(tmp_path, monkeypatch):
     E.save_profile("bayes_cohort", "zhaysan", vals, "u1", "правка математика")
     n = len(E.profiles.list_versions(pid))
     E.seed_builtin()
-    assert [v["version"] for v in E.versions("bayes_cohort")] == ["2.0.1", "2.0.0"]
-    assert E.latest_enabled("bayes_cohort")["version"] == "2.0.1"
+    assert [v["version"] for v in E.versions("bayes_cohort")] == ["2.0.2", "2.0.0"]
+    assert E.latest_enabled("bayes_cohort")["version"] == "2.0.2"
     assert len(E.profiles.list_versions(pid)) == n
     assert E.get_profile("bayes_cohort", "zhaysan")["values"]["species_profiles"]["lesh"]["draws"] == 1234
     # профиль, созданный пользователем на версии 2.x, переносом не затрагивается
     E.save_profile("bayes_cohort", "kapshagay", vals, "u1", "новый")
-    assert E.profiles.get(E.profile_id("bayes_cohort", "kapshagay"))["migrated_to"] == "defaults 2.0.1"
+    assert E.profiles.get(E.profile_id("bayes_cohort", "kapshagay"))["migrated_to"] == "defaults 2.0.2"
 
 
 def test_profile_species_add_remove(calc_stack):

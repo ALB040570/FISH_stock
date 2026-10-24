@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fishcore import stepkit, views
 from fishcore.bayes import config as bc
+from fishcore.bayes import parallel as P
 from fishcore.bayes import run as R
 from fishcore.data_source import load_fish_props
 from fishcore.pdu_npc import compute_pdu
@@ -65,17 +66,23 @@ def run(ctx):
     mode = ctx.params.get("mode") or "new"
     payload, rows, per_species = {}, [], {}
     n = len(runtime)
-    for i, ru in enumerate(runtime):
-        def progress(d, i=i, ru=ru):
-            frac = None
-            if d.get("total") and d.get("chains"):
-                done = sum(d["chains"].values()) / max(1, len(d["chains"]))
-                frac = (i + min(1.0, done / d["total"])) / n
-            ctx.progress(frac if frac is not None else i / n, species=ru, **d)
-        ctx.log(f"вид {ru} ({i + 1} из {n}), режим {mode}")
-        # графики диагностики (PNG) не строятся: FishStock показывает диагностику своими графиками и таблицами
-        meta = R.run(ru, mode, progress=progress, log=ctx.log, results_dir=ctx.out_dir, stage23=(res, pdu, props),
-                     plots=False)
+    species = list(runtime)
+    # виды независимы: считаются одновременно, если позволяет лимит ядер (FISH_CALC_CORES), иначе по очереди;
+    # у каждого вида свои seed и цепи — результаты те же, что при расчёте по очереди (решение № 64)
+    chains = max([int(v.get("chains") or 4) for v in runtime.values()] or [4])
+
+    def on_progress(frac, info):
+        now = [ru for ru in species if 0 < frac.get(ru, 0) < 1 or ru in info]
+        cur = info.get(now[0], {}) if len(now) == 1 else {}
+        ctx.progress(sum(frac.values()) / max(1, n), species=", ".join(now) or None,
+                     **({k: v for k, v in cur.items() if k != "species"} if cur else {"phase": "выборка" if now else None}))
+
+    ctx.log(f"видов: {n}, режим {mode}")
+    metas = P.run_tasks([(ru, {"species": ru, "mode": mode, "results_dir": str(ctx.out_dir), "stage23": (res, pdu, props)})
+                         for ru in species], "fishcore.bayes.parallel:fit_species", on_progress, ctx.log, ctx.check_cancel,
+                        chains=chains)
+    for ru in species:
+        meta = metas[ru]
         loaded = R.load_npz(R.result_path(ru, mode, "npz", ctx.out_dir))
         a, m = loaded
         payload[ru] = views.bayes_payload(ru, a, m, mode)

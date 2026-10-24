@@ -28,6 +28,25 @@ def prepare_step(step_dir: Path, package_files: dict[str, bytes], context: dict)
     return step_dir
 
 
+def _kill(p) -> None:
+    """Завершить шаг вместе с его процессами (группа процессов шага)."""
+    import signal
+    try:
+        os.killpg(p.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        p.kill()
+    p.wait()
+
+
+def _kill_group(p) -> None:
+    """После шага не должно остаться его процессов (цепи PyMC, расчёты видов)."""
+    import signal
+    try:
+        os.killpg(p.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
+
+
 def run_step(step_dir: Path, timeout_s: float | None = None, on_poll=None, poll_s: float = 1.0) -> dict:
     """Запуск fishrunner в отдельном процессе. on_poll() вызывается периодически; вернёт True — отменить."""
     step_dir = Path(step_dir)
@@ -36,8 +55,9 @@ def run_step(step_dir: Path, timeout_s: float | None = None, on_poll=None, poll_
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env.setdefault("PYTENSOR_FLAGS", f"base_compiledir={step_dir / '.pytensor'}")
     log = open(step_dir / "stdout.txt", "ab")
+    # своя группа процессов: при отмене и превышении времени завершаются и процессы цепей и видов (№ 64)
     p = subprocess.Popen([sys.executable, "-m", "fishrunner", str(step_dir)], cwd=step_dir, env=env,
-                         stdout=log, stderr=subprocess.STDOUT)
+                         stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     t0 = time.time()
     try:
         while p.poll() is None:
@@ -48,8 +68,7 @@ def run_step(step_dir: Path, timeout_s: float | None = None, on_poll=None, poll_
                 try:
                     p.wait(30)          # алгоритм сам завершится при ближайшем ctx.progress()
                 except subprocess.TimeoutExpired:
-                    p.kill()
-                    p.wait()
+                    _kill(p)
                 st = {}
                 try:
                     st = json.loads((step_dir / "status.json").read_text(encoding="utf-8"))
@@ -60,13 +79,13 @@ def run_step(step_dir: Path, timeout_s: float | None = None, on_poll=None, poll_
                     (step_dir / "status.json").write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
                 return st
             if timeout_s and time.time() - t0 > timeout_s:
-                p.kill()
-                p.wait()
+                _kill(p)
                 st = {"status": "failed", "message": f"Превышено время выполнения шага ({int(timeout_s // 60)} мин)"}
                 (step_dir / "status.json").write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
                 return st
     finally:
         log.close()
+        _kill_group(p)
     try:
         return json.loads((step_dir / "status.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
