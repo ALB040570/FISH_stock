@@ -22,6 +22,11 @@ RESULT_ALGOS = {"seine_catchability", "stock_by_catch", "bayes_cohort", "forecas
 RESULT_VIEWS = {v for v in (*calc_views.VIEWS, *calc_stock_views.VIEWS) if not v.startswith("pn_")}
 assert RESULT_VIEWS.isdisjoint({v for v in insights.VIEWS if v not in calc_views.VIEWS and v not in calc_stock_views.VIEWS})
 
+# проверки модели (шаг «Проверки байесовской модели», раздел «Запасы → Проверки модели») скрыты для всех ролей —
+# решение заказчика 24.10 (№ 65); код расчёта и прежние запуски сохраняются
+OFF_ALGOS = {"bayes_checks"}
+OFF_VIEWS = {v for v in calc_views.VIEWS if v.startswith("bc_")}
+
 FORBIDDEN_MSG = "Результаты модели (уловистость, запасы, ПДУ приложения) доступны администратору, математику и ихтиологу"
 
 
@@ -29,26 +34,37 @@ def full(user) -> bool:
     return user.can(PERM)
 
 
-def restricted_source(src: dict | None) -> bool:
+def _match(src: dict | None, views, algos) -> bool:
     src = src or {}
     kind = src.get("kind")
     if kind == "insight":
-        return src.get("view") in RESULT_VIEWS
+        return src.get("view") in views
     if kind in ("run", "payload"):
-        return src.get("algorithm") in RESULT_ALGOS
+        return src.get("algorithm") in algos
     return False
 
 
+def restricted_source(src: dict | None) -> bool:
+    return _match(src, RESULT_VIEWS, RESULT_ALGOS)
+
+
+def off_source(src: dict | None) -> bool:
+    return _match(src, OFF_VIEWS, OFF_ALGOS)
+
+
 def check_source(user, src: dict) -> None:
+    if off_source(src):
+        raise AppError("widget.hidden", "Этот раздел скрыт", 404)
     if not full(user) and restricted_source(src):
         raise AppError("auth.forbidden", FORBIDDEN_MSG, 403)
 
 
-def hidden_widgets(board: dict) -> set[str]:
-    """id виджетов, скрытых от ролей без права на результаты: со скрытым источником и текстовые
-    виджеты вкладок и разделов, в которых не осталось ничего другого."""
+def hidden_widgets(board: dict, full_access: bool = False) -> set[str]:
+    """id скрытых виджетов: проверки модели — для всех; без права на результаты — и результаты модели.
+    Плюс текстовые виджеты вкладок и разделов, в которых не осталось ничего другого."""
     ws = board.get("widgets") or []
-    hid = {w.get("id") for w in ws if w.get("type") != "text" and restricted_source(w.get("source"))}
+    hid = {w.get("id") for w in ws if w.get("type") != "text"
+           and (off_source(w.get("source")) or (not full_access and restricted_source(w.get("source"))))}
 
     def emptied(key):
         groups: dict = {}
@@ -68,10 +84,8 @@ def hidden_widgets(board: dict) -> set[str]:
 
 def filter_board(board: dict, user) -> dict:
     """Дашборд для роли: без скрытых виджетов, а также вкладок и разделов, где не осталось виджетов."""
-    if full(user):
-        return board
     d = copy.deepcopy(board)
-    hid = hidden_widgets(d)
+    hid = hidden_widgets(d, full(user))
     if not hid:
         return d
     before = d.get("widgets") or []
@@ -90,6 +104,8 @@ def filter_board(board: dict, user) -> dict:
                              if not ((code, s.get("code")) in had_sec and (code, s.get("code")) not in left_sec)]
         tabs.append(t)
     d["tabs"] = tabs
+    if full(user):
+        return d
     d["restricted"] = True
     if d.get("system") and d.get("id") == "monitoring":
         d["description"] = "Исходные данные и ПДУ НПЦ выбранного водоёма."

@@ -10,19 +10,27 @@ def mod_process(mod):
     return import_module("app.worker").process_one(mod.E, mod.CLIENTS, log=lambda *a: None)
 
 
+def E_has_checks(aa):
+    """Скрытый шаг остаётся в хранилище каталога, но шаблона «с проверками» нет."""
+    r = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "full_checks"})
+    return r.status_code == 400
+
+
 def test_catalog_and_profiles(calc_stack):
     dm, da, aa, mod = calc_stack
     cat = aa.get("/catalog", headers=H("viewer")).json()
-    assert [a["code"] for a in cat] == ["seine_catchability", "stock_by_catch", "pdu_by_age", "bayes_cohort", "forecast_pdu", "bayes_checks"]
+    # «Проверки байесовской модели» скрыты (№ 65): нет в каталоге и шаблонах, пакет остаётся
+    assert [a["code"] for a in cat] == ["seine_catchability", "stock_by_catch", "pdu_by_age", "bayes_cohort", "forecast_pdu"]
+    assert E_has_checks(aa)
     latest = {a["code"]: a["latest"] for a in cat}
     assert latest == {"seine_catchability": "2.0.0", "stock_by_catch": "2.0.0", "pdu_by_age": "2.0.0",
-                      "bayes_cohort": "2.0.2", "forecast_pdu": "2.0.0", "bayes_checks": "2.0.2"}
+                      "bayes_cohort": "2.0.2", "forecast_pdu": "2.0.0"}
     files = aa.get("/catalog/bayes_cohort/versions/2.0.2/files", headers=H("viewer")).json()
     assert any(f["path"] == "fishcore/bayes/dynamics.py" for f in files)
     p = aa.get("/profiles/bayes_cohort/zhaysan", headers=H("viewer")).json()
     assert set(p["profile"]["values"]["species_profiles"]) == {"lesh", "sudak", "okun", "plotva", "shuka", "sazan", "karas", "yaz"}
     # «Презентация» (№ 62): каталог — названия, версии, описания; без кода, пакета и параметров водоёмов
-    assert len(aa.get("/catalog", headers=H("presenter")).json()) == 6
+    assert len(aa.get("/catalog", headers=H("presenter")).json()) == 5
     for url in ("/catalog/bayes_cohort/versions/2.0.2/files", "/catalog/bayes_cohort/versions/2.0.2/package.zip",
                 "/profiles/bayes_cohort/zhaysan"):
         assert aa.get(url, headers=H("presenter")).status_code == 403, url

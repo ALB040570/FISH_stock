@@ -38,6 +38,22 @@ def test_roles_monitoring(calc_stack, tmp_path, monkeypatch):
 
     full = db.get("/dashboards/monitoring", headers=H("mathematician")).json()
     assert [t["code"] for t in full["tabs"]] == ["data", "catchability", "stock", "pdu"]
+    # «Проверки модели» скрыты для всех (№ 65): нет раздела и слайдов, данные — 404
+    assert [x["code"] for x in full["tabs"][2]["sections"]] == ["summary", "by_catch", "bayes"]
+    assert not [w for w in full["widgets"] if w["id"].startswith("bc_")]
+    for role in FULL + LIMITED:
+        r = db.post("/widgets/data", headers=H(role), json={"source": {"kind": "insight", "view": "bc_net"}, "filters": F, "options": {}})
+        assert r.status_code == 404, role
+        r = db.post("/widgets/data", headers=H(role), json={"source": {"kind": "payload", "algorithm": "bayes_checks"}, "filters": F, "options": {}})
+        assert r.status_code == 404, role
+    # дашборд, сохранённый со старым разделом (копия шаблона), отдаётся без него
+    mod.boards.update("monitoring", {"tabs": full["tabs"][:2] + [{**full["tabs"][2], "sections": full["tabs"][2]["sections"] + [
+        {"code": "model_checks", "title_ru": "Проверки модели"}]}] + full["tabs"][3:],
+        "widgets": full["widgets"] + [{"id": "bc_retro", "tab": "stock", "section": "model_checks", "type": "view",
+                                       "source": {"kind": "insight", "view": "bc_retro"}, "options": {}}]}, actor="system")
+    old = db.get("/dashboards/monitoring", headers=H("admin")).json()
+    assert "model_checks" not in [x["code"] for x in old["tabs"][2]["sections"]] and "bc_retro" not in [w["id"] for w in old["widgets"]]
+    mod.boards.update("monitoring", {"tabs": full["tabs"], "widgets": full["widgets"]}, actor="system")
     hidden = [w for w in full["widgets"] if w["tab"] in ("catchability", "stock") or (w["tab"], w.get("section")) == ("pdu", "app")]
     open_ = [w for w in full["widgets"] if w not in hidden]
     assert len(hidden) > 40 and {w["id"] for w in hidden} == access.hidden_widgets(full)

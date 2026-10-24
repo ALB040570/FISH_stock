@@ -28,8 +28,8 @@ TABS_MONITORING = [
     {"code": "stock", "title_ru": "Запасы", "title_kk": "Қорлар", "year_picker": True,
      "sections": [{"code": "summary", "title_ru": "Сводка", "title_kk": "Жиынтық"},
                   {"code": "by_catch", "title_ru": "По уловам", "title_kk": "Ауланым бойынша"},
-                  {"code": "bayes", "title_ru": "Байесовская модель", "title_kk": "Байестік модель"},
-                  {"code": "model_checks", "title_ru": "Проверки модели", "title_kk": "Модельді тексеру"}]},
+                  {"code": "bayes", "title_ru": "Байесовская модель", "title_kk": "Байестік модель"}]},
+     # раздел «Проверки модели» (CALC_CHECKS) скрыт — решение заказчика 24.10 (№ 65)
     {"code": "pdu", "title_ru": "ПДУ", "title_kk": "ШРА", "year_picker": True,
      "sections": [{"code": "npc", "title_ru": "ПДУ НПЦ (официальный)", "title_kk": "ҒӨО ШРА (ресми)"},
                   {"code": "app", "title_ru": "ПДУ, рассчитанный в приложении (F = k·M)", "title_kk": "Қосымшада есептелген ШРА (F = k·M)"}]},
@@ -417,7 +417,6 @@ MONITORING = {
         *CALC_STOCK_SUMMARY,
         *CALC_STOCK,
         *CALC_BAYES,
-        *CALC_CHECKS,
         # ---- ПДУ
         *CALC_PDU_NPC,
         *CALC_PDU_APP,
@@ -442,6 +441,6 @@ COMPARE = {
 }
 
 # Ревизия системных шаблонов: при обновлении приложения неизменённые пользователями шаблоны обновляются
-TEMPLATE_REV = 16
+TEMPLATE_REV = 17
 
 SYSTEM = [MONITORING, COMPARE]
