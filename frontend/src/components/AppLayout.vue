@@ -22,7 +22,7 @@
       <el-header class="header" height="52px">
         <el-button text @click="collapsed = !collapsed"><el-icon :size="18"><Fold v-if="!collapsed" /><Expand v-else /></el-icon></el-button>
         <el-dropdown v-if="cabs.length > 1" trigger="click" class="cab-switch" @command="hardGo">
-          <el-button text><el-icon><Grid /></el-icon>&nbsp;{{ $t('cab.switch') }}<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+          <el-button text :title="$t('cab.switch')"><el-icon><Grid /></el-icon><span class="hide-sm">&nbsp;{{ $t('cab.switch') }}</span><el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item v-for="c in cabs" :key="c.key" :command="c.base" :disabled="c.key === cab.key">
@@ -33,9 +33,10 @@
           </template>
         </el-dropdown>
         <div class="grow" />
-        <el-button text class="help-link" @click="$router.push(helpPath())"><el-icon><Reading /></el-icon>&nbsp;{{ $t('nav.help') }}</el-button>
+        <el-button text class="help-link" :title="$t('nav.help')" @click="$router.push(helpPath())"><el-icon><Reading /></el-icon><span class="hide-sm">&nbsp;{{ $t('nav.help') }}</span></el-button>
         <el-tooltip :content="$t('help.context')" placement="bottom">
-          <el-button circle size="small" @click="openContext"><el-icon><QuestionFilled /></el-icon></el-button>
+          <span class="hide-sm ctx-help">
+          <el-button circle size="small" @click="openContext"><el-icon><QuestionFilled /></el-icon></el-button></span>
         </el-tooltip>
         <ThemeToggle />
         <el-radio-group v-model="lang" size="small" @change="setLang">
@@ -45,7 +46,7 @@
         <el-dropdown trigger="click" @command="onCmd">
           <span class="user">
             <UserAvatar :user="auth.user" :size="28" />
-            <span class="uname">{{ auth.user?.name }}<br><span class="urole">{{ $t('roles.' + auth.role) }}</span></span>
+            <span class="uname hide-sm">{{ auth.user?.name }}<br><span class="urole">{{ $t('roles.' + auth.role) }}</span></span>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
@@ -188,4 +189,14 @@ function onCmd(c) {
 .uname { font-size: 13px; line-height: 1.15; }
 .urole { color: var(--fs-muted); font-size: 11px; }
 .main { padding: 0; overflow: auto; }
+.header > * { flex-shrink: 0; }
+.header > .grow { flex: 1 1 0; min-width: 0; }
+/* телефон: значки без подписей, без имени пользователя; справка по экрану — из «Справки» */
+@media (max-width: 640px) {
+  .header { gap: 6px; padding: 0 8px; }
+  .header :deep(.el-button + .el-button) { margin-left: 0; }
+  .header :deep(.el-button.is-text) { padding: 6px; }
+  .header :deep(.cab-switch .el-icon--right) { margin-left: 2px; }
+  .hide-sm { display: none !important; }
+}
 </style>
