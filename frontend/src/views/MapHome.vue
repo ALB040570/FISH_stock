@@ -71,10 +71,11 @@
             <div class="fs-tile"><div class="ft-l">{{ $t('map.datasets') }}</div><div class="ft-v">{{ sel.ndatasets }}</div></div>
           </div>
           <div v-if="sel.speciesList.length" class="small" style="margin-top:8px"><span class="muted">{{ $t('map.species_in_data') }}:</span> {{ sel.speciesList.join(', ') }}</div>
-          <div v-if="shownRun(sel)" class="small" style="margin-top:8px">
-            <span class="muted">{{ sel.run.main_run ? $t('map.main_run') : $t('map.last_run') }}:</span>
-            {{ shownRun(sel).calculation_title }}
-            <span class="muted"> · {{ shortDate(shownRun(sel).finished_at) }}</span>
+          <div v-if="mainsOf(sel).length" class="small" style="margin-top:8px" data-test="map-mains">
+            <span class="muted">{{ $t('map.main_calcs') }}:</span>
+            {{ mainsOf(sel).map((m) => m.letter).join(', ') }}
+            <span class="muted"> · {{ shortDate(lastOf(sel)) }}</span>
+            <el-tag v-if="!hideInternal && sel.run.stale?.length" size="small" type="warning" effect="plain" style="margin-left:4px">{{ $t('map.stale_n', { n: sel.run.stale.length }) }}</el-tag>
           </div>
           <div v-if="sel.pdu?.rows?.length" style="margin-top:8px">
             <div class="small muted">{{ pduLabel(sel.pdu) }}, т ({{ sel.pdu.rows[0].year }})</div>
@@ -168,7 +169,9 @@ const filtered = computed(() => wbs.value.filter((w) =>
 ).sort((a, b) => (a.state === 'no_data') - (b.state === 'no_data') || a.name_ru.localeCompare(b.name_ru)))
 
 // наблюдателю — только завершённый расчёт (идущий или неудачный запуск — внутреннее состояние, № 55)
-const shownRun = (w) => (w.run ? w.run.main_run || w.run.last_done || (hideInternal ? null : w.run.last_run) : null)
+// основные расчёты водоёма (решение № 70): буквы алгоритмов и дата последнего результата
+const mainsOf = (w) => Object.values(w.run?.main || {}).sort((a, b) => (a.letter || '').localeCompare(b.letter || ''))
+const lastOf = (w) => mainsOf(w).map((m) => m.finished_at).filter(Boolean).sort().pop()
 const shortDate = (s) => (s ? new Date(s).toLocaleDateString('ru-RU') : '')
 
 async function load() {

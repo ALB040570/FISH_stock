@@ -4,7 +4,8 @@
     python algorithms/build.py            # собрать все пакеты в algorithms/dist/
 
 Сервис «Моделирование алгоритмов» при первом запуске сам собирает эти пакеты и публикует
-их как проверенные версии 1.0.0 (эталонные алгоритмы, перенесённые из fish_stock_forecast).
+их как проверенные версии (эталонные алгоритмы, перенесённые из fish_stock_forecast; с 3.0.0 — по одному
+алгоритму каталога на пакет, решение № 70).
 """
 from __future__ import annotations
 
@@ -18,7 +19,15 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PACKAGES = HERE / "packages"
-ORDER = ["seine_catchability", "stock_by_catch", "pdu_by_age", "bayes_cohort", "forecast_pdu", "bayes_checks"]
+# Каталог алгоритмов a–k (решение № 70): порядок букв; k — «Планируется» (без пакета, algorithms/catalog.json).
+# «Проверки байесовской модели» (bayes_checks) в каталог не входят (решение № 65); пакет сохранён.
+ORDER = ["net_catchability", "seine_catchability", "seine_likelihood", "net_likelihood", "seine_stock", "net_stock",
+         "combined_stock", "pdu_by_age", "bayes_cohort", "forecast_pdu"]
+
+
+def catalog() -> list[dict]:
+    """Алгоритмы каталога a–k: буква, название, описание, есть ли реализация (algorithms/catalog.json)."""
+    return json.loads((HERE / "catalog.json").read_text(encoding="utf-8"))
 
 
 def _profile_files() -> dict[str, bytes]:

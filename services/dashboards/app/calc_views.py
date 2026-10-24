@@ -12,7 +12,9 @@ import re
 
 from .insights import NoData, col
 
-ALG = {"seine": "seine_catchability", "net": "stock_by_catch"}
+# алгоритмы каталога (решение № 70): уловистость невода — b, сети — a (σ балансовой модели — из d)
+ALG = {"seine": "seine_catchability", "net": "net_catchability"}
+CALC_HINT = ("Расчёт запасов рыб", "Балық қорын есептеу")
 
 
 def L(lang, ru, kk):
@@ -54,14 +56,19 @@ def age_label(j):
 
 
 # ------------------------------------------------------------------ данные запуска
+def _no_main(D, letter, ru, kk):
+    return NoData(L(D.lang, f"Для водоёма нет основного расчёта «{letter}. {ru}» — выполните его в кабинете «{CALC_HINT[0]}»",
+                    f"Су айдыны үшін «{letter}. {kk}» негізгі есептеуі жоқ — оны «{CALC_HINT[1]}» кабинетінде орындаңыз"))
+
+
 def _payload(D, gear):
-    pl, meta = D.run_payload(ALG[gear])
-    if pl is None:
-        if meta is None:
-            raise NoData(L(D.lang, "Для водоёма ещё нет расчёта уловистости — запустите расчёт в разделе «Расчёты»",
-                           "Су айдыны үшін аулағыштық әлі есептелмеген — «Есептеулер» бөлімінде есептеуді іске қосыңыз"))
-        raise NoData(L(D.lang, "В запуске нет результата этого шага", "Іске қосуда бұл қадамның нәтижесі жоқ"))
-    part = pl.get("net") if gear == "net" else pl
+    res, meta = D.main_result(ALG[gear])
+    letter, ru, kk = ("a", "Уловистость сети", "Аудың аулағыштығы") if gear == "net" else ("b", "Уловистость невода", "Сүзекінің аулағыштығы")
+    if meta is None:
+        raise _no_main(D, letter, ru, kk)
+    if res is None:
+        raise NoData(L(D.lang, "У основного расчёта нет результата", "Негізгі есептеудің нәтижесі жоқ"))
+    part = D.net_payload() if gear == "net" else res.get("payload")
     if not part or not part.get("fits"):
         raise NoData(L(D.lang, "В результате запуска нет параметров уловистости", "Іске қосу нәтижесінде аулағыштық параметрлері жоқ"))
     return part, meta
@@ -454,27 +461,27 @@ def pieces(v, lang="ru"):
 
 
 def _stock(D):
-    pl, meta = D.run_payload("stock_by_catch")
-    if pl is None or not (pl.get("stock") or {}).get("species"):
+    res, meta = D.main_result("combined_stock")
+    pl = (res or {}).get("payload") or {}
+    if not (pl.get("stock") or {}).get("species"):
         if meta is None:
-            raise NoData(L(D.lang, "Для водоёма ещё нет расчёта запаса по уловам — запустите расчёт в разделе «Расчёты»",
-                           "Су айдыны үшін ауланым бойынша қор әлі есептелмеген — «Есептеулер» бөлімінде есептеуді іске қосыңыз"))
-        raise NoData(L(D.lang, "В запуске нет результата расчёта запаса", "Іске қосуда қор есебінің нәтижесі жоқ"))
-    return pl["stock"], meta
+            raise _no_main(D, "g", "Ежегодный запас, усреднённый по неводу и сети", "Сүзекі мен ау бойынша орташаланған жылдық қор")
+        raise NoData(L(D.lang, "У основного расчёта запаса нет результата", "Қордың негізгі есептеуінің нәтижесі жоқ"))
+    st = pl["stock"]
+    D._d["_stock_method"] = st.get("method") or "on_stock"
+    return st, meta
+
+
+def _vm(sp):
+    """Годовой запас вида того способа, которым посчитан основной расчёт g (по запасам / по улову)."""
+    vb = sp["variants"]["with_ages"]
+    return vb.get("on_stock") or next(v for k, v in vb.items() if k != "hauls")
 
 
 def _toggles(D, opt, hauls_only=False):
-    lang = D.lang
-    variant = opt.get("variant") if opt.get("variant") in ("with_ages", "out_ages") else "with_ages"
-    method = opt.get("method") if opt.get("method") in ("on_stock", "on_catch") else "on_stock"
-    t = [{"key": "variant", "title": L(lang, "Уловистость", "Аулағыштық"), "value": variant,
-          "options": [{"value": "with_ages", "label": L(lang, "по возрастам", "жастар бойынша")},
-                      {"value": "out_ages", "label": L(lang, "средняя по виду", "түр бойынша орташа")}]}]
-    if not hauls_only:
-        t.append({"key": "method", "title": L(lang, "Годовой запас", "Жылдық қор"), "value": method,
-                  "options": [{"value": "on_stock", "label": L(lang, "по запасам", "қорлар бойынша")},
-                              {"value": "on_catch", "label": L(lang, "по улову", "ауланым бойынша")}]})
-    return variant, method, t
+    """С решения № 70 уловистость всегда по возрастам, способ годового запаса — параметр расчёта (e, f, g):
+    переключателей нет, способ показывается в подписи слайда."""
+    return "with_ages", D._d.get("_stock_method", "on_stock"), []
 
 
 def _stock_species(D, opt):
@@ -493,9 +500,6 @@ def _stock_species(D, opt):
 def _stock_common(D, meta, years, y, code, variant=None, method=None, st=None):
     lang = D.lang
     parts = [D.sp_name(code) if code else None, str(y)]
-    if st and variant:
-        parts.append(L(lang, "уловистость по возрастам", "жастар бойынша аулағыштық") if variant == "with_ages"
-                     else L(lang, "уловистость средняя по виду", "түр бойынша орташа аулағыштық"))
     if st and method:
         parts.append(L(lang, "по запасам", "қорлар бойынша") if method == "on_stock" else L(lang, "по улову", "ауланым бойынша"))
     return {"meta": meta, "year": y, "year_choices": years, "calc_year": True, "help": "method-stock",
@@ -610,8 +614,8 @@ def v_st_hauls(D, opt):
             rows.append({"gear": L(lang, "сеть", "ау") if g == "net" else L(lang, "невод", "сүзекі"), "year": yy, "date": H[gk]["date"][h],
                          "place": H[gk]["place"][h], "type": H[gk]["type"][h], "stock": v})
         dots.append({"name": L(lang, "Сети, лов", "Аулар, аулау") if g == "net" else L(lang, "Невод, лов", "Сүзекі, аулау"), "points": pts, "c": k})
-    lines = [{"name": L(lang, "Сети, год", "Аулар, жыл"), "values": vb["on_stock"]["totals"][G["net"]], "c": 0},
-             {"name": L(lang, "Невод, год", "Сүзекі, жыл"), "values": vb["on_stock"]["totals"][G["seine"]], "c": 1}]
+    lines = [{"name": L(lang, "Сети, год", "Аулар, жыл"), "values": _vm(sp)["totals"][G["net"]], "c": 0},
+             {"name": L(lang, "Невод, год", "Сүзекі, жыл"), "values": _vm(sp)["totals"][G["seine"]], "c": 1}]
     return {"chart": {"kind": "dots", "x": years, "dots": dots, "lines": lines, "x_title": L(lang, "Год", "Жыл"),
                       "y_title": L(lang, "штук", "дана"), "allowed": ["log", "linear"], "default": "log"},
             "columns": [col("gear", L(lang, "Орудие", "Құрал")), col("year", L(lang, "Год", "Жыл"), "integer"), col("date", L(lang, "Дата", "Күні")),
@@ -694,10 +698,9 @@ def _bayes(D):
     pl, meta = D.run_payload("bayes_cohort")
     if pl is None or not pl.get("species"):
         if meta is None:
-            raise NoData(L(D.lang, "Для водоёма ещё нет полного расчёта с байесовской моделью (этапы 1–5) — запустите его в разделе «Расчёты»",
-                           "Су айдыны үшін байестік модельмен толық есеп (1–5 кезеңдер) әлі жоқ — «Есептеулер» бөлімінде іске қосыңыз"))
-        raise NoData(L(D.lang, "В запуске нет шага «Байесовская когортная модель» — нужен полный расчёт (этапы 1–5)",
-                       "Іске қосуда «Байестік когорттық модель» қадамы жоқ — толық есеп қажет (1–5 кезеңдер)"))
+            raise _no_main(D, "i", "Запас по математической модели", "Математикалық модель бойынша қор")
+        raise NoData(L(D.lang, "У основного расчёта математической модели нет результата",
+                       "Математикалық модельдің негізгі есептеуінің нәтижесі жоқ"))
     return pl, meta
 
 
@@ -1129,9 +1132,8 @@ def _pdu(D):
     pl, meta = D.run_payload("pdu_by_age")
     if pl is None or not pl.get("species"):
         if meta is None:
-            raise NoData(L(D.lang, "Для водоёма ещё нет расчёта ПДУ НПЦ по возрастам — запустите расчёт в разделе «Расчёты»",
-                           "Су айдыны үшін жас бойынша ҒӨО ШРА әлі есептелмеген — «Есептеулер» бөлімінде іске қосыңыз"))
-        raise NoData(L(D.lang, "В запуске нет шага «ПДУ НПЦ по возрастам»", "Іске қосуда «Жас бойынша ҒӨО ШРА» қадамы жоқ"))
+            raise _no_main(D, "h", "ПДУ в экземплярах особей", "Дарақ данасымен ШРА")
+        raise NoData(L(D.lang, "У основного расчёта ПДУ в экземплярах нет результата", "Дарақ данасымен ШРА негізгі есептеуінің нәтижесі жоқ"))
     return pl, meta
 
 
@@ -1294,10 +1296,8 @@ def _fc(D):
     pl, meta = D.run_payload("forecast_pdu")
     if pl is None or not pl.get("species"):
         if meta is None:
-            raise NoData(L(D.lang, "Для водоёма ещё нет полного расчёта (этапы 1–5): ПДУ приложения считается по байесовской модели",
-                           "Су айдыны үшін толық есеп (1–5 кезеңдер) әлі жоқ: қосымша ШРА байестік модель бойынша есептеледі"))
-        raise NoData(L(D.lang, "В запуске нет шага «Прогноз и ПДУ» — нужен полный расчёт (этапы 1–5)",
-                       "Іске қосуда «Болжам және ШРА» қадамы жоқ — толық есеп қажет (1–5 кезеңдер)"))
+            raise _no_main(D, "j", "Прогноз запаса и оценка ПДУ по модели", "Модель бойынша қор болжамы және ШРА бағасы")
+        raise NoData(L(D.lang, "У основного расчёта прогноза нет результата", "Болжамның негізгі есептеуінің нәтижесі жоқ"))
     return pl, meta
 
 
@@ -1579,7 +1579,7 @@ def _trust_row(ctx, key, sp, y, yi):
     R, grow, grow_words, gear_w = ctx["R"], ctx["grow"], ctx["grow_words"], ctx["gear_w"]
     code = names.get(key.strip().lower(), key)
     ages = sp["ages"]
-    mb = sp["variants"]["with_ages"]["on_stock"]
+    mb = _vm(sp)
     stock_y = mb["by_age"][G["mean"]][yi] if yi < len(mb["by_age"][G["mean"]]) else None
     if not stock_y:
         return None
@@ -1856,7 +1856,7 @@ def _lg(x):
 def _growth_heat(ctx, sp, lang):
     years, G = ctx["years"], ctx["G"]
     ages = sp["ages"]
-    byA = sp["variants"]["with_ages"]["on_stock"]["by_age"][G["mean"]]
+    byA = _vm(sp)["by_age"][G["mean"]]
     lim = 1 + ctx["grow"] / 100
     xs = ages[1:]
     cells, rows = [], []
@@ -1881,7 +1881,7 @@ def _growth_heat(ctx, sp, lang):
 def _gears_heat(ctx, sp, lang):
     years, G = ctx["years"], ctx["G"]
     ages = sp["ages"]
-    mb = sp["variants"]["with_ages"]["on_stock"]["by_age"]
+    mb = _vm(sp)["by_age"]
     S, Nn = mb[G["seine"]], mb[G["net"]]
     R = ctx["R"]
     cells, rows = [], []
@@ -2097,7 +2097,7 @@ def v_ca_strong(D, opt, rules=None):
         raise NoData(L(lang, f"За {y} г. нет запаса вида", f"{y} ж. түр қоры жоқ"))
     r = r[0]
     ages, N, Np, fl = r["_ages"], r["_N"], r["_Np"] or {}, r["_flagged"]
-    byA = sp["variants"]["with_ages"]["on_stock"]["by_age"][G["mean"]]
+    byA = _vm(sp)["by_age"][G["mean"]]
     lim = 1 + ctx["grow"] / 100
     rows, mx, mean = [], [], []
     for xi, j in enumerate(ages):

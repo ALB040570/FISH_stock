@@ -1,18 +1,27 @@
 """
-Каталог версий алгоритмов, профили водоёмов, расчёты (цепочки) и запуски; исполнение запусков воркером.
+Каталог алгоритмов, параметры алгоритмов, расчёты и журнал; исполнение расчётов воркером (решение № 70).
+
+Понятия:
+- алгоритм каталога (a–k) — версии пакетов кода; включает и отключает администратор и математик;
+- параметры алгоритма — именованный набор значений всех параметров одного алгоритма, с версиями; общий для водоёмов;
+- расчёт — алгоритм + версия кода (пусто — последняя включённая) + водоём + период + входы (наборы данных —
+  последняя версия; результаты других алгоритмов — основной расчёт водоёма или указанный) + параметры (набор и
+  версия). Хранит один результат: новый запуск затирает прежний; журнал расчёта хранит, чем считали каждый раз;
+- основной расчёт — один на алгоритм × водоём; мониторинг собирает картину водоёма из основных расчётов.
 """
 from __future__ import annotations
 
 import io
 import json
 import os
+import shutil
 import socket
 import sys
-import time
 import zipfile
 from pathlib import Path
 
-from fishcommon.storage import Collection, atomic_write_json, dumps, locked, now_iso, read_json
+from fishcommon.storage import Collection, atomic_write_json, dumps, locked, new_id, now_iso, read_json
+
 
 def _algorithms_dir() -> Path:
     """Каталог пакетов алгоритмов: FISH_ALGORITHMS_DIR; в образе Docker — /srv/algorithms (рядом с app/);
@@ -33,7 +42,11 @@ import build  # noqa: E402
 import executor  # noqa: E402
 
 STEP_ORDER = {c: i for i, c in enumerate(build.ORDER)}
-TERMINAL = ("done", "failed", "cancelled")
+CATALOG = build.catalog()                                    # a–k: буква, название, есть ли реализация
+CATALOG_BY_CODE = {a["code"]: a for a in CATALOG}
+ORDER_ALL = {a["code"]: i for i, a in enumerate(CATALOG)}
+ACTIVE = ("queued", "running")
+DEFAULT_SET_NAME = "По умолчанию (эталон 22.10.2026)"
 
 
 def semver_key(v: str):
@@ -43,16 +56,34 @@ def semver_key(v: str):
         return (0,)
 
 
+def letter(code: str) -> str:
+    return (CATALOG_BY_CODE.get(code) or {}).get("letter", "")
+
+
+def algo_info(E, code: str) -> dict | None:
+    """Алгоритм каталога: a–k (algorithms/catalog.json) или опубликованный математиком в «Моделировании алгоритмов»."""
+    a = CATALOG_BY_CODE.get(code)
+    if a:
+        return a
+    meta = E.catalog.get(code) if code else None
+    if meta:
+        return {"code": code, "letter": "", "title_ru": meta.get("title_ru", code), "title_kk": meta.get("title_kk", ""),
+                "planned": False, "inputs": []}
+    return None
+
+
 class Engine:
     def __init__(self, root: Path):
         self.root = Path(root)
         self.catalog = Collection(self.root, "catalog")
-        self.profiles = Collection(self.root, "profiles")
-        self.calculations = Collection(self.root, "calculations")
-        self.runs = Collection(self.root, "runs")
+        self.param_sets = Collection(self.root, "param_sets")
+        self.calcs = Collection(self.root, "calcs")
+        self.mains_path = self.root / "mains.json"
+        self.migrations_path = self.root / "migrations.json"
 
-    # ================================================================ каталог
+    # ================================================================ каталог (версии кода)
     def seed_builtin(self) -> None:
+        self._migrate_v3()
         for manifest, files in build.builtin():
             code = manifest["code"]
             if not self.catalog.exists(code):
@@ -63,56 +94,11 @@ class Engine:
                 self.publish(manifest, files, actor="system", source="builtin",
                              report={"status": "passed", "note": "эталонный алгоритм; проверен на контрольных примерах оз. Жайсан (эталон 22.10.2026)"})
             self._drop_old_builtin(code, manifest["version"])
-            prof = files.get("profiles/zhaysan.json")
-            if prof and not self.profiles.exists(f"{code}__zhaysan"):
-                self.save_profile(code, "zhaysan", {"species_profiles": json.loads(prof)}, "system",
-                                  "значения расчётов заказчика для оз. Жайсан")
-                self.profiles.update(self.profile_id(code, "zhaysan"), {"migrated_to": f"defaults {manifest['version']}"},
-                                     actor="system")
-            elif prof and files.get("previous_defaults_1.0.json"):
-                self._migrate_profiles(code, json.loads(prof), json.loads(files["previous_defaults_1.0.json"]),
-                                       manifest["version"])
-
-    def _migrate_profiles(self, code: str, new: dict, previous: dict, version: str) -> None:
-        """Профили водоёмов после смены эталона (23.10.2026): значение, совпадающее с прежним значением по
-        умолчанию, заменяется новым значением по умолчанию; значения, изменённые пользователями, сохраняются;
-        параметров, которых больше нет в модели, в профиле не остаётся. Каждый профиль получает новую версию
-        (прежняя — в истории профиля). Выполняется один раз на версию алгоритма."""
-        tag = f"defaults {version}"
-        major = version.split(".")[0] + "."
-        for p in self.profiles.list():
-            # один раз на основную версию: переход 1.x → 2.x; исправления 2.0.x значений по умолчанию не меняют
-            if p.get("algorithm") != code or str(p.get("migrated_to") or "").startswith(f"defaults {major}"):
-                continue
-            cur = self.get_profile(code, p["water_body"])
-            if not cur:
-                continue
-            old_sp = (cur.get("values") or {}).get("species_profiles") or {}
-            out = {}
-            keys = set(next(iter(new.values()), {}))
-            for sp, vals in old_sp.items():
-                vals = vals or {}
-                if sp not in new:                          # вид не из эталона: только убрать исчезнувшие параметры
-                    out[sp] = {k: v for k, v in vals.items() if k in keys}
-                    continue
-                merged = dict(new[sp])
-                for k, v in vals.items():
-                    if k in merged and k in previous.get(sp, {}) and v != previous[sp][k]:
-                        merged[k] = v                      # изменено пользователем — сохраняем
-                out[sp] = merged
-            self.profiles.add_version(self.profile_id(code, p["water_body"]),
-                                      {"values.json": dumps({**(cur.get("values") or {}), "species_profiles": out}).encode()},
-                                      {"comment": f"переход на эталон 22.10.2026 (версия алгоритма {version}): новые значения "
-                                                  "по умолчанию, изменения пользователей сохранены"}, "system")
-            self.profiles.update(self.profile_id(code, p["water_body"]), {"migrated_to": tag}, actor="system")
-            print(f"[algo_admin] профиль {code} / {p['water_body']}: переведён на значения версии {version}", flush=True)
+            self._seed_default_set(code, manifest, files)
 
     def _drop_old_builtin(self, code: str, keep: str) -> None:
-        """Прежние эталонные версии удаляются из каталога (решение заказчика 23.10.2026: новый эталон).
-        Запуски по ним остаются: в запуске хранятся версия, параметры и результаты. Версии, опубликованные
-        пользователями, не трогаются. Эталонные версии той же основной версии (2.0.0 при 2.0.1) остаются —
-        для воспроизводимости и запуска «с шага» от прежних запусков."""
-        import shutil
+        """Прежние эталонные версии другой основной версии удаляются из каталога (смена эталона, решение № 70).
+        Версии, опубликованные пользователями, не трогаются; эталонные версии той же основной версии остаются."""
         cur = self.catalog.get(code) or {}
         st = dict(cur.get("versions_state", {}))
         removed = []
@@ -188,56 +174,138 @@ class Engine:
         st.setdefault(version, {})["enabled"] = enabled
         self.catalog.update(code, {"versions_state": st}, actor=actor)
 
-    # ================================================================ профили водоёмов
-    def profile_id(self, code: str, water_body: str) -> str:
-        return f"{code}__{water_body}"
+    # ================================================================ перенос на новую схему (один раз)
+    def _migrations(self) -> dict:
+        return read_json(self.migrations_path, {}) or {}
 
-    def get_profile(self, code: str, water_body: str) -> dict | None:
-        pid = self.profile_id(code, water_body)
-        p = self.profiles.get(pid)
-        if not p or not p.get("current_version"):
-            return None
-        values = json.loads(self.profiles.read_version_file(pid, p["current_version"], "values.json"))
-        return {**p, "values": values}
+    def _migrate_v3(self) -> None:
+        """Переход на каталог a–k (решение № 70, 25.10.2026): прежние запуски, цепочки расчётов и основной запуск
+        удаляются (решение заказчика — пересчитать заново); алгоритмы, которых больше нет в каталоге
+        («Уловистость сети и запас по уловам», «Проверки модели»), убираются; профили байесовской модели водоёмов
+        становятся наборами «Параметры алгоритма i» с сохранением правок. Наборы данных и справочники — в других
+        сервисах и не меняются."""
+        done = self._migrations()
+        if done.get("catalog_v3"):
+            return
+        removed = []
+        for name in ("runs", "calculations"):
+            d = self.root / name
+            if d.exists():
+                n = sum(1 for p in d.iterdir() if p.is_dir())
+                shutil.rmtree(d, ignore_errors=True)
+                removed.append(f"{name}: {n}")
+        if (self.root / "main_runs.json").exists():
+            (self.root / "main_runs.json").unlink()
+            removed.append("main_runs.json")
+        for code in ("stock_by_catch", "bayes_checks"):          # опубликованные пользователями — не трогаются
+            if (self.catalog.dir / code).exists():
+                self.catalog.purge(code)
+                removed.append(f"алгоритм {code}")
+        self._profiles_to_sets()
+        done["catalog_v3"] = {"at": now_iso(), "removed": removed}
+        atomic_write_json(self.migrations_path, done)
+        if removed:
+            print("[algo_admin] переход на каталог a–k: удалено — " + "; ".join(removed), flush=True)
 
-    def save_profile(self, code: str, water_body: str, values: dict, actor: str, comment: str = "") -> dict:
-        pid = self.profile_id(code, water_body)
-        if not self.profiles.exists(pid):
-            # новый профиль уже на значениях текущей версии — перенос значений по умолчанию к нему не применяется
-            cur = self.latest_enabled(code) if self.catalog.exists(code) else None
-            self.profiles.create({"algorithm": code, "water_body": water_body,
-                                  "migrated_to": f"defaults {cur['version']}" if cur else None}, actor=actor, obj_id=pid)
-        self.profiles.add_version(pid, {"values.json": dumps(values).encode()}, {"comment": comment}, actor)
-        return self.get_profile(code, water_body)
+    def _profiles_to_sets(self) -> None:
+        """Профили водоёмов байесовской модели → наборы параметров алгоритма i (последняя версия профиля)."""
+        pdir = self.root / "profiles"
+        if not pdir.exists():
+            return
+        prof = Collection(self.root, "profiles")
+        for p in prof.list():
+            if p.get("algorithm") != "bayes_cohort" or not p.get("current_version"):
+                continue
+            try:
+                values = json.loads(prof.read_version_file(p["id"], p["current_version"], "values.json"))
+            except (OSError, ValueError):
+                continue
+            sp = (values or {}).get("species_profiles") or {}
+            if not sp:
+                continue
+            wb = p.get("water_body") or ""
+            name = {"zhaysan": "оз. Жайсан (профиль водоёма)"}.get(wb, f"Профиль водоёма «{wb}»")
+            s = self.param_sets.create({"algorithm": "bayes_cohort", "name": name, "is_default": False, "system": False,
+                                        "description": f"Перенесён из «Параметров водоёмов» ({wb}) 25.10.2026 со всеми правками",
+                                        "source_water_body": wb}, actor="system")
+            self.param_sets.add_version(s["id"], {"values.json": dumps({"species_profiles": sp}).encode()},
+                                        {"comment": "перенос профиля водоёма (решение № 70)"}, "system")
+            print(f"[algo_admin] профиль bayes_cohort / {wb} → набор параметров «{name}»", flush=True)
+        shutil.rmtree(pdir, ignore_errors=True)
 
-    def profile_version_values(self, code: str, water_body: str, n: int) -> dict:
-        return json.loads(self.profiles.read_version_file(self.profile_id(code, water_body), n, "values.json"))
+    # ================================================================ параметры алгоритма
+    def set_values(self, sid: str, n: int | None = None) -> dict:
+        s = self.param_sets.get(sid)
+        n = n or s.get("current_version")
+        return json.loads(self.param_sets.read_version_file(sid, n, "values.json"))
 
-    # ================================================================ запуски
-    def run_dir(self, run_id: str) -> Path:
-        return self.runs.obj_dir(run_id)
+    def default_set(self, code: str) -> dict | None:
+        return next((s for s in self.param_sets.list() if s.get("algorithm") == code and s.get("is_default")
+                     and not s.get("deleted")), None)
 
-    def step_dir(self, run_id: str, i: int, code: str) -> Path:
-        return self.run_dir(run_id) / "steps" / f"{i + 1:02d}_{code}"
+    def _seed_default_set(self, code: str, manifest: dict, files: dict[str, bytes]) -> None:
+        """Набор «По умолчанию» алгоритма — значения по умолчанию его манифеста (эталон). Если у новой версии кода
+        значения по умолчанию другие — у набора появляется новая версия."""
+        values = default_values(manifest, files)
+        cur = self.default_set(code)
+        if cur is None:
+            cur = self.param_sets.create({"algorithm": code, "name": DEFAULT_SET_NAME, "is_default": True, "system": True,
+                                          "description": "Значения по умолчанию алгоритма (эталон 22.10.2026, расчёты "
+                                                         "заказчика для оз. Жайсан). Не меняется: для своих значений "
+                                                         "создайте набор на его основе."}, actor="system", obj_id=f"default_{code}")
+        elif cur.get("current_version") and self.set_values(cur["id"]) == values:
+            return
+        self.param_sets.add_version(cur["id"], {"values.json": dumps(values).encode()},
+                                    {"comment": f"значения по умолчанию версии {manifest['version']}"}, "system")
 
-    def queue(self) -> list[dict]:
-        rs = [r for r in self.runs.list() if r.get("status") == "queued"]
-        return sorted(rs, key=lambda r: r["created_at"] + r["id"])
+    # ================================================================ основной расчёт
+    def mains(self) -> dict:
+        return read_json(self.mains_path, {}) or {}
 
-    def claim(self, worker: str) -> dict | None:
-        for r in self.queue():
-            mp = self.runs.obj_dir(r["id"]) / "meta.json"
-            with locked(mp):
-                cur = read_json(mp)
-                if cur.get("status") != "queued":
-                    continue
-                cur.update(status="running", started_at=now_iso(), worker=worker, heartbeat=now_iso())
-                atomic_write_json(mp, cur)
-                return cur
-        return None
+    def main_of(self, water_body: str, code: str) -> str | None:
+        return ((self.mains().get(water_body) or {}).get(code) or {}).get("calc_id")
 
-    def update_run(self, run_id: str, **changes) -> dict:
-        mp = self.runs.obj_dir(run_id) / "meta.json"
+    def set_main(self, water_body: str, code: str, calc_id: str | None, user_id: str, user_name: str = "") -> None:
+        with locked(self.mains_path):
+            data = read_json(self.mains_path, {}) or {}
+            wb = data.setdefault(water_body, {})
+            if calc_id is None:
+                wb.pop(code, None)
+            else:
+                wb[code] = {"calc_id": calc_id, "set_by": user_id, "set_by_name": user_name, "set_at": now_iso()}
+            atomic_write_json(self.mains_path, data)
+
+    # ================================================================ расчёты
+    def calc(self, cid: str) -> dict | None:
+        c = self.calcs.get(cid)
+        return None if not c or c.get("deleted") else c
+
+    def calc_list(self) -> list[dict]:
+        return [c for c in self.calcs.list() if not c.get("deleted")]
+
+    def result_dir(self, cid: str) -> Path:
+        return self.calcs.obj_dir(cid) / "result"
+
+    def work_dir(self, cid: str) -> Path:
+        return self.calcs.obj_dir(cid) / "work"
+
+    def journal(self, cid: str) -> list[dict]:
+        return read_json(self.calcs.obj_dir(cid) / "journal.json", []) or []
+
+    def add_journal(self, cid: str, entry: dict) -> None:
+        p = self.calcs.obj_dir(cid) / "journal.json"
+        with locked(p):
+            j = read_json(p, []) or []
+            j.append({"at": now_iso(), **entry})
+            atomic_write_json(p, j)
+
+    def resolve_input(self, calc: dict, code: str) -> str | None:
+        """Расчёт, который берётся входом code: указанный в расчёте или основной расчёт водоёма."""
+        ref = (calc.get("inputs") or {}).get(code) or "main"
+        return self.main_of(calc["water_body"], code) if ref == "main" else ref
+
+    def update_calc(self, cid: str, **changes) -> dict:
+        mp = self.calcs.obj_dir(cid) / "meta.json"
         with locked(mp):
             cur = read_json(mp)
             cur.update(changes)
@@ -245,23 +313,67 @@ class Engine:
             atomic_write_json(mp, cur)
             return cur
 
-    def recover_stale(self, host: str, sole: bool | None = None) -> int:
-        """Запуски «выполняется», чей воркер завершился (перезапуск, обновление), помечаются прерванными.
+    def queue(self) -> list[dict]:
+        rs = [c for c in self.calc_list() if c.get("state") == "queued"]
+        return sorted(rs, key=lambda c: (c.get("queued_at") or "") + c["id"])
 
-        sole — этот процесс единственный воркер каталога данных (Docker: один контейнер worker; run_local — один
-        процесс; переменная FISH_WORKER_SOLE=1). Тогда при старте воркера все «выполняется» — от прежних процессов,
-        даже если имя хоста другое (контейнер пересоздан при обновлении — у него новое имя хоста).
-        Без sole проверяются только запуски этого хоста: процесс жив и это не мы с тем же номером процесса
-        (в контейнере номер процесса после перезапуска снова 1 — отличаем по метке запуска процесса).
-        """
+    def claim(self, worker: str) -> dict | None:
+        """Следующий расчёт из очереди, у которого входы не ждут пересчёта (в очереди или выполняются)."""
+        for c in self.queue():
+            if self._inputs_pending(c):
+                continue
+            mp = self.calcs.obj_dir(c["id"]) / "meta.json"
+            with locked(mp):
+                cur = read_json(mp)
+                if cur.get("state") != "queued":
+                    continue
+                cur.update(state="running", started_at=now_iso(), worker=worker, heartbeat=now_iso(), progress=None)
+                atomic_write_json(mp, cur)
+                return cur
+        return None
+
+    def _inputs_pending(self, c: dict) -> bool:
+        return any(self.pending_input(c, code) for code in self.input_codes(c))
+
+    def pending_input(self, c: dict, code: str) -> dict | None:
+        """Расчёт-вход, который ещё в очереди или выполняется. Если основного расчёта входа нет, но расчёт этого
+        алгоритма для водоёма уже поставлен в очередь, — он (его первый результат станет основным)."""
+        rid = self.resolve_input(c, code)
+        if rid:
+            ic = self.calc(rid)
+            return ic if ic and ic.get("state") in ACTIVE else None
+        if ((c.get("inputs") or {}).get(code) or "main") != "main":
+            return None
+        return next((x for x in self.calc_list() if x["algorithm"] == code and x["water_body"] == c["water_body"]
+                     and x.get("state") in ACTIVE), None)
+
+    def input_codes(self, c: dict) -> list[str]:
+        """Алгоритмы-входы расчёта (по манифесту версии кода, которой он будет выполнен)."""
+        m = self.calc_manifest(c)
+        return list((m or {}).get("requires", {}).get("steps", []))
+
+    def calc_version(self, c: dict) -> str | None:
+        v = c.get("version")
+        if v and self.find_version(c["algorithm"], v):
+            return v
+        lv = self.latest_enabled(c["algorithm"])
+        return lv["version"] if lv else None
+
+    def calc_manifest(self, c: dict) -> dict | None:
+        v = self.calc_version(c)
+        return self.manifest(c["algorithm"], v) if v else None
+
+    def recover_stale(self, host: str, sole: bool | None = None) -> int:
+        """Расчёты «выполняется», чей воркер завершился (перезапуск, обновление), помечаются прерванными; прежний
+        результат расчёта (если был) остаётся."""
         if sole is None:
             sole = os.environ.get("FISH_WORKER_SOLE", "") in ("1", "true", "yes")
         me = worker_name()
         n = 0
-        for r in self.runs.list():
-            if r.get("status") != "running":
+        for c in self.calc_list():
+            if c.get("state") != "running":
                 continue
-            w = r.get("worker", "")
+            w = c.get("worker", "")
             if w == me:
                 continue
             parts = w.split(":")
@@ -278,72 +390,152 @@ class Engine:
                         alive = False
                 if alive:
                     continue
-            self.update_run(r["id"], status="failed", finished_at=now_iso(),
-                            message="Расчёт прерван (перезапуск сервера). Запустите заново.")
+            msg = "Расчёт прерван (перезапуск сервера). Запустите заново."
+            self.update_calc(c["id"], state="failed", finished_at=now_iso(), message=msg, progress=None)
+            self.add_journal(c["id"], {"action": "run", "status": "failed", "message": msg, "by": c.get("queued_by"),
+                                       "by_name": c.get("queued_by_name")})
             n += 1
         return n
 
-    def execute(self, run: dict, clients, log=print) -> dict:
-        """Выполнить запуск: снимок данных → шаги цепочки по порядку."""
-        run_id = run["id"]
-        rdir = self.run_dir(run_id)
-        inputs = rdir / "inputs"
-        inputs.mkdir(exist_ok=True)
+    def execute(self, c: dict, clients, plan_fn, log=print) -> dict:
+        """Выполнить расчёт: план (версия, параметры, входы, наборы данных) → шаг в отдельном процессе → при успехе
+        результат заменяет прежний. plan_fn(c) → (план, ошибки, предупреждения)."""
+        cid = c["id"]
+        wdir = self.work_dir(cid)
+        shutil.rmtree(wdir, ignore_errors=True)
+        wdir.mkdir(parents=True)
+        entry = {"action": "run", "by": c.get("queued_by"), "by_name": c.get("queued_by_name")}
+
+        def fail(msg, **extra):
+            self.add_journal(cid, {**entry, "status": "failed", "message": msg, **extra})
+            return self.update_calc(cid, state="failed", finished_at=now_iso(), message=msg, progress=None)
+
         try:
-            tables = {}
-            for dtype, src in run["datasets"].items():
-                tables[dtype] = clients.table(src["dataset_id"], src["version"])
-            (inputs / "tables.json").write_text(json.dumps(tables, ensure_ascii=False), encoding="utf-8")
-            names, kinds = clients.species_names(), clients.gear_kinds()
-            atomic_write_json(inputs / "dictionaries.json", {"species_names": names, "gear_kinds": kinds})
+            plan, errors, warnings = plan_fn(c)
         except Exception as e:  # noqa: BLE001
-            return self.update_run(run_id, status="failed", finished_at=now_iso(),
-                                   message=f"Не удалось получить исходные данные: {getattr(e, 'message', e)}")
-        steps = run["steps"]
-        done_dirs: dict[str, Path] = {}
-        for i, st in enumerate(steps):
-            meta = read_json(rdir / "meta.json")
-            if meta.get("cancel_requested"):
-                for j in range(i, len(steps)):
-                    steps[j]["status"] = "cancelled"
-                return self.update_run(run_id, status="cancelled", finished_at=now_iso(), steps=steps,
-                                       message="Расчёт отменён пользователем")
-            if st.get("skip"):
-                src = st.get("reuse_from")
-                if src:
-                    done_dirs[st["algorithm"]] = Path(src)
-                st["status"] = "reused"
-                self.update_run(run_id, steps=steps)
-                continue
-            d = self.step_dir(run_id, i, st["algorithm"])
-            ctx = {"run_id": run_id, "step": st["algorithm"], "water_body": run["water_body"], "params": st["params"],
-                   "species_names": names, "gear_kinds": kinds,
-                   "inputs": {k: str(v / "out") for k, v in done_dirs.items()},
-                   "tables_path": str(inputs / "tables.json"), "dataset_sources": run["datasets"]}
-            executor.prepare_step(d, self.package_files(st["algorithm"], st["version"]), ctx)
-            st.update(status="running", started_at=now_iso(), dir=str(d.relative_to(rdir)))
-            self.update_run(run_id, steps=steps, current_step=i)
-            log(f"запуск {run_id}: шаг {i + 1}/{len(steps)} {st['algorithm']} {st['version']}")
-            m = self.manifest(st["algorithm"], st["version"])
-            timeout = float(m.get("runtime", {}).get("timeout_minutes", 60)) * 60
+            return fail(f"Не удалось подготовить расчёт: {getattr(e, 'message', e)}")
+        if errors:
+            return fail("; ".join(errors))
+        entry.update({k: plan[k] for k in ("version", "checksum", "param_set", "param_set_name", "param_version",
+                                           "period", "datasets", "inputs")})
+        try:
+            tables = {t: clients.table(src["dataset_id"], src["version"]) for t, src in plan["datasets"].items()}
+            (wdir / "tables.json").write_text(json.dumps(tables, ensure_ascii=False), encoding="utf-8")
+            names, kinds = clients.species_names(), clients.gear_kinds()
+        except Exception as e:  # noqa: BLE001
+            return fail(f"Не удалось получить исходные данные: {getattr(e, 'message', e)}")
+        step = wdir / "step"
+        ctx = {"run_id": cid, "step": c["algorithm"], "water_body": c["water_body"], "params": plan["params"],
+               "species_names": names, "gear_kinds": kinds, "period": plan["period"],
+               "inputs": {code: str(self.result_dir(i["calc_id"]) / "out") for code, i in plan["inputs"].items()},
+               "tables_path": str(wdir / "tables.json"), "dataset_sources": plan["datasets"]}
+        executor.prepare_step(step, self.package_files(c["algorithm"], plan["version"]), ctx)
+        log(f"расчёт {cid}: {c['algorithm']} {plan['version']}, водоём {c['water_body']}")
+        m = self.manifest(c["algorithm"], plan["version"])
+        timeout = float(m.get("runtime", {}).get("timeout_minutes", 60)) * 60
 
-            def poll(run_id=run_id):
-                cur = read_json(self.runs.obj_dir(run_id) / "meta.json") or {}
-                self.update_run(run_id)  # heartbeat
-                return bool(cur.get("cancel_requested"))
+        def poll(cid=cid):
+            cur = read_json(self.calcs.obj_dir(cid) / "meta.json") or {}
+            self.update_calc(cid, progress=read_json(step / "progress.json"))
+            return bool(cur.get("cancel_requested"))
 
-            res = executor.run_step(d, timeout_s=timeout, on_poll=poll, poll_s=1.0)
-            st.update(status=res["status"], finished_at=now_iso(), message=res.get("message"),
-                      seconds=res.get("seconds"))
-            if res["status"] != "done":
-                for j in range(i + 1, len(steps)):
-                    steps[j]["status"] = "skipped"
-                status = "cancelled" if res["status"] == "cancelled" else "failed"
-                return self.update_run(run_id, status=status, finished_at=now_iso(), steps=steps,
-                                       message=f"Шаг «{st['title']}»: {res.get('message') or 'ошибка'}")
-            done_dirs[st["algorithm"]] = d
-            self.update_run(run_id, steps=steps)
-        return self.update_run(run_id, status="done", finished_at=now_iso(), steps=steps, message="Расчёт выполнен")
+        res = executor.run_step(step, timeout_s=timeout, on_poll=poll, poll_s=1.0)
+        log_text = (step / "log.txt").read_text(encoding="utf-8") if (step / "log.txt").exists() else ""
+        (self.calcs.obj_dir(cid) / "last_log.txt").write_text(log_text[-500_000:], encoding="utf-8")
+        status = read_json(step / "status.json", {}) or {}
+        if status.get("traceback"):
+            (self.calcs.obj_dir(cid) / "last_traceback.txt").write_text(status["traceback"], encoding="utf-8")
+        if res["status"] != "done":
+            msg = res.get("message") or "ошибка"
+            shutil.rmtree(wdir, ignore_errors=True)
+            if res["status"] == "cancelled":
+                self.add_journal(cid, {**entry, "status": "cancelled", "message": msg})
+                return self.update_calc(cid, state="cancelled", finished_at=now_iso(), message=msg, progress=None,
+                                        cancel_requested=False)
+            return fail(msg, seconds=res.get("seconds"))
+        result = read_json(step / "out" / "result.json", {}) or {}
+        # новый результат заменяет прежний (решение № 70)
+        rdir = self.result_dir(cid)
+        old = rdir.with_name(".result.old")
+        shutil.rmtree(old, ignore_errors=True)
+        if rdir.exists():
+            os.replace(rdir, old)
+        os.replace(step, rdir)
+        shutil.rmtree(old, ignore_errors=True)
+        shutil.rmtree(wdir, ignore_errors=True)
+        rid = new_id()
+        info = {"result_id": rid, "finished_at": now_iso(), "seconds": res.get("seconds"),
+                "years": (result.get("summary") or {}).get("years"), "notes": result.get("notes") or [],
+                "metrics": result.get("metrics") or {}, "warnings": warnings, "by": c.get("queued_by"),
+                "by_name": c.get("queued_by_name"), **{k: entry[k] for k in ("version", "checksum", "param_set",
+                                                                              "param_set_name", "param_version",
+                                                                              "period", "datasets", "inputs")}}
+        self.add_journal(cid, {**entry, "status": "done", "message": "Расчёт выполнен", "result_id": rid,
+                               "seconds": res.get("seconds"), "years": info["years"], "notes": info["notes"],
+                               "warnings": warnings})
+        cur = self.update_calc(cid, state="done", finished_at=info["finished_at"], message="Расчёт выполнен",
+                               progress=None, result=info, cancel_requested=False)
+        if not self.main_of(c["water_body"], c["algorithm"]):        # первый результат — основной
+            self.set_main(c["water_body"], c["algorithm"], cid, "system", "автоматически (первый результат)")
+        return cur
+
+    # ================================================================ устаревание
+    def staleness(self, current_datasets: dict, water_body: str | None = None) -> dict[str, list[str]]:
+        """{расчёт: причины} — результат устарел: новая версия набора данных, сменился основной расчёт-вход,
+        вход пересчитан или сам устарел, изменилась версия кода (если версия не закреплена)."""
+        calcs = {c["id"]: c for c in self.calc_list() if not water_body or c["water_body"] == water_body}
+        memo: dict[str, list[str]] = {}
+
+        def reasons(cid, path=()):
+            if cid in memo:
+                return memo[cid]
+            c = calcs.get(cid) or self.calc(cid)
+            if c is None or not c.get("result") or cid in path:
+                memo[cid] = []
+                return []
+            r = c["result"]
+            out = []
+            cur = current_datasets.get(c["water_body"]) or {}
+            for t, src in (r.get("datasets") or {}).items():
+                now = cur.get(t)
+                if now and (now.get("dataset_id") != src.get("dataset_id") or now.get("version") != src.get("version")):
+                    out.append(f"новая версия набора данных «{t}»")
+            for code, used in (r.get("inputs") or {}).items():
+                rid = self.resolve_input(c, code)
+                L = letter(code)
+                if rid != used.get("calc_id"):
+                    out.append(f"сменился основной расчёт-вход {L}" if (c.get("inputs") or {}).get(code, "main") == "main"
+                               else f"сменился расчёт-вход {L}")
+                    continue
+                ic = calcs.get(rid) or self.calc(rid)
+                if not ic or not ic.get("result"):
+                    out.append(f"у расчёта-входа {L} нет результата")
+                elif ic["result"].get("result_id") != used.get("result_id"):
+                    out.append(f"расчёт-вход {L} пересчитан")
+                elif reasons(rid, (*path, cid)):
+                    out.append(f"расчёт-вход {L} устарел")
+            if not c.get("version"):
+                lv = self.latest_enabled(c["algorithm"])
+                if lv and lv["version"] != r.get("version"):
+                    out.append(f"новая версия алгоритма {lv['version']}")
+            memo[cid] = out
+            return out
+
+        return {cid: reasons(cid) for cid in calcs if reasons(cid)}
+
+
+def default_values(manifest: dict, files: dict[str, bytes] | None = None) -> dict:
+    """Значения по умолчанию всех параметров набора (категории param и прежние fixed/waterbody/run, кроме calc)."""
+    out = {}
+    for p in manifest.get("parameters", []):
+        if p.get("category") == "calc":
+            continue
+        if p.get("type") == "profile":
+            prof = (files or {}).get("profiles/zhaysan.json")
+            out[p["code"]] = json.loads(prof) if prof else {}
+        else:
+            out[p["code"]] = p.get("default")
+    return out
 
 
 # метка запуска процесса: в контейнере номер процесса после перезапуска тот же (1), метка — новая

@@ -8,16 +8,20 @@
         <el-select v-model="wb" filterable :placeholder="$t('monitoring.choose')" class="wbsel" @change="go">
           <el-option v-for="w in wbs" :key="w.code" :label="tr(w, 'name')" :value="w.code" />
         </el-select>
-        <el-popover v-if="wb && runInfo" trigger="click" :width="300" placement="bottom-start">
+        <el-popover v-if="wb && runInfo" trigger="click" :width="380" placement="bottom-start">
           <template #reference>
-            <button class="status" :class="statusKind"><span class="sdot" />{{ statusText }}</button>
+            <button class="status" :class="statusKind" data-test="mon-status"><span class="sdot" />{{ statusText }}</button>
           </template>
           <div class="small">
-            <template v-if="runInfo.run">
-              <div><b>{{ runInfo.run.calculation_title }}</b></div>
-              <div class="muted" v-if="runInfo.run.finished_at">{{ new Date(runInfo.run.finished_at).toLocaleString('ru-RU') }}</div>
-              <div v-if="!runInfo.is_main" class="muted" style="margin-top:4px">{{ $t('monitoring.run_last') }}</div>
-              <router-link v-if="canGo('/calc/', auth.role)" :to="'/calc/runs/' + runInfo.run.id" class="plink">{{ $t('mon.run_link') }} →</router-link>
+            <template v-if="mains.length">
+              <div class="muted" style="margin-bottom:4px">{{ $t('monitoring.mains') }}</div>
+              <div v-for="m in mains" :key="m.id" class="mrow">
+                <b v-if="!(m.title || '').startsWith(m.letter + '.')">{{ m.letter }}. </b>
+                <router-link v-if="canGo('/calc/', auth.role)" :to="'/calc/calculations/' + m.id">{{ m.title }}</router-link><span v-else>{{ m.title }}</span>
+                <span class="muted"> · {{ m.finished_at ? new Date(m.finished_at).toLocaleDateString('ru-RU') : '—' }}</span>
+                <el-tag v-if="m.stale?.length && !hideInternal" size="small" type="warning" effect="plain" :title="m.stale.join('; ')">{{ $t('calcs.stale') }}</el-tag>
+              </div>
+              <router-link v-if="canGo('/calc/', auth.role)" :to="{ path: '/calc/calculations', query: { wb } }" class="plink">{{ $t('mon.run_link') }} →</router-link>
             </template>
             <template v-else>
               <div>{{ $t('monitoring.no_run') }}</div>
@@ -105,8 +109,12 @@ async function loadTraffic() {
 }
 watch([wb, locale], loadTraffic)
 
-const statusKind = computed(() => (!runInfo.value?.run ? 'none' : runInfo.value.is_main ? 'main' : 'last'))
-const statusText = computed(() => t('mon.status_' + statusKind.value))
+// основные расчёты водоёма (решение № 70): мониторинг собирает картину из них; «устарели» — не для наблюдателя (№ 55)
+const mains = computed(() => Object.values(runInfo.value || {}).sort((a, b) => (a.letter || '').localeCompare(b.letter || '')))
+const hideInternal = !auth.can('results.view')
+const staleN = computed(() => mains.value.filter((m) => m.stale?.length).length)
+const statusKind = computed(() => (!mains.value.length ? 'none' : staleN.value && !hideInternal ? 'last' : 'main'))
+const statusText = computed(() => (statusKind.value === 'last' ? t('mon.status_stale', { n: staleN.value }) : t('mon.status_' + statusKind.value)))
 
 // сжатие шапки при прокрутке (прокручивается .main)
 const sentinel = ref(null)
@@ -128,7 +136,7 @@ onMounted(async () => {
     board.value = b
     if (wb.value) {
       loadTraffic()
-      runInfo.value = await api.get('algo-admin', `/water-bodies/${wb.value}/monitoring-run`)
+      runInfo.value = await api.get('algo-admin', `/water-bodies/${wb.value}/mains`)
     }
   } catch (e) { error.value = e } finally { loading.value = false }
 })
@@ -156,6 +164,7 @@ async function copy() {
 .status:hover { border-color: var(--fs-primary-2); }
 .sdot { width: 8px; height: 8px; border-radius: 50%; background: var(--fs-faint); }
 .status.main .sdot { background: var(--fs-success); }
+.mrow { margin-bottom: 3px; }
 .status.last .sdot { background: var(--fs-warning); }
 .plink { display: inline-block; margin-top: 8px; }
 .chips { display: flex; gap: 6px; margin-top: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }

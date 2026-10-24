@@ -1,0 +1,113 @@
+[
+ {
+  "code": "net_catchability",
+  "letter": "a",
+  "title_ru": "Уловистость сети по возрастам и годам",
+  "title_kk": "Аудың жас пен жыл бойынша аулағыштығы",
+  "planned": false,
+  "inputs": []
+ },
+ {
+  "code": "seine_catchability",
+  "letter": "b",
+  "title_ru": "Уловистость невода по возрастам и годам",
+  "title_kk": "Сүзекінің жас пен жыл бойынша аулағыштығы",
+  "planned": false,
+  "inputs": []
+ },
+ {
+  "code": "seine_likelihood",
+  "letter": "c",
+  "title_ru": "Правдоподобие методом площадей (уловы неводом)",
+  "title_kk": "Аудан әдісімен шынайылық (сүзекі ауланымы)",
+  "planned": false,
+  "inputs": [
+   "seine_catchability"
+  ]
+ },
+ {
+  "code": "net_likelihood",
+  "letter": "d",
+  "title_ru": "Правдоподобие балансовым методом (уловы сетью)",
+  "title_kk": "Баланс әдісімен шынайылық (ау ауланымы)",
+  "planned": false,
+  "inputs": [
+   "net_catchability"
+  ]
+ },
+ {
+  "code": "seine_stock",
+  "letter": "e",
+  "title_ru": "Ежегодный запас методом площадей (шт и т)",
+  "title_kk": "Аудан әдісімен жылдық қор (дана және т)",
+  "planned": false,
+  "inputs": [
+   "seine_likelihood"
+  ]
+ },
+ {
+  "code": "net_stock",
+  "letter": "f",
+  "title_ru": "Ежегодный запас балансовым методом (шт и т)",
+  "title_kk": "Баланс әдісімен жылдық қор (дана және т)",
+  "planned": false,
+  "inputs": [
+   "net_likelihood"
+  ]
+ },
+ {
+  "code": "combined_stock",
+  "letter": "g",
+  "title_ru": "Ежегодный запас, усреднённый по неводу и сети (шт и т)",
+  "title_kk": "Сүзекі мен ау бойынша орташаланған жылдық қор (дана және т)",
+  "planned": false,
+  "inputs": [
+   "seine_stock",
+   "net_stock"
+  ]
+ },
+ {
+  "code": "pdu_by_age",
+  "letter": "h",
+  "title_ru": "ПДУ в экземплярах особей",
+  "title_kk": "Дарақ данасымен ШРА",
+  "planned": false,
+  "inputs": [
+   "combined_stock"
+  ]
+ },
+ {
+  "code": "bayes_cohort",
+  "letter": "i",
+  "title_ru": "Запас по математической модели",
+  "title_kk": "Математикалық модель бойынша қор",
+  "planned": false,
+  "inputs": [
+   "seine_likelihood",
+   "net_likelihood",
+   "combined_stock",
+   "pdu_by_age"
+  ]
+ },
+ {
+  "code": "forecast_pdu",
+  "letter": "j",
+  "title_ru": "Прогноз запаса и оценка ПДУ по модели",
+  "title_kk": "Модель бойынша қор болжамы және ШРА бағасы",
+  "planned": false,
+  "inputs": [
+   "bayes_cohort"
+  ]
+ },
+ {
+  "code": "removal_pdu",
+  "letter": "k",
+  "title_ru": "Оценка ПДУ на основе коэффициента изъятия",
+  "title_kk": "Алу коэффициенті негізінде ШРА бағасы",
+  "planned": true,
+  "inputs": [
+   "combined_stock"
+  ],
+  "description": "ПДУ, т = промысловый запас, т × коэффициент изъятия (таблица 5 статьи: промысловый запас, коэффициент изъятия, ПДУ). Вход — промысловый запас в тоннах (алгоритм g); параметр — коэффициент изъятия по видам. Реализация — позже (решение заказчика 24.10.2026)."
+ }
+]

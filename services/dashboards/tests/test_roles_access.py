@@ -8,7 +8,7 @@ import importlib
 
 from fastapi.testclient import TestClient
 
-from conftest import H, load_service
+from conftest import H, load_service, run_chain
 
 FULL = ("admin", "mathematician", "ichthyologist")
 LIMITED = ("viewer", "operator", "presenter")
@@ -27,9 +27,7 @@ def _post(db, role, w):
 
 def test_roles_monitoring(calc_stack, tmp_path, monkeypatch):
     dm, da, aa, aa_mod = calc_stack
-    c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "stock"}).json()
-    aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"), json={})
-    assert mod_process(aa_mod)
+    run_chain(aa, aa_mod)
     mod = load_service("dashboards", tmp_path, monkeypatch)
     for k, cl in (("algo_admin", aa), ("data_admin", da), ("data_model", dm)):
         mod.SVC[k] = mod.Svc(k, http=cl)

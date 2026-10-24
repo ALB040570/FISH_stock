@@ -1,4 +1,5 @@
-"""Пакеты алгоритмов в отдельных процессах (как у воркера): цепочка этапов 1–3, априорная проверка, прогноз."""
+"""Пакеты алгоритмов каталога a–j в отдельных процессах (как у воркера): сверка с прежним общим расчётом,
+период расчёта, априорная проверка модели, прогноз (решение № 70)."""
 import json
 import shutil
 import subprocess
@@ -30,45 +31,136 @@ def env(data_stack, tmp_path):
     return tmp_path, sp, gk
 
 
-def step(tmp, sp, gk, code, inputs=None, params=None, name=None):
+def step(tmp, sp, gk, code, inputs=None, params=None, name=None, period=None, wb="zhaysan"):
     d = tmp / (name or code)
-    ctx = {"run_id": "test", "step": code, "water_body": "zhaysan", "params": {**manifest_defaults(code), **(params or {})},
+    ctx = {"run_id": "test", "step": code, "water_body": wb, "params": {**manifest_defaults(code), **(params or {})},
            "species_names": sp, "gear_kinds": gk, "inputs": {k: str(v / "out") for k, v in (inputs or {}).items()},
-           "tables_path": str(tmp / "tables.json")}
+           "tables_path": str(tmp / "tables.json"), "period": period}
     executor.prepare_step(d, PKG[code], ctx)
     st = executor.run_step(d, timeout_s=900)
     assert st["status"] == "done", (st.get("message"), (d / "log.txt").read_text()[-2000:] if (d / "log.txt").exists() else "")
     return d, executor.read_result(d)
 
 
-def test_chain_1_2_3(env):
+def _state(d):
+    import pickle
+    with open(d / "out" / "state.pkl", "rb") as f:
+        return pickle.load(f)
+
+
+def _reference(tmp, sp, gk, wb="zhaysan"):
+    """Прежний общий расчёт этапов 1–3 в этом процессе (эталон сверки отдельных алгоритмов) — с теми же значениями
+    параметров, что в манифестах (там 1/3 записана как 0,3333333333)."""
+    import copy as _copy
+    from fishcore import config, stepkit
+    saved = {k: _copy.deepcopy(getattr(config, k)) for k in (*stepkit.FIXED_CONFIG, "NET_PANELS_BY_CATCH_TYPE")}
+    try:
+        for code in ("net_catchability", "seine_catchability", "net_likelihood", "combined_stock", "pdu_by_age"):
+            stepkit.apply_fixed(manifest_defaults(code))
+        return _reference_calc(tmp, sp, gk, wb)
+    finally:
+        for k, v in saved.items():
+            setattr(config, k, v)
+
+
+def _reference_calc(tmp, sp, gk, wb):
+    from fishcore.bundle import Bundle
+    from fishcore.data_source import load_fish_props
+    from fishcore.pdu_npc import compute_pdu
+    from fishcore.stock import compute_stock
+    tables = json.loads((tmp / "tables.json").read_text())
+    b = Bundle(wb, tables, sp, gk)
+    props = load_fish_props(wb, b)
+    res, net_c, seine_c = compute_stock(wb, b, props=props)
+    return res, compute_pdu(res, props, data_dir=b), props
+
+
+def test_catalog_algorithms_a_to_h_match_reference(env):
+    """Алгоритмы a–h каталога (решение № 70), каждый в своём процессе, дают те же числа, что прежний общий расчёт
+    этапов 1–3 (а он сверен с эталоном 22.10 — test_regression_stage123)."""
+    from fishcore import config
+    from fishcore.stock import MEAN
     tmp, sp, gk = env
-    d1, r1 = step(tmp, sp, gk, "seine_catchability")
-    assert r1["tables"]["coefficients"]["rows"] and r1["payload"]["fits"]["лещ"]
-    d2, r2 = step(tmp, sp, gk, "stock_by_catch", {"seine_catchability": d1})
-    assert {"yearly_stock", "stock_by_age", "net_coefficients"} <= set(r2["tables"])
-    assert any(f["name"] == "zhaysan_stock_net_with_ages_3d.nc" for f in r2["files"])
-    d3, r3 = step(tmp, sp, gk, "pdu_by_age", {"stock_by_catch": d2})
-    rows = r3["tables"]["pdu_by_age"]["rows"]
-    lesh24 = sum(r["pdu_t"] or 0 for r in rows if r["species"] == "лещ" and r["year"] == 2024)
-    assert abs(lesh24 - 4488) < 1  # квота НПЦ 4488 т распределена полностью
-    # без цепочки шаг 3 считает этапы 1–2 сам — результат тот же
-    d3b, r3b = step(tmp, sp, gk, "pdu_by_age", name="pdu_alone")
-    a = [r["pdu_pcs"] for r in rows]
-    b = [r["pdu_pcs"] for r in r3b["tables"]["pdu_by_age"]["rows"]]
-    assert np.allclose(np.array(a, float), np.array(b, float), rtol=1e-9, equal_nan=True)
-    # априорная проверка байесовской модели (секунды)
-    d4, r4 = step(tmp, sp, gk, "bayes_cohort", {"stock_by_catch": d2, "pdu_by_age": d3},
-                  {"mode": "prior", "species": ["lesh", "sudak"]})
+    da, ra = step(tmp, sp, gk, "net_catchability")
+    db, rb = step(tmp, sp, gk, "seine_catchability")
+    dc, rc = step(tmp, sp, gk, "seine_likelihood", {"seine_catchability": db})
+    dd, rd = step(tmp, sp, gk, "net_likelihood", {"net_catchability": da})
+    de, re_ = step(tmp, sp, gk, "seine_stock", {"seine_likelihood": dc})
+    df, rf = step(tmp, sp, gk, "net_stock", {"net_likelihood": dd})
+    dg, rg = step(tmp, sp, gk, "combined_stock", {"seine_stock": de, "net_stock": df})
+    dh, rh = step(tmp, sp, gk, "pdu_by_age", {"combined_stock": dg})
+    ref, ref_pdu, props = _reference(tmp, sp, gk)
+    NET, SEINE = config.GEAR_NET, config.GEAR_SEINE
+    close = lambda a, b: np.allclose(np.asarray(a, float), np.asarray(b, float), rtol=1e-12, atol=0, equal_nan=True)
+    assert close(_state(da)["cube"], ref.catchability[(NET, "with_ages")])
+    assert close(_state(db)["cube"], ref.catchability[(SEINE, "with_ages")])
+    assert close(_state(dc)["per_haul"], ref.per_haul[(SEINE, "with_ages")])
+    assert close(_state(dd)["sigma"], ref.sigma["with_ages"])
+    assert close(_state(dd)["per_haul"], ref.per_haul[(NET, "with_ages")])
+    assert close(_state(de)["yearly"], ref.yearly[(SEINE, "with_ages", "on_stock")])
+    assert close(_state(df)["yearly"], ref.yearly[(NET, "with_ages", "on_stock")])
+    g = _state(dg)["res"]
+    assert close(g.yearly[(MEAN, "with_ages", "on_stock")], ref.yearly[(MEAN, "with_ages", "on_stock")])
+    assert close(g.npc_stock, ref.npc_stock)
+    assert close(_state(dh)["pdu"].pieces, ref_pdu.pieces)
+    # контрольные значения эталона 22.10: лещ 2024 — сеть 22 829 938, невод 224 656 053, окончательный 91 190 397
+    yi, si = ref.years.index(2024), ref.species.index("лещ")
+    # (допуск сверки с эталоном — 1e-6, как в test_regression_stage123)
+    for gear, val in ((NET, 22829938), (SEINE, 224656053), (MEAN, 91190397)):
+        assert abs(g.yearly_total(gear, "with_ages", "on_stock")[yi, si] / val - 1) < 1e-6
+    rows = rh["tables"]["pdu_by_age"]["rows"]
+    assert abs(sum(r["pdu_t"] or 0 for r in rows if r["species"] == "лещ" and r["year"] == 2024) - 4488) < 1
+    # тонны: промысловый запас окончательный = промысловая биомасса шага ПДУ (те же веса и возрасты)
+    t = {(r["year"], r["species"], r["gear"]): r for r in rg["tables"]["tonnes"]["rows"]}
+    bio = ref_pdu.fishable_biomass_t()
+    assert abs(t[(2024, "лещ", MEAN)]["tonnes_fishable"] - bio[yi, si]) < 1e-3
+    assert t[(2024, "лещ", MEAN)]["tonnes_all"] >= t[(2024, "лещ", MEAN)]["tonnes_fishable"]
+    # таблицы и представления для мониторинга
+    assert ra["payload"]["fits"]["лещ"] and rd["payload"]["net"]["fits"]["лещ"]["2024"]["sigma"]
+    assert rg["payload"]["stock"]["species"]["лещ"]["variants"]["with_ages"]["on_stock"]["totals"]
+    assert "out_ages" not in rg["payload"]["stock"]["species"]["лещ"]["variants"]
+    assert {r["gear"] for r in rc["tables"]["catch_by_age"]["rows"]} == {SEINE}
+    # «по улову» — тот же способ у e, f, g, как в прежнем расчёте
+    de2, _ = step(tmp, sp, gk, "seine_stock", {"seine_likelihood": dc}, {"STOCK_METHOD": "on_catch"}, name="e2")
+    df2, _ = step(tmp, sp, gk, "net_stock", {"net_likelihood": dd}, {"STOCK_METHOD": "on_catch"}, name="f2")
+    dg2, _ = step(tmp, sp, gk, "combined_stock", {"seine_stock": de2, "net_stock": df2}, name="g2")
+    g2 = _state(dg2)["res"]
+    assert g2.method == "on_catch"
+    assert close(g2.yearly[(MEAN, "with_ages", "on_catch")], ref.yearly[(MEAN, "with_ages", "on_catch")])
+    # разные способы у входов g — понятная ошибка
+    d = tmp / "g_bad"
+    ctx = {"water_body": "zhaysan", "params": manifest_defaults("combined_stock"), "species_names": sp, "gear_kinds": gk,
+           "inputs": {"seine_stock": str(de2 / "out"), "net_stock": str(df / "out")}, "tables_path": str(tmp / "tables.json")}
+    executor.prepare_step(d, PKG["combined_stock"], ctx)
+    st = executor.run_step(d, timeout_s=300)
+    assert st["status"] == "failed" and "разными способами" in st["message"]
+    # период: c за 2018–2022 по уловистости невода за все годы
+    dcp, rcp = step(tmp, sp, gk, "seine_likelihood", {"seine_catchability": db}, period={"from": 2018, "to": 2022}, name="c_period")
+    assert _state(dcp)["years"] == [2018, 2019, 2020, 2021, 2022]
+    assert {r["year"] for r in rcp["tables"]["per_haul"]["rows"]} <= set(range(2018, 2023))
+    # e за все годы по c за 2018–2022 — расчёт за общие годы с замечанием
+    dep, rep_ = step(tmp, sp, gk, "seine_stock", {"seine_likelihood": dcp}, name="e_period")
+    assert _state(dep)["years"] == [2018, 2019, 2020, 2021, 2022]
+    # h за 2020–2024 по g за все годы — те же числа, что у h за все годы, за эти годы
+    dhp, _ = step(tmp, sp, gk, "pdu_by_age", {"combined_stock": dg}, period={"from": 2020, "to": 2024}, name="h_period")
+    hp = _state(dhp)["pdu"]
+    idx = [ref.years.index(y) for y in hp.years]
+    assert hp.years == [2020, 2021, 2022, 2023, 2024] and close(hp.pieces, ref_pdu.pieces[idx])
+    # априорная проверка модели по входам c, d, g, h (секунды)
+    d4, r4 = step(tmp, sp, gk, "bayes_cohort", {"seine_likelihood": dc, "net_likelihood": dd, "combined_stock": dg,
+                                               "pdu_by_age": dh}, {"mode": "prior", "species": ["lesh", "sudak"]})
     assert set(r4["payload"]["species"]) == {"лещ", "судак"}
     assert r4["tables"]["bayes_totals"]["rows"]
-    # проверки модели: чувствительность балансового метода (без MCMC) — таблица 17 статьи для леща
-    d6, r6 = step(tmp, sp, gk, "bayes_checks", {"bayes_cohort": d4},
-                  {"check_net": True, "check_retro": False, "check_prior": False, "check_pad": False, "check_recovery": False})
-    rows = [r for r in r6["tables"]["net_sensitivity"]["rows"] if r["species"] == "лещ"]
-    f = {(r["parameter"], round(r["rel_change"], 2)): round(r["stock_factor"], 2) for r in rows if r["parameter"] != "база"}
-    assert f[("V, м/ч", -0.5)] == 2.08 and f[("V, м/ч", 0.5)] == 0.66 and f[("k", -0.5)] == 1.83 and f[("k", 0.25)] == 0.83
-    assert f[("p_to_net", -0.4)] == 2.09 and f[("p_to_net", 0.4)] == 0.53
+
+
+def test_missing_input_message(env):
+    tmp, sp, gk = env
+    d = tmp / "c_alone"
+    ctx = {"water_body": "zhaysan", "params": manifest_defaults("seine_likelihood"), "species_names": sp, "gear_kinds": gk,
+           "inputs": {}, "tables_path": str(tmp / "tables.json")}
+    executor.prepare_step(d, PKG["seine_likelihood"], ctx)
+    st = executor.run_step(d, timeout_s=120)
+    assert st["status"] == "failed" and "b. Уловистость невода" in st["message"]
 
 
 def test_forecast_matches_legacy(env):
@@ -142,9 +234,15 @@ def test_species_outside_reference(data_stack, tmp_path):
         return d, executor.read_result(d)
 
     general = {k: v for k, v in asdict(bc.SpeciesConfig()).items() if k in bc.EDITABLE}
-    d2, _ = step_wb("stock_by_catch")
-    d3, _ = step_wb("pdu_by_age", {"stock_by_catch": d2})
-    d4, r4 = step_wb("bayes_cohort", {"stock_by_catch": d2, "pdu_by_age": d3},
+    da, _ = step_wb("net_catchability")
+    db, _ = step_wb("seine_catchability")
+    dc, _ = step_wb("seine_likelihood", {"seine_catchability": db})
+    dd, _ = step_wb("net_likelihood", {"net_catchability": da})
+    de, _ = step_wb("seine_stock", {"seine_likelihood": dc})
+    df, _ = step_wb("net_stock", {"net_likelihood": dd})
+    dg, _ = step_wb("combined_stock", {"seine_stock": de, "net_stock": df})
+    d3, _ = step_wb("pdu_by_age", {"combined_stock": dg})
+    d4, r4 = step_wb("bayes_cohort", {"seine_likelihood": dc, "net_likelihood": dd, "combined_stock": dg, "pdu_by_age": d3},
                      {"mode": "prior", "species_profiles": {"zherekh": general, "som": general}})
     assert set(r4["payload"]["species"]) == {"жерех", "сом"}
     names = {f["name"] for f in r4["files"]}

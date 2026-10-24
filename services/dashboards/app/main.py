@@ -256,16 +256,9 @@ def _gear_names():
     return {r["values"]["code"]: r["values"]["name_ru"] for r in recs}
 
 
-def _monitoring_run(wb, algorithm=None):
-    q = f"?algorithm={algorithm}" if algorithm else ""
-    return SVC["algo_admin"].get(f"/water-bodies/{wb}/monitoring-run{q}") or {"run": None}
-
-
-def _step_index(run, algorithm):
-    for i, s in enumerate(run["steps"]):
-        if s["algorithm"] == algorithm and s.get("status") in ("done", "reused"):
-            return i
-    return None
+# прежний шаг «Уловистость сети и запас по уловам» (до решения № 70) в сохранённых дашбордах → алгоритмы каталога
+ALIAS_TABLES = {"yearly_stock": ("combined_stock", "yearly_stock"), "stock_by_age": ("combined_stock", "stock_by_age"),
+                "npc_stock": ("combined_stock", "npc_stock"), "net_coefficients": ("net_catchability", "coefficients")}
 
 
 def _subst(v, ctx):
@@ -291,21 +284,25 @@ def _rows_dataset(wb, dtype, ctx):
     return rows, {"dataset_id": src["dataset_id"], "version": src["version"], "species": table.get("species", [])}
 
 
-def _rows_run(wb, algorithm, table, run_id=None):
-    if run_id:
-        run = SVC["algo_admin"].get(f"/runs/{run_id}")
-        info = {"run": run, "is_main": None}
+def _rows_run(wb, algorithm, table, calc_id=None):
+    """Строки таблицы (или весь результат при table=None) основного расчёта алгоритма водоёма либо указанного расчёта."""
+    if calc_id:
+        try:
+            res = SVC["algo_admin"].get(f"/calcs/{calc_id}/result")
+        except AppError:
+            return None, {"reason": "no_run"}
+        c = res.get("calc") or {}
+        meta = {"calc_id": calc_id, "is_main": c.get("is_main"), "calculation_title": c.get("title"),
+                "run_finished_at": (c.get("result") or {}).get("finished_at"), "stale": c.get("stale") or []}
     else:
-        info = _monitoring_run(wb, algorithm)
-        run = info.get("run")
-    if not run:
-        return None, {"reason": "no_run"}
-    i = _step_index(run, algorithm)
-    if i is None:
-        return None, {"reason": "no_step", "run_id": run["id"]}
-    res = SVC["algo_admin"].get(f"/runs/{run['id']}/steps/{i}/result")
-    meta = {"run_id": run["id"], "is_main": info.get("is_main"), "run_finished_at": run.get("finished_at"),
-            "calculation_title": run.get("calculation_title")}
+        D = insights.Data(wb, SVC)
+        if algorithm == "stock_by_catch" and table in ALIAS_TABLES:
+            algorithm, table = ALIAS_TABLES[table]
+        res, meta = D.run_result(algorithm)
+        if meta is None:
+            return None, {"reason": "no_run"}
+        if res is None:
+            return None, {**meta, "reason": "no_step"}
     if table is None:
         return res, meta
     t = (res.get("tables") or {}).get(table)
@@ -385,7 +382,7 @@ def widget_data(body: DataIn, user: User = Depends(require("dashboard.view"))):
         runs = SVC["algo_admin"].get("/water-bodies/status") or {}
         return {"data": data.get(wb), "runs": access.strip_status(runs.get(wb), user)}
     if kind == "payload":
-        res, meta = _rows_run(wbs[0], src["algorithm"], None, src.get("run_id"))
+        res, meta = _rows_run(wbs[0], src["algorithm"], None, src.get("calc_id"))
         if res is None:
             return {"empty": True, **meta, "message": _empty_msg(meta)}
         return {"payload": res.get("payload"), "tables": {k: {"title": v["title"], "columns": v["columns"]}
@@ -398,7 +395,7 @@ def widget_data(body: DataIn, user: User = Depends(require("dashboard.view"))):
             if rows is None:
                 continue
         elif kind == "run":
-            rows, meta = _rows_run(wb, src["algorithm"], src["table"], src.get("run_id"))
+            rows, meta = _rows_run(wb, src["algorithm"], src["table"], src.get("calc_id"))
             if rows is None:
                 if len(wbs) == 1:
                     return {"empty": True, **meta, "message": _empty_msg(meta)}
@@ -441,9 +438,9 @@ def widget_data(body: DataIn, user: User = Depends(require("dashboard.view"))):
 
 def _empty_msg(meta):
     r = meta.get("reason")
-    return {"no_run": "Для водоёма ещё нет выполненного расчёта",
-            "no_step": "В запуске для мониторинга нет этого шага расчёта",
-            "no_table": "В результатах шага нет этой таблицы"}.get(r, "Нет данных")
+    return {"no_run": "Для водоёма нет основного расчёта этого алгоритма",
+            "no_step": "У основного расчёта нет результата",
+            "no_table": "В результатах расчёта нет этой таблицы"}.get(r, "Нет данных")
 
 
 # ================================================================ представления исходных данных

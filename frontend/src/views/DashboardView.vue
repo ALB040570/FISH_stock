@@ -77,7 +77,7 @@
           </el-form-item>
           <template v-if="w.source.kind === 'run' || w.source.kind === 'payload'">
             <el-form-item :label="$t('catalog.title')">
-              <el-select v-model="w.source.algorithm" style="width:300px"><el-option v-for="a in catalog" :key="a.code" :label="a.title_ru" :value="a.code" /></el-select>
+              <el-select v-model="w.source.algorithm" style="width:300px"><el-option v-for="a in catalog" :key="a.code" :label="(a.letter ? a.letter + '. ' : '') + a.title_ru" :value="a.code" /></el-select>
             </el-form-item>
             <el-form-item v-if="w.source.kind === 'run'" :label="$t('runs.tables')">
               <el-select v-model="w.source.table" style="width:300px"><el-option v-for="o in outputsOf(w.source.algorithm)" :key="o.code" :label="o.title_ru" :value="o.code" /></el-select>
@@ -149,7 +149,7 @@ async function load() {
       api.get('data-model', '/entities/water_bodies/records'), api.get('data-model', '/dataset-types'), api.get('algo-admin', '/catalog')])
     b.value = d; orig = JSON.parse(JSON.stringify(d))
     if (!d.can_edit) editing.value = false   // чужой дашборд или шаблон: в конструкторе — только копия
-    species.value = sp.map((r) => r.values); wbs.value = wb.map((r) => r.values); dtypes.value = dt; catalog.value = cat
+    species.value = sp.map((r) => r.values); wbs.value = wb.map((r) => r.values); dtypes.value = dt; catalog.value = cat.filter((a) => !a.planned && a.latest)
     multiFlag.value = 'water_bodies' in (d.filters || {})
     if (multiFlag.value) f.water_bodies = d.filters.water_bodies?.length ? d.filters.water_bodies : ['zhaysan']
     if (d.filters?.water_body) f.water_body = route.query.wb || d.filters.water_body

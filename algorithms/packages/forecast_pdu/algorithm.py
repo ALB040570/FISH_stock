@@ -1,4 +1,5 @@
-"""Этап 5. Прогноз и ПДУ (перенос fish_stock_forecast: core/forecast.py и app/services_forecast.py)."""
+"""j. Прогноз запаса и оценка ПДУ по модели (перенос fish_stock_forecast: core/forecast.py и app/services_forecast.py;
+решение № 70)."""
 import io
 
 import numpy as np
@@ -42,8 +43,8 @@ def run(ctx):
     b = stepkit.bundle(ctx, "species_props", "yearly_conditions", "mean_weights")
     bdir = ctx.input_dir("bayes_cohort")
     if bdir is None:
-        raise UserError("Прогноз строится по результатам байесовской модели: добавьте шаг «Байесовская когортная модель» "
-                        "в цепочку расчёта")
+        raise UserError("Прогноз строится по результатам математической модели: укажите вход «i. Запас по "
+                        "математической модели» (по умолчанию — основной расчёт водоёма)")
     h = int(ctx.params.get("horizon") or 5)
     if not 1 <= h <= MAX_HORIZON:
         raise UserError(f"Горизонт прогноза — от 1 до {MAX_HORIZON} лет")

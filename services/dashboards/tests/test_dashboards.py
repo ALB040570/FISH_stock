@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from conftest import H, load_service
+from conftest import H, load_service, run_chain
 
 
 def mod_process(mod):
@@ -10,9 +10,7 @@ def mod_process(mod):
 
 def test_dashboards(calc_stack, tmp_path, monkeypatch):
     dm, da, aa, aa_mod = calc_stack
-    c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "stock"}).json()
-    aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"), json={})
-    assert mod_process(aa_mod)
+    run_chain(aa, aa_mod)
     mod = load_service("dashboards", tmp_path, monkeypatch)
     for k, cl in (("algo_admin", aa), ("data_admin", da), ("data_model", dm)):
         mod.SVC[k] = mod.Svc(k, http=cl)
@@ -28,10 +26,10 @@ def test_dashboards(calc_stack, tmp_path, monkeypatch):
         assert r.status_code == 200, (w["id"], r.text)
         j = r.json()
         if w["source"].get("algorithm") in ("bayes_cohort", "forecast_pdu"):
-            assert j.get("empty") and j["reason"] == "no_step", w["id"]
+            assert j.get("empty") and j["reason"] == "no_run", w["id"]
         elif str(w["source"].get("view", "")).startswith(("by_", "fc_")) or w["source"].get("view") in ("st_trust", "ca_q"):
-            # модель и прогноз: в расчёте «stock» шагов нет
-            assert j.get("empty") and "полный расчёт" in j["message"], w["id"]
+            # модель и прогноз: основных расчётов i и j нет
+            assert j.get("empty") and "нет основного расчёта" in j["message"], (w["id"], j["message"])
         elif str(w["source"].get("view", "")).startswith("bc_"):            # проверки модели — отдельный шаг
             assert j.get("empty") and "«Полный расчёт и проверки модели»" in j["message"] and "час" in j["message"], w["id"]
         else:
@@ -39,10 +37,14 @@ def test_dashboards(calc_stack, tmp_path, monkeypatch):
     j = db.post("/widgets/data", headers=H(), json={"source": {"kind": "dataset", "dataset_type": "npc_pdu"}, "filters": f,
                                                    "options": {"x": "year", "y": "$species"}}).json()
     assert j["x"][0] == 2015 and j["series"][0]["values"][0] == 3597
-    j = db.post("/widgets/data", headers=H(), json={"source": {"kind": "run", "algorithm": "stock_by_catch", "table": "yearly_stock"},
-                                                   "filters": f, "options": {"x": "year", "y": "stock", "series": "gear",
-                                                                             "filter": {"variant": "with_ages", "method": "on_stock"}}}).json()
+    j = db.post("/widgets/data", headers=H(), json={"source": {"kind": "run", "algorithm": "combined_stock", "table": "yearly_stock"},
+                                                   "filters": f, "options": {"x": "year", "y": "stock", "series": "gear"}}).json()
     assert {s["name"] for s in j["series"]} == {"сеть", "невод", "сеть+невод"}
+    # сохранённый дашборд с прежним шагом «stock_by_catch» — та же таблица из расчёта g
+    j2 = db.post("/widgets/data", headers=H(), json={"source": {"kind": "run", "algorithm": "stock_by_catch", "table": "yearly_stock"},
+                                                    "filters": f, "options": {"x": "year", "y": "stock", "series": "gear",
+                                                                              "filter": {"variant": "with_ages", "method": "on_stock"}}}).json()
+    assert j2["series"] == j["series"] and j2["meta"]["calc_id"]
     # копия шаблона и права
     cp = db.post("/dashboards/monitoring/copy", headers=H("ichthyologist"), json={}).json()
     assert cp["can_edit"] and cp["visibility"] == "private"
@@ -63,9 +65,7 @@ def test_catch_by_age_formula20(calc_stack, tmp_path, monkeypatch):
     """Улов по ловам и возрастам: Y_ijd = Y_id · q_ij(t_d), q — доли сглаженной пробы года (эталон 22.10.2026:
     в сумме одна условная рыба на группы j ≤ m1; пробы меньше 30 рыб — вместе с соседними годами ± 1)."""
     dm, da, aa, aa_mod = calc_stack
-    c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "stock"}).json()
-    aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"), json={})
-    assert mod_process(aa_mod)
+    run_chain(aa, aa_mod)
     mod = load_service("dashboards", tmp_path, monkeypatch)
     for k, cl in (("algo_admin", aa), ("data_admin", da), ("data_model", dm)):
         mod.SVC[k] = mod.Svc(k, http=cl)
@@ -74,7 +74,7 @@ def test_catch_by_age_formula20(calc_stack, tmp_path, monkeypatch):
     src = {"kind": "insight", "view": "age_catch_hauls"}
     j = db.post("/widgets/data", headers=H("viewer"), json={"source": src, "filters": f,
                                                              "options": {"gear_kind": "net", "year": 2019}}).json()
-    assert j["year"] == 2019 and j["meta"]["run_id"] and j["help"] == "method-catch-age"
+    assert j["year"] == 2019 and j["meta"]["calc_id"] and j["help"] == "method-catch-age"
     row = j["rows"][0]
     e = db.post("/widgets/drill", headers=H("viewer"), json={"source": src, "filters": f, "options": {"gear_kind": "net"},
                                                             "where": {"haul": row["haul"]}, "dataset_type": "catch_by_age"}).json()
@@ -106,11 +106,9 @@ def test_catch_by_age_formula20(calc_stack, tmp_path, monkeypatch):
 
 
 def test_catchability_views(calc_stack, tmp_path, monkeypatch):
-    """Уловистость в мониторинге: блоки-слайды повторяют числа результата этапов 1–2 (как страницы прежнего приложения)."""
+    """Уловистость и запас в мониторинге: слайды повторяют числа основных расчётов a–h (как страницы прежнего приложения)."""
     dm, da, aa, aa_mod = calc_stack
-    c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "stock"}).json()
-    aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"), json={})
-    assert mod_process(aa_mod)
+    run_chain(aa, aa_mod)
     mod = load_service("dashboards", tmp_path, monkeypatch)
     for k, cl in (("algo_admin", aa), ("data_admin", da), ("data_model", dm)):
         mod.SVC[k] = mod.Svc(k, http=cl)
@@ -165,9 +163,10 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     tot = st["species"]["лещ"]["variants"]["with_ages"]["on_stock"]["totals"]
     yt = view("st_table", "lesh")
     assert [r["mean"] for r in yt["rows"]] == tot["сеть+невод"] and [r["net"] for r in yt["rows"]] == tot["сеть"]
+    # с решения № 70 уловистость всегда по возрастам, способ годового запаса — параметр расчёта: переключателей нет
     t2 = view("st_tiles", "lesh", variant="out_ages", method="on_catch")
-    oc = st["species"]["лещ"]["variants"]["out_ages"]["on_catch"]["totals"]["сеть+невод"][-1]
-    assert t2["values"]["mean"] == oc and [g["value"] for g in t2["toggles"]] == ["out_ages", "on_catch"]
+    assert t2["values"]["mean"] == tot["сеть+невод"][-1] and not t2.get("toggles")
+    assert "out_ages" not in st["species"]["лещ"]["variants"] and st["method"] == "on_stock"
     sp_rows = view("st_species")["rows"]
     assert len(sp_rows) == len(st["species"]) and next(r for r in sp_rows if r["_code"] == "lesh")["mean"] == tot["сеть+невод"][-1]
     ages = [r["age"] for r in view("st_ages", "lesh")["rows"]]
@@ -186,7 +185,8 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     ps = view("pn_species")
     assert {r["_code"] for r in ps["rows"]} >= {"lesh", "sudak"} and "F = k·M" not in str(ps["columns"])
     # байесовская модель и ПДУ приложения: в расчёте «stock» их нет — понятное сообщение, а не ошибка
-    assert "полный расчёт" in view("by_total", "lesh")["message"] and "полный расчёт" in view("fc_tiles", "lesh")["message"]
+    assert "«i. Запас по математической модели»" in view("by_total", "lesh")["message"]
+    assert "«j. Прогноз запаса" in view("fc_tiles", "lesh")["message"]
     # ---- «Можно ли верить запасу»: контрольный пример Жайсан 2024 по эталону 22.10.2026 (независимый пересчёт
     # по файлам legacy/fish_stock_forecast/results — tools/control_trust.py)
     tr = view("ca_trust")

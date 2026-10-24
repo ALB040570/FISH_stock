@@ -5,7 +5,8 @@
     python tools/seed_samples.py --password <пароль> --water-body zhaysan --run stock
 
 Для каждого водоёма (папка samples/<код водоёма>) загружает 7 наборов данных (данные заказчика из
-legacy/data_catch в шаблонах FishStock), создаёт расчёты по шаблонам и, по желанию, ставит расчёт в очередь.
+legacy/data_catch в шаблонах FishStock), создаёт расчёты алгоритмов каталога (stock — a–h, full — a–j; решение
+№ 70) с параметрами «По умолчанию» и, по желанию, ставит их в очередь (зависимые ждут свои входы).
 """
 from __future__ import annotations
 
@@ -14,6 +15,9 @@ import sys
 from pathlib import Path
 
 import httpx
+
+CHAIN = ["net_catchability", "seine_catchability", "seine_likelihood", "net_likelihood", "seine_stock", "net_stock",
+         "combined_stock", "pdu_by_age", "bayes_cohort", "forecast_pdu"]
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -47,24 +51,28 @@ def main():
             print(f"{f.stem:20s} {'загружен, версия ' + str(j.get('version')) if j.get('ok') else 'ОШИБКА: ' + str(j)[:300]}")
         if errors:
             continue  # расчёты — только для водоёмов с полностью загруженными данными
-        prefix = {"full": "Полный расчёт ПДУ", "stock": "Запас по уловам"}
-        r = c.get("/algo-admin/calculations", params={"water_body": wb})
+        # расчёты алгоритмов каталога (решение № 70): stock — a–h (запас по уловам и ПДУ НПЦ в штуках),
+        # full — ещё модель i и прогноз j; параметры «По умолчанию», входы — основные расчёты водоёма
+        chain = CHAIN[:8] if a.run in ("stock", "none") else CHAIN
+        r = c.get("/algo-admin/calcs", params={"water_body": wb})
         if r.status_code != 200:
             errors += 1
             print(f"ОШИБКА: список расчётов недоступен ({r.status_code})")
             continue
-        ids = {tpl: x["id"] for x in r.json()
-               for tpl, p in prefix.items() if x["title"].startswith(p)}
-        for tpl in ("full", "stock"):
-            if tpl in ids:
-                continue
-            r = c.post("/algo-admin/calculations/from-template", json={"water_body": wb, "template": tpl})
-            if r.status_code == 201:
-                ids[tpl] = r.json()["id"]
-                print(f"расчёт «{r.json()['title']}» создан")
-        if a.run != "none" and a.run in ids:
-            r = c.post(f"/algo-admin/calculations/{ids[a.run]}/run", json={})
-            print("запуск поставлен в очередь:", r.json().get("id") if r.status_code == 201 else r.text)
+        have = {x["algorithm"]: x for x in r.json()}
+        for code in chain:
+            x = have.get(code)
+            if x is None:
+                r = c.post("/algo-admin/calcs", json={"algorithm": code, "water_body": wb})
+                if r.status_code != 201:
+                    errors += 1
+                    print(f"ОШИБКА: расчёт {code} не создан: {r.text[:300]}")
+                    break
+                x = r.json()
+                print(f"расчёт «{x['title']}» создан")
+            if a.run != "none" and x.get("state") not in ("queued", "running"):
+                r = c.post(f"/algo-admin/calcs/{x['id']}/run")
+                print(f"  в очередь: {'да' if r.status_code == 200 else r.text[:300]}")
     if errors:
         sys.exit(f"Ошибок: {errors}. Повторный запуск загрузит данные заново (новой версией).")
 

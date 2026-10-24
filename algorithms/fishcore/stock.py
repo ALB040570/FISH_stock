@@ -99,6 +99,7 @@ class StockResult:
     per_haul: dict[tuple[str, str], np.ndarray] = field(default_factory=dict)   # (орудие, вариант) -> (N, виды, группы)
     yearly: dict[tuple[str, str, str], np.ndarray] = field(default_factory=dict)  # (орудие|среднее, вариант, метод)
     npc_stock: np.ndarray | None = None                # (годы, виды), штук
+    method: str = "on_stock"                           # способ годового запаса, по которому считаются ПДУ и модель
 
     def age_mask(self) -> np.ndarray:
         """(виды, группы) — группы от 2 до m1 вида."""
@@ -123,10 +124,15 @@ class StockResult:
         all_nan = np.all(np.isnan(np.where(m, arr, np.nan)), axis=2)
         return np.where(all_nan, np.nan, np.nansum(np.where(m, arr, 0.0), axis=2))
 
+    def variant_methods(self) -> list[tuple[str, str]]:
+        """Пары (вариант, способ), посчитанные в результате: у compute_stock — все, у алгоритма g — одна (№ 70)."""
+        have = {(k[1], k[2]) for k in self.yearly if k[0] == MEAN}
+        return [(v, m) for v in VARIANTS for m in METHODS if (v, m) in have]
+
     def totals_frame(self) -> pd.DataFrame:
         rows = []
-        for v in VARIANTS:
-            for meth in METHODS:
+        for v, meth in self.variant_methods():
+            if True:
                 tot = {g: self.yearly_total(g, v, meth) for g in (*GEARS, MEAN)}
                 cnt = {g: self.catches[g].yearly_count() for g in GEARS}
                 for si, fish in enumerate(self.species):
@@ -151,6 +157,88 @@ def panel_factor(hc: HaulCatch) -> np.ndarray:
     raise ValueError(f"Неизвестный режим числа полотен: {config.NET_PANELS_MODE}")
 
 
+# ---------------------------------------------------------------- части расчёта (алгоритмы каталога c–g)
+# Те же выражения, что были внутри compute_stock (результат не меняется — проверяет регрессия этапов 1–3):
+# compute_stock собирается из этих функций, алгоритмы каталога вызывают их по отдельности (решение № 70).
+
+def gear_inputs(props: FishProps, years, species):
+    """S(t), м²; V вида, м/ч; время стоянки и длина сети по годам."""
+    area = np.array([props.lake_area_km2[y] * config.KM2_M2 for y in years])       # S(t), м²
+    speed = np.array([props.cruise_speed[s] * 3600.0 for s in species])            # V, м/ч
+    hours = [props.net_hours[y] for y in years]
+    length = [props.net_length[y] for y in years]
+    return area, speed, hours, length
+
+
+def net_sigma(c: np.ndarray, hours, length, speed) -> np.ndarray:
+    """σ — доля рыб первого круга, попавших в сеть (балансовая модель), (годы, виды, группы)."""
+    nY, nS, nA = c.shape
+    sg = np.zeros_like(c)
+    for yi in range(nY):
+        for si in range(nS):
+            for ai in range(nA):
+                sg[yi, si, ai] = net_share(c[yi, si, ai], hours[yi], length[yi], speed[si])
+    return sg
+
+
+def seine_per_haul(hc: HaulCatch, c: np.ndarray, area: np.ndarray) -> np.ndarray:
+    """Метод площадей: X²_ij(d) = Y²_ij(d) · S(t) / (c²_ij(t) · s_area(d)), (ловы, виды, группы)."""
+    yi = hc.year_index
+    s_area = hc.meta["Area"].to_numpy(float) * config.HECTARE_M2
+    den = c[yi] * s_area[:, None, None]
+    return _safe_div(hc.values * area[yi][:, None, None], den)
+
+
+def net_per_haul(hc: HaulCatch, sigma: np.ndarray, area: np.ndarray, speed: np.ndarray, length) -> np.ndarray:
+    """Балансовый метод: X¹_ij(d) = Y¹_ij(d) · S(t) / (√n(d) · π V_i² σ(c¹_ij(t))), (ловы, виды, группы)."""
+    yi = hc.year_index
+    width = np.array([length[k] for k in yi], float)
+    den = net_denominator(speed[None, :, None], width[:, None, None], sigma[yi])
+    den = den * panel_factor(hc)[:, None, None]
+    return _safe_div(hc.values * area[yi][:, None, None], den)
+
+
+def seine_yearly(hc: HaulCatch, per: np.ndarray, c: np.ndarray, area: np.ndarray, method: str) -> np.ndarray:
+    """Годовой запас неводом (годы, виды, группы): on_stock — среднее оценок по ловам; on_catch — по годовому улову."""
+    nY = len(hc.years)
+    yi = hc.year_index
+    out = np.full((nY, len(hc.species), len(hc.ages)), np.nan)
+    for k in range(nY):
+        sel = yi == k
+        if not sel.any():
+            continue
+        if method == "on_stock":
+            out[k] = _nanmean(per[sel], axis=0)
+            continue
+        vals = hc.values[sel]                                   # (n, виды, группы)
+        recorded = ~np.isnan(vals)
+        s_area = hc.meta["Area"].to_numpy(float)[sel] * config.HECTARE_M2
+        area_sum = (recorded * s_area[:, None, None]).sum(axis=0)
+        catch_sum = np.where(recorded.any(axis=0), np.nansum(vals, axis=0), np.nan)
+        out[k] = _safe_div(catch_sum * area[k], c[k] * area_sum)
+    return out
+
+
+def net_yearly(hc: HaulCatch, per: np.ndarray, sigma: np.ndarray, area: np.ndarray, speed: np.ndarray, length,
+               method: str) -> np.ndarray:
+    """Годовой запас сетью (годы, виды, группы): on_stock — среднее оценок по ловам; on_catch — средний улов на лов."""
+    nY = len(hc.years)
+    yi = hc.year_index
+    out = np.full((nY, len(hc.species), len(hc.ages)), np.nan)
+    for k in range(nY):
+        sel = yi == k
+        if not sel.any():
+            continue
+        if method == "on_stock":
+            out[k] = _nanmean(per[sel], axis=0)
+            continue
+        vals = hc.values[sel]
+        mean_catch = _nanmean(vals / panel_factor(hc)[sel][:, None, None], axis=0)  # к одной сети
+        den = net_denominator(speed[:, None], length[k], sigma[k])
+        out[k] = _safe_div(mean_catch * area[k], den)
+    return out
+
+
 def compute_stock(
     waterbody: str = config.WATERBODY,
     data_dir: Path | None = None,
@@ -169,10 +257,7 @@ def compute_stock(
     assert np.array_equal(seine_c.all_ages, ages) and np.array_equal(net_c.all_ages, ages)
 
     nY, nS, nA = len(years), len(species), len(ages)
-    area = np.array([props.lake_area_km2[y] * config.KM2_M2 for y in years])       # S(t), м²
-    speed = np.array([props.cruise_speed[s] * 3600.0 for s in species])            # V, м/ч
-    hours = [props.net_hours[y] for y in years]
-    length = [props.net_length[y] for y in years]
+    area, speed, hours, length = gear_inputs(props, years, species)
 
     catchability = {
         (config.GEAR_NET, "with_ages"): net_c.cube(),
@@ -184,61 +269,23 @@ def compute_stock(
     }
 
     # σ сети для каждого (год, вид, группа) — модель баланса с кэшем
-    sigma = {}
-    for v in VARIANTS:
-        c = catchability[(config.GEAR_NET, v)]
-        sg = np.zeros_like(c)
-        for yi in range(nY):
-            for si in range(nS):
-                for ai in range(nA):
-                    sg[yi, si, ai] = net_share(c[yi, si, ai], hours[yi], length[yi], speed[si])
-        sigma[v] = sg
+    sigma = {v: net_sigma(catchability[(config.GEAR_NET, v)], hours, length, speed) for v in VARIANTS}
 
     res = StockResult(waterbody, years, species, ages, dict(props.m1),
                       {config.GEAR_NET: net_catch, config.GEAR_SEINE: seine_catch}, catchability, sigma)
 
     # --- запас по каждому лову ---
     for v in VARIANTS:
-        # невод (27)
-        hc = seine_catch
-        yi = hc.year_index
-        s_area = hc.meta["Area"].to_numpy(float) * config.HECTARE_M2
-        den = catchability[(config.GEAR_SEINE, v)][yi] * s_area[:, None, None]
-        res.per_haul[(config.GEAR_SEINE, v)] = _safe_div(hc.values * area[yi][:, None, None], den)
-        # сеть (28)
-        hc = net_catch
-        yi = hc.year_index
-        width = np.array([length[k] for k in yi], float)
-        den = net_denominator(speed[None, :, None], width[:, None, None], sigma[v][yi])
-        den = den * panel_factor(hc)[:, None, None]
-        res.per_haul[(config.GEAR_NET, v)] = _safe_div(hc.values * area[yi][:, None, None], den)
+        res.per_haul[(config.GEAR_SEINE, v)] = seine_per_haul(seine_catch, catchability[(config.GEAR_SEINE, v)], area)
+        res.per_haul[(config.GEAR_NET, v)] = net_per_haul(net_catch, sigma[v], area, speed, length)
 
     # --- годовой запас ---
     for v in VARIANTS:
-        for gear in GEARS:
-            hc = res.catches[gear]
-            yi = hc.year_index
-            per = res.per_haul[(gear, v)]
-            on_stock = np.full((nY, nS, nA), np.nan)
-            on_catch = np.full((nY, nS, nA), np.nan)
-            for k in range(nY):
-                sel = yi == k
-                if not sel.any():
-                    continue
-                on_stock[k] = _nanmean(per[sel], axis=0)
-                vals = hc.values[sel]                                   # (n, виды, группы)
-                if gear == config.GEAR_SEINE:
-                    recorded = ~np.isnan(vals)
-                    s_area = hc.meta["Area"].to_numpy(float)[sel] * config.HECTARE_M2
-                    area_sum = (recorded * s_area[:, None, None]).sum(axis=0)
-                    catch_sum = np.where(recorded.any(axis=0), np.nansum(vals, axis=0), np.nan)
-                    on_catch[k] = _safe_div(catch_sum * area[k], catchability[(gear, v)][k] * area_sum)
-                else:
-                    mean_catch = _nanmean(vals / panel_factor(hc)[sel][:, None, None], axis=0)  # к одной сети
-                    den = net_denominator(speed[:, None], length[k], sigma[v][k])
-                    on_catch[k] = _safe_div(mean_catch * area[k], den)
-            res.yearly[(gear, v, "on_stock")] = on_stock
-            res.yearly[(gear, v, "on_catch")] = on_catch
+        for meth in METHODS:
+            res.yearly[(config.GEAR_SEINE, v, meth)] = seine_yearly(
+                seine_catch, res.per_haul[(config.GEAR_SEINE, v)], catchability[(config.GEAR_SEINE, v)], area, meth)
+            res.yearly[(config.GEAR_NET, v, meth)] = net_yearly(
+                net_catch, res.per_haul[(config.GEAR_NET, v)], sigma[v], area, speed, length, meth)
         for meth in METHODS:
             res.yearly[(MEAN, v, meth)] = combine_gears(
                 [res.yearly[(g, v, meth)] for g in GEARS],

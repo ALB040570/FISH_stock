@@ -42,9 +42,9 @@
       <div class="pathrow">
         <div class="path" data-test="path"><b>{{ $t('flow.path') }}:</b> {{ $t('flow.path_hint') }}</div>
         <div class="legend">
-          <span><i class="dot" :style="{ background: MAP_STATE.stale }" />{{ $t('flow.legend_wait') }}</span>
+          <span><i class="dot" :style="{ background: MAP_STATE.has_data }" />{{ $t('flow.legend_wait') }}</span>
           <span><i class="dot" :style="{ background: RUN_STEP.running }" />{{ $t('flow.legend_run') }}</span>
-          <span><i class="dot" :style="{ background: MAP_STATE.has_data }" />{{ $t('flow.legend_main') }}</span>
+          <span><i class="dot" :style="{ background: MAP_STATE.stale }" />{{ $t('flow.legend_stale') }}</span>
           <span><i class="dot" :style="{ background: MAP_STATE.has_run }" />{{ $t('flow.legend_ready') }}</span>
         </div>
       </div>
@@ -66,7 +66,7 @@
 
         <!-- стрелка: ждут расчёта -->
         <FlowPipe stage="wait_calc" :label="$t('flow.pipe_calc')" :items="flow?.byStage.wait_calc || []" :loaded="!!flow"
-          :color="(w) => w.failed ? RUN_STEP.failed : MAP_STATE.stale" :hint="(w) => $t(w.failed ? 'flow.hint_failed' : 'flow.hint_calc')" :href="href" />
+          :color="(w) => w.failed ? RUN_STEP.failed : MAP_STATE.has_data" :hint="(w) => $t(w.failed ? 'flow.hint_failed' : 'flow.hint_calc')" :href="href" />
 
         <!-- Расчёты -->
         <div class="tile" role="link" tabindex="0" data-cabinet="calc" @click="go('calc')" @keydown.enter="go('calc')">
@@ -86,9 +86,9 @@
           <span class="act">{{ $t('flow.act_calc') }} →</span>
         </div>
 
-        <!-- стрелка: ждут отметки основного -->
-        <FlowPipe stage="wait_main" :label="$t('flow.pipe_main')" :items="flow?.byStage.wait_main || []" :loaded="!!flow"
-          :color="() => MAP_STATE.has_data" :hint="() => $t('flow.hint_main')" :href="href" />
+        <!-- стрелка: основные расчёты устарели (новые данные или пересчитан вход, решение № 70) -->
+        <FlowPipe stage="stale" :label="$t('flow.pipe_stale')" :items="flow?.byStage.stale || []" :loaded="!!flow"
+          :color="() => MAP_STATE.stale" :hint="(w) => $t('flow.hint_stale', { n: w.n })" :href="href" />
 
         <!-- Мониторинг -->
         <div class="tile" role="link" tabindex="0" data-cabinet="monitoring" @click="go('monitoring')" @keydown.enter="go('monitoring')">
@@ -153,7 +153,7 @@ import { useAuth } from '../store/auth'
 import { setLang, tr } from '../i18n'
 import { api } from '../api'
 import { MAP_STATE, RUN_STEP } from '../theme'
-import { FLOW_BASE, FLOW_PATH, cabinet, cabinetsFor, canEnter, hardGo, hasFlow, helpPath, mainPage } from '../cabinets'
+import { FLOW_BASE, FLOW_PATH, cabinet, cabinetsFor, hardGo, hasFlow, helpPath, mainPage } from '../cabinets'
 import { buildFlow, resultLink, runProgress, stageLink } from '../flow'
 import { loadLast } from '../lastPlace'
 import ThemeToggle from '../components/ThemeToggle.vue'
@@ -214,7 +214,7 @@ function baseLine(key) {
   const t = (k, n) => (n === undefined || n === null ? null : i18n.t(k, { n }))
   if (key === 'design') return [t('flow.dicts', extra.dicts), t('flow.types', extra.types), t('flow.algos', extra.algos)].filter(Boolean).join(' · ')
   if (key === 'admin') {
-    return [t('flow.users', extra.users), extra.blocked ? t('flow.blocked', extra.blocked) : null, t('flow.catalog', extra.catalog),
+    return [t('flow.users', extra.users), extra.blocked ? t('flow.blocked', extra.blocked) : null,
       auth.can('audit.view') ? i18n.t('flow.journal') : null].filter(Boolean).join(' · ')
   }
   return ''
@@ -236,14 +236,13 @@ async function load() {
 }
 async function loadExtra() {
   const len = (x) => (Array.isArray(x) ? x.length : null)
-  const [ents, types, algos, users, cat] = await Promise.all([
+  const [ents, types, algos, users] = await Promise.all([
     safe(api.get('data-model', '/entities')), safe(api.get('data-model', '/dataset-types')),
     auth.can('algo.develop') ? safe(api.get('algo-model', '/algorithms')) : null,
     auth.can('users.manage') ? safe(api.get('users', '/users')) : null,
-    canEnter(cabinet('admin'), auth.role) ? safe(api.get('algo-admin', '/catalog')) : null,
   ])
   Object.assign(extra, { dicts: len(ents), types: len(types), algos: len(algos), users: len(users),
-    blocked: Array.isArray(users) ? users.filter((u) => u.blocked).length : null, catalog: len(cat) })
+    blocked: Array.isArray(users) ? users.filter((u) => u.blocked).length : null })
 }
 
 // обратная связь: очередь и состояния обновляются сами

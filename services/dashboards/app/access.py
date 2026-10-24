@@ -16,8 +16,10 @@ from .insights import calc_stock_views, calc_views  # после insights: он 
 
 PERM = "results.view"
 
-# шаги расчёта, результаты которых — оценки модели; pdu_by_age — ПДУ НПЦ по возрастам (официальная квота)
-RESULT_ALGOS = {"seine_catchability", "stock_by_catch", "bayes_cohort", "forecast_pdu", "bayes_checks"}
+# алгоритмы, результаты которых — оценки модели; pdu_by_age (h) — ПДУ НПЦ по возрастам (официальная квота);
+# stock_by_catch — прежний код (до решения № 70) в сохранённых дашбордах
+RESULT_ALGOS = {"net_catchability", "seine_catchability", "seine_likelihood", "net_likelihood", "seine_stock", "net_stock",
+                "combined_stock", "stock_by_catch", "bayes_cohort", "forecast_pdu", "bayes_checks", "removal_pdu"}
 # представления результатов расчёта, кроме раздела «ПДУ НПЦ (официальный)» (pn_*)
 RESULT_VIEWS = {v for v in (*calc_views.VIEWS, *calc_stock_views.VIEWS) if not v.startswith("pn_")}
 assert RESULT_VIEWS.isdisjoint({v for v in insights.VIEWS if v not in calc_views.VIEWS and v not in calc_stock_views.VIEWS})

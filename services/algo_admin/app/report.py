@@ -1,7 +1,8 @@
 """
-Отчёт по запуску расчёта ПДУ (Word и PDF). Структура предложена разработчиком (согласовано 18.10):
+Отчёт водоёма по основным расчётам алгоритмов (Word и PDF; решение № 70). Структура предложена разработчиком
+(согласовано 18.10):
 
-1. Сведения о расчёте: водоём, расчёт, автор, даты, версии алгоритмов, версии наборов данных.
+1. Сведения о расчётах: основной расчёт каждого алгоритма — версия, параметры, период, дата, устарел ли, наборы данных.
 2. Итог: ПДУ по видам (прогноз F = k·M на первый прогнозный год с 95 % интервалом; ПДУ НПЦ последнего года).
 3. Запас: окончательный запас по уловам и численность по байесовской модели (последний год истории).
 4. ПДУ НПЦ по возрастам (последний год).
@@ -13,9 +14,11 @@ import io
 from pathlib import Path
 
 FONT_DIR = Path(__file__).parent / "fonts"
-STEP_TITLES = {"seine_catchability": "Уловистость невода", "stock_by_catch": "Уловистость сети и запас по уловам",
-               "pdu_by_age": "ПДУ НПЦ по возрастам", "bayes_cohort": "Байесовская когортная модель",
-               "forecast_pdu": "Прогноз и ПДУ", "bayes_checks": "Проверки модели"}
+STEP_TITLES = {"net_catchability": "a. Уловистость сети", "seine_catchability": "b. Уловистость невода",
+               "seine_likelihood": "c. Правдоподобие методом площадей", "net_likelihood": "d. Правдоподобие балансовым методом",
+               "seine_stock": "e. Запас методом площадей", "net_stock": "f. Запас балансовым методом",
+               "combined_stock": "g. Запас, усреднённый по неводу и сети", "pdu_by_age": "h. ПДУ в экземплярах",
+               "bayes_cohort": "i. Запас по математической модели", "forecast_pdu": "j. Прогноз и ПДУ по модели"}
 
 
 def _fmt(v, digits=0):
@@ -30,21 +33,20 @@ def _fmt(v, digits=0):
     return f"{f:,.{digits}f}".replace(",", " ").replace(".", ",")
 
 
-def _sections(run: dict, results: dict, wb: dict) -> list[tuple[str, list]]:
+def _sections(water_body: str, info: list[dict], results: dict, wb: dict) -> list[tuple[str, list]]:
     """Содержимое отчёта: [(заголовок, [абзац | ("table", заголовки, строки)])]."""
     out = []
-    info = [
-        ("table", ["Показатель", "Значение"], [
-            ["Водоём", wb.get("name_ru", run["water_body"])],
-            ["Расчёт", run.get("calculation_title", "")],
-            ["Идентификатор запуска", run["id"]],
-            ["Автор", run.get("author_name") or run.get("author") or ""],
-            ["Начат / завершён (UTC)", f"{run.get('started_at', '—')} / {run.get('finished_at', '—')}"],
-            ["Шаги (алгоритм, версия)", "; ".join(f"{STEP_TITLES.get(s['algorithm'], s['algorithm'])} {s['version']}"
-                                                   for s in run["steps"])],
-            ["Наборы данных (тип: версия)", "; ".join(f"{k}: v{v['version']}" for k, v in sorted(run["datasets"].items()))],
-        ])]
-    out.append(("1. Сведения о расчёте", info))
+    rows = [[STEP_TITLES.get(c["algorithm"], c["algorithm"]), c.get("title") or "", c.get("version") or "",
+             f"{c.get('param_set_name') or ''} (в. {c.get('param_version')})", c.get("period_text") or "",
+             (c.get("finished_at") or "")[:16].replace("T", " "), "устарел: " + "; ".join(c["stale"]) if c.get("stale") else "актуален"]
+            for c in info]
+    ds = {}
+    for c in info:
+        ds.update(c.get("datasets") or {})
+    out.append(("1. Сведения о расчётах", [
+        f"Водоём: {wb.get('name_ru', water_body)}. Отчёт собран из основных расчётов алгоритмов водоёма.",
+        ("table", ["Алгоритм", "Расчёт", "Версия", "Параметры", "Период", "Выполнен (UTC)", "Состояние"], rows),
+        "Наборы данных (тип: версия): " + "; ".join(f"{k}: v{v['version']}" for k, v in sorted(ds.items()))]))
 
     fc = results.get("forecast_pdu") or {}
     rows = (fc.get("tables", {}).get("forecast_summary") or {}).get("rows", [])
@@ -59,24 +61,26 @@ def _sections(run: dict, results: dict, wb: dict) -> list[tuple[str, list]]:
             f"Параметры прогноза: k = {_fmt(fc.get('payload', {}).get('k'), 2)}, "
             f"горизонт — {fc.get('payload', {}).get('horizon')} лет."]))
     else:
-        out.append(("2. ПДУ", ["В запуске нет шага прогноза — ПДУ по сценариям не рассчитан."]))
+        out.append(("2. ПДУ", ["У водоёма нет основного расчёта прогноза (j) — ПДУ по сценариям не рассчитан."]))
 
-    st = results.get("stock_by_catch") or {}
+    st = results.get("combined_stock") or {}
     by = (st.get("tables", {}).get("yearly_stock") or {}).get("rows", [])
     if by:
         last = max(r["year"] for r in by)
         tab = [[r["species"], _fmt(r["stock"])] for r in by
-               if r["year"] == last and r["gear"] not in ("сеть", "невод") and r["variant"] == "with_ages"
-               and r["method"] == "on_stock"]
-        par = [f"Окончательный запас по уловам (сеть и невод, уловистость по возрастам) за {last} г., шт."]
+               if r["year"] == last and r["gear"] not in ("сеть", "невод") and r.get("variant", "with_ages") == "with_ages"]
+        tonnes = {r["species"]: r for r in (st.get("tables", {}).get("tonnes") or {}).get("rows", [])
+                  if r["year"] == last and r["gear"] not in ("сеть", "невод")}
+        tab = [[sp, v, _fmt((tonnes.get(sp) or {}).get("tonnes_fishable"), 1)] for sp, v in tab]
+        par = [f"Окончательный запас по уловам (сеть и невод, уловистость по возрастам) за {last} г."]
         bc = results.get("bayes_cohort") or {}
         btab = (bc.get("tables", {}).get("bayes_totals") or {}).get("rows", [])
         bmap = {r["species"]: r for r in btab if r["year"] == last}
-        out.append(("3. Запас", par + [("table", ["Вид", "Запас по уловам, шт", "Байесовская модель, медиана, шт",
-                                                  "95 % интервал, шт"],
-                                        [[s, v, _fmt(bmap.get(s, {}).get("total_median")),
+        out.append(("3. Запас", par + [("table", ["Вид", "Запас по уловам, шт", "Промысловый запас, т",
+                                                  "Математическая модель, медиана, шт", "95 % интервал, шт"],
+                                        [[s, v, t, _fmt(bmap.get(s, {}).get("total_median")),
                                           f"{_fmt(bmap.get(s, {}).get('total_q025'))} – {_fmt(bmap.get(s, {}).get('total_q975'))}"
-                                          if s in bmap else "—"] for s, v in tab])]))
+                                          if s in bmap else "—"] for s, v, t in tab])]))
 
     pd_ = results.get("pdu_by_age") or {}
     prow = (pd_.get("tables", {}).get("pdu_by_age") or {}).get("rows", [])
@@ -96,23 +100,24 @@ def _sections(run: dict, results: dict, wb: dict) -> list[tuple[str, list]]:
         for k, m in ((res or {}).get("metrics") or {}).items():
             if k.startswith(("rhat_", "divergences_")) and m.get("value") is not None:
                 notes.append(f"{m['title']}: {_fmt(m['value'], 3 if k.startswith('rhat') else 0)}")
-    notes += [w for w in run.get("warnings", [])]
+    for c in info:
+        notes += [f"{STEP_TITLES.get(c['algorithm'], c['algorithm'])}: {w}" for w in c.get("warnings", [])]
     notes.append("Методика расчёта: «Многовидовые когортные математические модели оценки запасов рыбных ресурсов "
                  "с применением байесовского вывода» (Габбасов М. и др.).")
     out.append(("5. Диагностика и примечания", notes))
     return out
 
 
-def docx_report(run: dict, results: dict, wb: dict) -> bytes:
+def docx_report(water_body: str, info: list[dict], results: dict, wb: dict) -> bytes:
     from docx import Document
     from docx.shared import Pt
     doc = Document()
     st = doc.styles["Normal"]
     st.font.name = "Times New Roman"
     st.font.size = Pt(11)
-    doc.add_heading(f"Обоснование ПДУ: {wb.get('name_ru', run['water_body'])}", 0)
+    doc.add_heading(f"Обоснование ПДУ: {wb.get('name_ru', water_body)}", 0)
     doc.add_paragraph("Отчёт сформирован приложением FishStock.")
-    for title, items in _sections(run, results, wb):
+    for title, items in _sections(water_body, info, results, wb):
         doc.add_heading(title, 1)
         for it in items:
             if isinstance(it, tuple):
@@ -132,7 +137,7 @@ def docx_report(run: dict, results: dict, wb: dict) -> bytes:
     return buf.getvalue()
 
 
-def pdf_report(run: dict, results: dict, wb: dict) -> bytes:
+def pdf_report(water_body: str, info: list[dict], results: dict, wb: dict) -> bytes:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import ParagraphStyle
@@ -151,9 +156,9 @@ def pdf_report(run: dict, results: dict, wb: dict) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=15 * mm, rightMargin=15 * mm,
                             topMargin=12 * mm, bottomMargin=12 * mm, title="Обоснование ПДУ")
-    story = [Paragraph(f"Обоснование ПДУ: {wb.get('name_ru', run['water_body'])}", h0),
+    story = [Paragraph(f"Обоснование ПДУ: {wb.get('name_ru', water_body)}", h0),
              Paragraph("Отчёт сформирован приложением FishStock.", body)]
-    for title, items in _sections(run, results, wb):
+    for title, items in _sections(water_body, info, results, wb):
         story.append(Paragraph(title, h1))
         for it in items:
             if isinstance(it, tuple):

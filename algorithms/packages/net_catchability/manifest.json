@@ -1,0 +1,131 @@
+{
+ "version": "3.0.0",
+ "author": "FishStock",
+ "entrypoint": "algorithm:run",
+ "language": "python",
+ "runtime": {
+  "python": ">=3.11",
+  "timeout_minutes": 20
+ },
+ "code": "net_catchability",
+ "letter": "a",
+ "title_ru": "Уловистость сети по возрастам и годам",
+ "title_kk": "Аудың жас пен жыл бойынша аулағыштығы",
+ "description": "Несимметричная парабола уловистости сети по возрастным группам для каждого вида и года: вершина — в возрасте половой зрелости, края и нижняя граница — доли средней уловистости вида c̄, верхняя граница задана; наблюдения — годовой улов сетью по возрастам (малые пробы — сводная проба за все годы).",
+ "requires": {
+  "datasets": [
+   "catches",
+   "age_samples",
+   "species_props",
+   "yearly_conditions",
+   "mean_weights"
+  ],
+  "steps": []
+ },
+ "parameters": [
+  {
+   "code": "NET_MIN_AGE",
+   "title_ru": "Первая возрастная группа в уловах сети",
+   "type": "integer",
+   "default": 2,
+   "category": "param",
+   "min": 1,
+   "max": 5
+  },
+  {
+   "code": "NET_END_LEFT_FRAC",
+   "title_ru": "Левый край параболы сети, доля средней уловистости c̄",
+   "title_kk": "Ау параболасының сол шеті, орташа аулағыштық c̄ үлесі",
+   "type": "number",
+   "default": 0.3333333333,
+   "category": "param",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "code": "NET_END_RIGHT_FRAC",
+   "title_ru": "Правый край параболы сети, доля c̄",
+   "title_kk": "Ау параболасының оң шеті, c̄ үлесі",
+   "type": "number",
+   "default": 0.6666666667,
+   "category": "param",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "code": "NET_C_LOWER_FRAC",
+   "title_ru": "Нижняя граница c сети, доля c̄",
+   "title_kk": "Ау c-ның төменгі шегі, c̄ үлесі",
+   "type": "number",
+   "default": 0.3333333333,
+   "category": "param",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "code": "NET_C_UPPER",
+   "title_ru": "Верхняя граница c сети",
+   "type": "number",
+   "default": 0.8,
+   "category": "param",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "code": "NET_MIN_SAMPLE",
+   "title_ru": "Мин. число рыб, подвергнутых биол. обработке, шт",
+   "type": "integer",
+   "default": 20,
+   "category": "param",
+   "min": 1
+  },
+  {
+   "code": "AGE_PSEUDOCOUNT_TOTAL",
+   "title_ru": "Сглаживание данных биологической обработки: условных рыб на все данные года",
+   "title_kk": "Биологиялық өңдеу деректерін тегістеу: жылдың барлық деректеріне шартты балық",
+   "type": "number",
+   "default": 1.0,
+   "category": "param",
+   "min": 0,
+   "max": 100
+  },
+  {
+   "code": "AGE_POOL_MIN_SAMPLE",
+   "title_ru": "Добавлять данные биологической обработки соседних лет, если рыб меньше",
+   "title_kk": "Балық аз болса, көрші жылдардың биологиялық өңдеу деректерін қосу",
+   "type": "integer",
+   "default": 30,
+   "category": "param",
+   "min": 0,
+   "max": 1000
+  },
+  {
+   "code": "AGE_POOL_NEIGHBOURS",
+   "title_ru": "Соседних лет с каждой стороны",
+   "title_kk": "Әр жақтағы көрші жылдар",
+   "type": "integer",
+   "default": 1,
+   "category": "param",
+   "min": 0,
+   "max": 5
+  }
+ ],
+ "outputs": [
+  {
+   "code": "params",
+   "title_ru": "Параметры парабол",
+   "format": "table"
+  },
+  {
+   "code": "coefficients",
+   "title_ru": "Коэффициенты c сети (вид × год × возраст)",
+   "format": "table"
+  },
+  {
+   "code": "net_catchability.xlsx",
+   "title_ru": "Excel",
+   "format": "xlsx"
+  }
+ ],
+ "changes": "3.0.0 (25.10.2026): отдельный алгоритм каталога (решение № 70) — запускается сам по себе, входы — результаты других расчётов, параметры — из набора «Параметры алгоритма», расчёт за выбранный период; только с учётом возрастов; формулы и результаты при параметрах по умолчанию не меняются (эталон 22.10.2026)"
+}

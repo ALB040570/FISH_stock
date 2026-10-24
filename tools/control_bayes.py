@@ -4,7 +4,7 @@ FishStock и сравнение медиан численности с резу�
 (fish_stock_forecast от 22.10.2026, расчёты автора 4 × 1000).
 
     python tools/control_bayes.py sazan [--out каталог]
-    python tools/control_bayes.py --zip run_<id>.zip     # сверить готовый запуск (выгрузка «Все результаты (zip)»)
+    python tools/control_bayes.py --zip calc_<id>.zip    # сверить готовый расчёт модели (выгрузка результата, zip)
 
 Сверка выгрузки верна, если данные Жайсана в установке — образцы поставки (samples/zhaysan) без правок.
 
@@ -92,7 +92,7 @@ def compare_zip(path: Path) -> bool:
     ref = REPO / "legacy" / "fish_stock_forecast" / "results"
     with zipfile.ZipFile(path) as z:
         for name in sorted(z.namelist()):
-            m = re.search(r"bayes_cohort/zhaysan_bayes_([a-z]+)\.npz$", name)
+            m = re.search(r"(?:^|bayes_cohort/)zhaysan_bayes_([a-z]+)\.npz$", name)
             if not m:
                 continue
             sp = m.group(1)
@@ -125,12 +125,14 @@ def main():
     (work / "tables.json").write_text(json.dumps(tables, ensure_ascii=False))
     pkgs = {m["code"]: f for m, f in build.builtin()}
     prev = {}
-    for code, params in (("seine_catchability", {}), ("stock_by_catch", {}), ("pdu_by_age", {}),
-                         ("bayes_cohort", {"mode": "new", "species": a.species})):
+    # алгоритмы каталога a–i по очереди, входы — по манифестам (решение № 70)
+    chain = [(c, {}) for c in build.ORDER[:8]] + [("bayes_cohort", {"mode": "new", "species": a.species})]
+    for code, params in chain:
         m = json.loads(pkgs[code]["manifest.json"])
         defaults = {p["code"]: p["default"] for p in m["parameters"] if p.get("default") is not None}
+        need = m.get("requires", {}).get("steps", [])
         ctx = {"run_id": "control", "step": code, "water_body": "zhaysan", "params": {**defaults, **params},
-               "species_names": names, "gear_kinds": kinds, "inputs": {k: str(v / "out") for k, v in prev.items()},
+               "species_names": names, "gear_kinds": kinds, "inputs": {k: str(prev[k] / "out") for k in need},
                "tables_path": str(work / "tables.json")}
         d = work / code
         executor.prepare_step(d, pkgs[code], ctx)

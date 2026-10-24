@@ -1,4 +1,4 @@
-"""Этап 1. Уловистость невода (перенос fish_stock_forecast, формулы без изменений)."""
+"""b. Уловистость невода по возрастам и годам (формулы fish_stock_forecast без изменений; решение № 70)."""
 from fishcore import stepkit, views
 from fishcore.catchability_seine import compute_seine_catchability, save_results
 
@@ -6,8 +6,11 @@ DATASETS = ("catches", "age_samples", "species_props", "yearly_conditions", "mea
 
 
 def run(ctx):
+    from fishrunner import UserError
     stepkit.apply_fixed(ctx.params)
     b = stepkit.bundle(ctx, *DATASETS)
+    if not b.catch_years():
+        raise UserError("За период расчёта нет лет, где есть и уловы, и рыбы, подвергнутые биологической обработке")
     ctx.progress(0.1, phase="расчёт")
     ctx.log("подгонка сигмоид по видам и годам")
     res = compute_seine_catchability(ctx.water_body, b)
@@ -22,5 +25,6 @@ def run(ctx):
     bad = int(res.params_frame()["статус"].astype(str).str.contains("нарушено").sum()) if "статус" in res.params_frame() else 0
     ctx.metric("fits", len(res.fits), "Подогнано сигмоид")
     ctx.metric("violations", bad, "Нарушений ограничений")
-    ctx.save_state({"seine_c": res})
+    ctx.save_state({"seine_c": res, "cube": res.cube(), "years": list(res.years), "species": list(res.species),
+                    "ages": res.all_ages})
     return {"species": res.species, "years": res.years}

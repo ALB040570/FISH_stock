@@ -47,6 +47,10 @@ export function makeRouter(key, routes) {
     const auth = useAuth()
     if (to.meta.public) return true
     if (!auth.loggedIn) { hardGo('/login?next=' + encodeURIComponent(to.fullPath)); return false }
+    // перенесённый экран (например, каталог из «Администрирования» в «Расчёты», № 70) — сразу на новый адрес,
+    // даже если в прежний кабинет роль не входит
+    const moved = !to.matched.length || to.matched[0].path === '/:pathMatch(.*)*' ? legacyToNew(to.fullPath) : null
+    if (moved && moved !== to.fullPath) return leaveTo(own, to)
     if (own && !canEnter(own, auth.role)) { hardGo('/'); return false }
     if (to.meta.perm && !auth.can(to.meta.perm)) return own ? own.base : '/'
     return true

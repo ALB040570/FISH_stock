@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from conftest import H, load_service
+from conftest import H, load_service, run_chain
 
 
 def mod_process(mod):
@@ -50,9 +50,7 @@ def bayes_pl():
 
 def test_stock_insights(calc_stack, tmp_path, monkeypatch, bayes_pl):
     dm, da, aa, aa_mod = calc_stack
-    c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "stock"}).json()
-    aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"), json={})
-    assert mod_process(aa_mod)
+    run_chain(aa, aa_mod)
     mod = load_service("dashboards", tmp_path, monkeypatch)
     for k, cl in (("algo_admin", aa), ("data_admin", da), ("data_model", dm)):
         mod.SVC[k] = mod.Svc(k, http=cl)
@@ -66,7 +64,7 @@ def test_stock_insights(calc_stack, tmp_path, monkeypatch, bayes_pl):
         return r.json()
 
     # только этапы 1–3: понятное сообщение, не ошибка; «запас в тоннах» по уловам работает и без модели
-    assert "полный расчёт" in view("st_trust")["message"]
+    assert "«i. Запас по математической модели»" in view("st_trust")["message"]
     bm = view("st_biomass", "lesh")
     assert [round(r["bio"]) for r in bm["rows"]][::9] == [9113, 16217] and bm["rows"][-1]["share"] == 27.7
     assert bm["rows"][-1]["quota"] == 4488 and "model" not in [c["code"] for c in bm["columns"]]

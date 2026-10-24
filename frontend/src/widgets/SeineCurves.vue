@@ -33,7 +33,8 @@ const label = (a) => `${a - 1}–${a}`
 const opt = computed(() => {
   const f = fit.value
   const ages = f.ages.map(label)
-  const lo = net.value ? p.data.payload.net.c_lower : p.data.payload.c_lower
+  // у сети нижняя граница своя у каждого вида (c̄/3) — в подгонке; общей нет
+  const lo = net.value ? (f.c_lower ?? p.data.payload.net.c_lower) : p.data.payload.c_lower
   const hi = net.value ? p.data.payload.net.c_upper : p.data.payload.c_upper
   return {
     color: pal(),
@@ -47,7 +48,7 @@ const opt = computed(() => {
       { type: 'bar', name: f.observed_is_catch ? t('w.catch_by_age') : t('w.age_sample'), data: f.observed, itemStyle: { color: CHART.background }, barMaxWidth: 26 },
       ...(f.fitted ? [{ type: 'line', name: t('w.catch_curve'), data: f.fitted, symbol: 'none', lineStyle: { color: CHART.fit } }] : []),
       { type: 'line', name: t('w.catchability'), data: f.c, yAxisIndex: 1, lineStyle: { width: 2.5, color: CHART.main }, itemStyle: { color: CHART.main },
-        markLine: { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: CHART.limit }, label: { formatter: '{c}' }, data: [{ yAxis: lo }, { yAxis: hi }] } },
+        markLine: { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: CHART.limit }, label: { formatter: '{c}' }, data: [lo, hi].filter((v) => v !== null && v !== undefined).map((v) => ({ yAxis: v })) } },
     ],
   }
 })

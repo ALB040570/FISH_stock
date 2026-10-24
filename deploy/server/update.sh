@@ -34,7 +34,7 @@ fi
 echo "== Новое в $BRANCH:"
 git log --format='  %h %ad %s' --date=format:'%d.%m %H:%M' "$DEPLOYED..$TARGET"
 
-# расчёты, которые идут сейчас (данные воркера — /data/algo_admin/runs/*/meta.json)
+# расчёты, которые идут сейчас (данные воркера — /data/algo_admin/calcs/*/meta.json; до решения № 70 — runs/*)
 active_runs() {
   docker compose exec -T worker python - <<'PY' 2>/dev/null || true
 import glob, json
@@ -46,13 +46,14 @@ def ago(ts):
         return ""
     return f", {m // 60} ч {m % 60} мин назад" if m >= 60 else f", {m} мин назад"
 rows = {"running": [], "queued": []}
-for f in glob.glob("/data/algo_admin/runs/*/meta.json"):
+for f in glob.glob("/data/algo_admin/calcs/*/meta.json") + glob.glob("/data/algo_admin/runs/*/meta.json"):
     try:
         m = json.load(open(f, encoding="utf-8"))
     except Exception:
         continue
-    if m.get("status") in rows:
-        rows[m["status"]].append(f'{m.get("calculation_title") or m.get("id")} [{m.get("water_body", "")}]{ago(m.get("started_at") or m.get("created_at") or "")}')
+    st = m.get("state") or m.get("status")
+    if st in rows and not m.get("deleted"):
+        rows[st].append(f'{m.get("title") or m.get("calculation_title") or m.get("id")} [{m.get("water_body", "")}]{ago(m.get("started_at") or m.get("queued_at") or m.get("created_at") or "")}')
 for x in rows["running"]:
     print("RUNNING  " + x)
 for x in rows["queued"]:

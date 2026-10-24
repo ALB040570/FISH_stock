@@ -97,7 +97,8 @@ def test_search_and_context(svc):
     ctx = lambda r: c.get("/context", params={"route": r, "lang": "ru"}, headers=H()).json()["id"]
     assert ctx("/data") == "data-upload"
     assert ctx("/data/01ABC") == "data-edit"
-    assert ctx("/runs/01ABC") == "runs"
+    assert ctx("/calculations/01ABC") == "calculations"   # страница расчёта (решение № 70)
+    assert ctx("/catalog") == "catalog" and ctx("/profiles") == "profiles"
     assert ctx("/") == "map"
     assert ctx("/somewhere") == "intro"
 
