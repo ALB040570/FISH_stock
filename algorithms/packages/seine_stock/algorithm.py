@@ -1,4 +1,4 @@
-"""e. Ежегодный запас методом площадей (шт и т) по оценкам по ловам неводом (решение № 66).
+"""e. Ежегодный запас методом площадей (шт и т) по оценкам по ловам неводом (решение № 70).
 Формулы те же, что в расчёте запаса по уловам fish_stock_forecast (fishcore.stock.seine_yearly)."""
 from fishcore import biomass, config, stepkit, views
 from fishcore.data_source import load_fish_props

@@ -1,5 +1,5 @@
 """i. Запас по математической модели — байесовская когортная модель (перенос fish_stock_forecast, уравнения без
-изменений; решение № 66)."""
+изменений; решение № 70)."""
 import copy
 import json
 from pathlib import Path
@@ -29,7 +29,7 @@ def _profiles(ctx) -> dict:
 def run(ctx):
     from fishrunner import UserError
     b = stepkit.bundle(ctx, *DATASETS)
-    # входы (решение № 66): оценки по ловам — c и d, окончательный запас — g, ПДУ в штуках — h
+    # входы (решение № 70): оценки по ловам — c и d, окончательный запас — g, ПДУ в штуках — h
     c = stepkit.need_input(ctx, "seine_likelihood")
     d = stepkit.need_input(ctx, "net_likelihood")
     g = stepkit.need_input(ctx, "combined_stock")

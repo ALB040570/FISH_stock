@@ -207,7 +207,7 @@ def test_presenter(browser):
         assert page.get_by_text(txt, exact=True).count() == 0, txt
     page.goto(URL + "/calc/params")
     page.wait_for_url(lambda u: not u.startswith(URL + "/calc/params"))
-    page.goto(URL + "/design/catalog")                                  # перенесён в «Расчёты запасов рыб» (№ 66)
+    page.goto(URL + "/design/catalog")                                  # перенесён в «Расчёты запасов рыб» (№ 70)
     page.wait_for_url(URL + "/calc/catalog")
     page.wait_for_selector("text=Запас по математической модели")
     assert page.get_by_text("Код версии", exact=True).count() == 0 and page.locator("[data-test=run-bayes_cohort]").count() == 0
@@ -336,7 +336,7 @@ def test_monitoring_checks(browser):
 
 
 def test_monitoring_stock(browser):
-    """Запас по уловам: виды за год → вид; уловистость всегда по возрастам — переключателя нет (№ 66)."""
+    """Запас по уловам: виды за год → вид; уловистость всегда по возрастам — переключателя нет (№ 70)."""
     page = browser.new_page(viewport={"width": 1440, "height": 900})
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -448,7 +448,7 @@ def test_users_edit_delete_profile(browser, tmp_path):
 
 
 def test_calcs_catalog_params(browser):
-    """Расчёты запасов рыб (решение № 66): расчёты a–h водоёма, каталог a–k (k — «Планируется»), запуск алгоритма из
+    """Расчёты запасов рыб (решение № 70): расчёты a–h водоёма, каталог a–k (k — «Планируется»), запуск алгоритма из
     каталога с параметрами по умолчанию, альтернативный → основной, устаревшие и «Пересчитать устаревшие», набор
     параметров на основе «По умолчанию» с новой версией."""
     page = browser.new_page(viewport={"width": 1440, "height": 900})

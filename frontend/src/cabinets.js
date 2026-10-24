@@ -9,7 +9,7 @@ export const CABINETS = [
   { key: 'input', base: '/input/', icon: 'Upload', roles: [...STAFF, 'operator', 'presenter'] },
   { key: 'calc', base: '/calc/', icon: 'Odometer', roles: [...STAFF, 'presenter'] },
   { key: 'design', base: '/design/', icon: 'EditPen', roles: [...STAFF, 'presenter'] },
-  // каталог алгоритмов перенесён в «Расчёты запасов рыб» (решение № 66) — в «Администрировании» только пользователи и журнал
+  // каталог алгоритмов перенесён в «Расчёты запасов рыб» (решение № 70) — в «Администрировании» только пользователи и журнал
   { key: 'admin', base: '/admin/', icon: 'Setting', roles: ['admin'] },
 ]
 
@@ -45,7 +45,7 @@ const LEGACY = [
 
 const under = (p, prefix) => p === prefix || p.startsWith(prefix + '/')
 
-// перенесённые экраны (решение № 66): «хвост» адреса не сохраняется — у расчётов и запусков разные номера
+// перенесённые экраны (решение № 70): «хвост» адреса не сохраняется — у расчётов и запусков разные номера
 const MOVED = [
   ['/runs', '/calc/calculations'],
   ['/profiles', '/calc/params'],
@@ -62,7 +62,7 @@ export function legacyToNew(fullPath) {
   const p = m[1].replace(/\/+$/, '') || '/'
   const rest = m[2]
   if (p === '/') return null
-  // адреса кабинетов до решения № 66: каталог — в «Расчётах запасов рыб», запусков и параметров водоёмов больше нет
+  // адреса кабинетов до решения № 70: каталог — в «Расчётах запасов рыб», запусков и параметров водоёмов больше нет
   for (const [old, now] of MOVED) if (under(p, old)) return now + rest
   if (cabinetOf(p) && cabinetOf(p).key !== 'monitoring') return null
   if (p === '/monitoring') return null // главная кабинета (карта); прежний выбор водоёма — та же карта

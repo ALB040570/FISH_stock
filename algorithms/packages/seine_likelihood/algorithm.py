@@ -1,4 +1,4 @@
-"""c. Правдоподобие методом площадей для уловов неводом: оценка запаса по каждому лову (решение № 66).
+"""c. Правдоподобие методом площадей для уловов неводом: оценка запаса по каждому лову (решение № 70).
 Формула та же, что в расчёте запаса по уловам fish_stock_forecast (fishcore.stock.seine_per_haul)."""
 from fishcore import config, stepkit, views
 from fishcore.catch import build_haul_catch

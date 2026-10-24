@@ -122,7 +122,7 @@ class Data:
         return self.places.get(place_key(v), str(v).strip()) if v not in (None, "") else None
 
     def main_result(self, algorithm):
-        """Результат основного расчёта алгоритма водоёма (решение № 66): (результат, сведения о расчёте).
+        """Результат основного расчёта алгоритма водоёма (решение № 70): (результат, сведения о расчёте).
         (None, None) — основного расчёта нет; (None, сведения) — у расчёта нет результата."""
         key = f"_main:{algorithm}"
         if key not in self._d:

@@ -47,7 +47,7 @@ def test_new_algorithm_flow(algo_stack):
 
 def test_change_builtin_and_compare(algo_stack):
     """Математик меняет значение параметра по умолчанию в новой версии — сверка показывает отличие; тестовый прогон
-    сам считает алгоритмы-входы (a–g) по их манифестам (решение № 66)."""
+    сам считает алгоритмы-входы (a–g) по их манифестам (решение № 70)."""
     dm, da, aa, am, mod = algo_stack
     d = am.post("/algorithms/pdu_by_age/drafts", headers=H("mathematician"), json={}).json()
     m = json.loads(am.get(f"/drafts/{d['id']}/file?path=manifest.json", headers=H("mathematician")).json()["text"])

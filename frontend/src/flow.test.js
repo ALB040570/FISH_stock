@@ -4,7 +4,7 @@ import { buildFlow, mapState, resultLink, runProgress, stageLink, stageOf } from
 const D = (at) => ({ updated_at: at, datasets: { catches: {}, ages: {} } })
 const M = (extra = {}) => ({ main: { seine_catchability: { id: 'b1' }, pdu_by_age: { id: 'h1' } }, stale: [], active: [], ...extra })
 
-describe('состояние водоёма (решение № 66)', () => {
+describe('состояние водоёма (решение № 70)', () => {
   it('карта', () => {
     expect(mapState(null, null)).toBe('no_data')
     expect(mapState(D('2026-10-20'), null)).toBe('has_data')

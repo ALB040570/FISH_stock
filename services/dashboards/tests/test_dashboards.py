@@ -163,7 +163,7 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     tot = st["species"]["лещ"]["variants"]["with_ages"]["on_stock"]["totals"]
     yt = view("st_table", "lesh")
     assert [r["mean"] for r in yt["rows"]] == tot["сеть+невод"] and [r["net"] for r in yt["rows"]] == tot["сеть"]
-    # с решения № 66 уловистость всегда по возрастам, способ годового запаса — параметр расчёта: переключателей нет
+    # с решения № 70 уловистость всегда по возрастам, способ годового запаса — параметр расчёта: переключателей нет
     t2 = view("st_tiles", "lesh", variant="out_ages", method="on_catch")
     assert t2["values"]["mean"] == tot["сеть+невод"][-1] and not t2.get("toggles")
     assert "out_ages" not in st["species"]["лещ"]["variants"] and st["method"] == "on_stock"

@@ -1,5 +1,5 @@
 """j. Прогноз запаса и оценка ПДУ по модели (перенос fish_stock_forecast: core/forecast.py и app/services_forecast.py;
-решение № 66)."""
+решение № 70)."""
 import io
 
 import numpy as np

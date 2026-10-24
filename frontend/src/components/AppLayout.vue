@@ -125,7 +125,7 @@ const items = computed(() => {
       ...it('/design/algorithms', 'nav.algorithms', 'Cpu', 'algo.develop'),
       ...it('/design/dashboards', 'nav.dash_design', 'Histogram', 'dashboard.edit'),
       ...it('/design/signal-rules', 'cab.signal_rules', 'Bell', 'dashboard.edit'),
-      // без права правки — список дашбордов (№ 62); каталог алгоритмов — в «Расчётах запасов рыб» (№ 66)
+      // без права правки — список дашбордов (№ 62); каталог алгоритмов — в «Расчётах запасов рыб» (№ 70)
       ...(auth.can('dashboard.edit') ? [] : it('/monitoring/dashboards', 'nav.dashboards', 'Histogram'))]
     case 'admin': return [...it('/admin/users', 'nav.users', 'User', 'users.manage'), ...it('/admin/audit', 'nav.audit', 'Tickets', 'audit.view')]
   }

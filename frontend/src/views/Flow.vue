@@ -94,7 +94,7 @@
           <span class="act">{{ $t('flow.act_calc') }} →</span>
         </div>
 
-        <!-- труба: основные расчёты устарели (новые данные или пересчитан вход, решение № 66) -->
+        <!-- труба: основные расчёты устарели (новые данные или пересчитан вход, решение № 70) -->
         <div class="pipe" data-pipe="stale">
           <div class="pbody">
           <div class="plabel">{{ $t('flow.pipe_stale') }}</div>

@@ -169,7 +169,7 @@ const filtered = computed(() => wbs.value.filter((w) =>
 ).sort((a, b) => (a.state === 'no_data') - (b.state === 'no_data') || a.name_ru.localeCompare(b.name_ru)))
 
 // наблюдателю — только завершённый расчёт (идущий или неудачный запуск — внутреннее состояние, № 55)
-// основные расчёты водоёма (решение № 66): буквы алгоритмов и дата последнего результата
+// основные расчёты водоёма (решение № 70): буквы алгоритмов и дата последнего результата
 const mainsOf = (w) => Object.values(w.run?.main || {}).sort((a, b) => (a.letter || '').localeCompare(b.letter || ''))
 const lastOf = (w) => mainsOf(w).map((m) => m.finished_at).filter(Boolean).sort().pop()
 const shortDate = (s) => (s ? new Date(s).toLocaleDateString('ru-RU') : '')

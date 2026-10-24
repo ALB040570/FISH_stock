@@ -108,7 +108,7 @@ STOCK_CHAIN = ["net_catchability", "seine_catchability", "seine_likelihood", "ne
 
 def run_chain(aa, aa_mod, water_body="zhaysan", codes=STOCK_CHAIN):
     """Расчёты алгоритмов a–h водоёма (бывшие этапы 1–3) с параметрами по умолчанию; первый результат каждого —
-    основной (решение № 66). Возвращает {алгоритм: id расчёта}."""
+    основной (решение № 70). Возвращает {алгоритм: id расчёта}."""
     from importlib import import_module
     w = import_module("app.worker")
     ids = {}

@@ -99,19 +99,14 @@
   "order": 30,
   "routes": [
    "/calculations",
-   "/calculations/*",
-   "/design/calculations",
-   "/design/calculations/*"
+   "/calculations/*"
   ]
  },
  {
   "id": "runs",
   "section": "ichthyologist",
   "order": 31,
-  "routes": [
-   "/runs",
-   "/runs/*"
-  ]
+  "routes": []
  },
  {
   "id": "monitoring",
@@ -160,22 +155,22 @@
  },
  {
   "id": "catalog",
-  "section": "mathematician",
-  "order": 10,
+  "section": "ichthyologist",
+  "order": 32,
   "routes": [
    "/catalog"
   ]
  },
  {
   "id": "parameters",
-  "section": "mathematician",
-  "order": 11,
+  "section": "ichthyologist",
+  "order": 34,
   "routes": []
  },
  {
   "id": "profiles",
-  "section": "mathematician",
-  "order": 12,
+  "section": "ichthyologist",
+  "order": 33,
   "routes": [
    "/profiles"
   ]

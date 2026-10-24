@@ -125,7 +125,7 @@ class StockResult:
         return np.where(all_nan, np.nan, np.nansum(np.where(m, arr, 0.0), axis=2))
 
     def variant_methods(self) -> list[tuple[str, str]]:
-        """Пары (вариант, способ), посчитанные в результате: у compute_stock — все, у алгоритма g — одна (№ 66)."""
+        """Пары (вариант, способ), посчитанные в результате: у compute_stock — все, у алгоритма g — одна (№ 70)."""
         have = {(k[1], k[2]) for k in self.yearly if k[0] == MEAN}
         return [(v, m) for v in VARIANTS for m in METHODS if (v, m) in have]
 
@@ -159,7 +159,7 @@ def panel_factor(hc: HaulCatch) -> np.ndarray:
 
 # ---------------------------------------------------------------- части расчёта (алгоритмы каталога c–g)
 # Те же выражения, что были внутри compute_stock (результат не меняется — проверяет регрессия этапов 1–3):
-# compute_stock собирается из этих функций, алгоритмы каталога вызывают их по отдельности (решение № 66).
+# compute_stock собирается из этих функций, алгоритмы каталога вызывают их по отдельности (решение № 70).
 
 def gear_inputs(props: FishProps, years, species):
     """S(t), м²; V вида, м/ч; время стоянки и длина сети по годам."""

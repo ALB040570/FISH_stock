@@ -223,7 +223,7 @@ def _gear_names():
     return {r["values"]["code"]: r["values"]["name_ru"] for r in recs}
 
 
-# прежний шаг «Уловистость сети и запас по уловам» (до решения № 66) в сохранённых дашбордах → алгоритмы каталога
+# прежний шаг «Уловистость сети и запас по уловам» (до решения № 70) в сохранённых дашбордах → алгоритмы каталога
 ALIAS_TABLES = {"yearly_stock": ("combined_stock", "yearly_stock"), "stock_by_age": ("combined_stock", "stock_by_age"),
                 "npc_stock": ("combined_stock", "npc_stock"), "net_coefficients": ("net_catchability", "coefficients")}
 

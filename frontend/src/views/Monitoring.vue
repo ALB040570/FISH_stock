@@ -109,7 +109,7 @@ async function loadTraffic() {
 }
 watch([wb, locale], loadTraffic)
 
-// основные расчёты водоёма (решение № 66): мониторинг собирает картину из них; «устарели» — не для наблюдателя (№ 55)
+// основные расчёты водоёма (решение № 70): мониторинг собирает картину из них; «устарели» — не для наблюдателя (№ 55)
 const mains = computed(() => Object.values(runInfo.value || {}).sort((a, b) => (a.letter || '').localeCompare(b.letter || '')))
 const hideInternal = !auth.can('results.view')
 const staleN = computed(() => mains.value.filter((m) => m.stale?.length).length)

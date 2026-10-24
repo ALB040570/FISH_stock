@@ -124,7 +124,7 @@ def build_new_inputs(species: str, cfg: SpeciesConfig, res=None, pdu=None, props
     pdu_clean = (pdu_raw + 0.1) * cfg.pdu_scale
 
     # начальный запас (первый год), возрасты 2..m1
-    meth = getattr(res, "method", "on_stock")          # способ годового запаса расчёта g (решение № 66)
+    meth = getattr(res, "method", "on_stock")          # способ годового запаса расчёта g (решение № 70)
     yearly_final = res.yearly[(MEAN, "with_ages", meth)][:, si, :][:, sel]
     yearly_net = res.yearly[(app_config.GEAR_NET, "with_ages", meth)][:, si, :][:, sel]
     yearly_seine = res.yearly[(app_config.GEAR_SEINE, "with_ages", meth)][:, si, :][:, sel]

@@ -34,7 +34,7 @@ fi
 echo "== Новое в $BRANCH:"
 git log --format='  %h %ad %s' --date=format:'%d.%m %H:%M' "$DEPLOYED..$TARGET"
 
-# расчёты, которые идут сейчас (данные воркера — /data/algo_admin/calcs/*/meta.json; до решения № 66 — runs/*)
+# расчёты, которые идут сейчас (данные воркера — /data/algo_admin/calcs/*/meta.json; до решения № 70 — runs/*)
 active_runs() {
   docker compose exec -T worker python - <<'PY' 2>/dev/null || true
 import glob, json

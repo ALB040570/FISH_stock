@@ -95,7 +95,7 @@ def net_payload(res, net_c, props) -> dict:
 
 def net_payload_parts(net_c, props, years, species, ages, sigma=None) -> dict:
     """Параметры парабол сети для мониторинга; sigma (годы, виды, группы) — доля балансовой модели, если посчитана
-    (алгоритм d); у алгоритма a её нет — поле пустое (решение № 66)."""
+    (алгоритм d); у алгоритма a её нет — поле пустое (решение № 70)."""
     years, species = list(years), list(species)
     fits = {}
     for (fish, year), r in net_c.fits.items():
@@ -451,7 +451,7 @@ def catch_by_age_tables_hc(catches: list) -> list[tuple[str, str, list[dict], li
     return [t1, t2]
 
 
-# ---------------------------------------------------------------- алгоритмы каталога (решение № 66)
+# ---------------------------------------------------------------- алгоритмы каталога (решение № 70)
 def net_excel(net_c) -> bytes:
     params = net_c.params_frame()
     cube = net_c.cube_frame().pivot_table(index=["вид", "год"], columns="возраст", values="c", sort=False)

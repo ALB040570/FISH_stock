@@ -125,7 +125,7 @@ def main():
     (work / "tables.json").write_text(json.dumps(tables, ensure_ascii=False))
     pkgs = {m["code"]: f for m, f in build.builtin()}
     prev = {}
-    # алгоритмы каталога a–i по очереди, входы — по манифестам (решение № 66)
+    # алгоритмы каталога a–i по очереди, входы — по манифестам (решение № 70)
     chain = [(c, {}) for c in build.ORDER[:8]] + [("bayes_cohort", {"mode": "new", "species": a.species})]
     for code, params in chain:
         m = json.loads(pkgs[code]["manifest.json"])

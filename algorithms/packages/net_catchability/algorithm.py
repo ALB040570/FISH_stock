@@ -1,4 +1,4 @@
-"""a. Уловистость сети по возрастам и годам (формулы fish_stock_forecast без изменений; решение № 66)."""
+"""a. Уловистость сети по возрастам и годам (формулы fish_stock_forecast без изменений; решение № 70)."""
 from fishcore import config, stepkit, views
 from fishcore.catch import build_haul_catch
 from fishcore.catchability_net import compute_net_catchability

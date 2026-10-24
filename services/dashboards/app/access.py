@@ -17,7 +17,7 @@ from .insights import calc_stock_views, calc_views  # после insights: он 
 PERM = "results.view"
 
 # алгоритмы, результаты которых — оценки модели; pdu_by_age (h) — ПДУ НПЦ по возрастам (официальная квота);
-# stock_by_catch — прежний код (до решения № 66) в сохранённых дашбордах
+# stock_by_catch — прежний код (до решения № 70) в сохранённых дашбордах
 RESULT_ALGOS = {"net_catchability", "seine_catchability", "seine_likelihood", "net_likelihood", "seine_stock", "net_stock",
                 "combined_stock", "stock_by_catch", "bayes_cohort", "forecast_pdu", "bayes_checks", "removal_pdu"}
 # представления результатов расчёта, кроме раздела «ПДУ НПЦ (официальный)» (pn_*)

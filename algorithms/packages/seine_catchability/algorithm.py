@@ -1,4 +1,4 @@
-"""b. Уловистость невода по возрастам и годам (формулы fish_stock_forecast без изменений; решение № 66)."""
+"""b. Уловистость невода по возрастам и годам (формулы fish_stock_forecast без изменений; решение № 70)."""
 from fishcore import stepkit, views
 from fishcore.catchability_seine import compute_seine_catchability, save_results
 

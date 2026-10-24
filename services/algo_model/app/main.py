@@ -54,7 +54,7 @@ drafts = Collection(ROOT, "drafts")
 TESTS = ROOT / "tests"
 TESTS.mkdir(exist_ok=True)
 TEXT_EXT = (".py", ".json", ".md", ".txt", ".csv", ".yaml", ".yml")
-# param — значение из набора «Параметры алгоритма», calc — задаётся в расчёте (решение № 66);
+# param — значение из набора «Параметры алгоритма», calc — задаётся в расчёте (решение № 70);
 # fixed, waterbody, run — категории прежних версий (до 3.0.0), допустимы в черновиках на их основе
 CATEGORIES = ("param", "calc", "fixed", "waterbody", "run")
 PARAM_TYPES = ("integer", "number", "enum", "boolean", "string", "species_list", "year_map", "species_map",

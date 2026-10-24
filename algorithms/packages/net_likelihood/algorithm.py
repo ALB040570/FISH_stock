@@ -1,5 +1,5 @@
 """d. Правдоподобие балансовым методом для уловов сетью: σ балансовой модели и оценка запаса по каждому лову
-(решение № 66). Формулы те же, что в расчёте запаса по уловам fish_stock_forecast (fishcore.stock)."""
+(решение № 70). Формулы те же, что в расчёте запаса по уловам fish_stock_forecast (fishcore.stock)."""
 from fishcore import config, stepkit, views
 from fishcore.catch import build_haul_catch
 from fishcore.data_source import load_fish_props
