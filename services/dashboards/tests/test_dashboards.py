@@ -277,6 +277,19 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     T3 = {r["species"]: r for r in view("ca_trust")["trust"]["rows"]}
     assert all(r["gears"]["one"] and r["gears"]["ratio"] is None and not r["gears"]["hit"] for r in T3.values())
     assert T3["лещ"]["bounds"]["pct"] is not None and T3["лещ"]["bounds"]["gear"] in ("", "невод")
+    # невод не дал вида в одном году (Балхаш на сервере, 24.10.2026): сравнивать не с чем — «—», а не ошибка 500
+    monkeypatch.setattr(cv, "_payload", real_payload)
+
+    def seine_zero_2020(D, *a, **k):
+        st, m = real_stock(D, *a, **k)
+        st = copy.deepcopy(st)
+        tot = st["species"]["лещ"]["variants"]["with_ages"]["on_stock"]["totals"][st["gears"]["seine"]]
+        tot[st["years"].index(2020)] = 0
+        return st, m
+    monkeypatch.setattr(cv, "_stock", seine_zero_2020)
+    T4 = {r["species"]: r for r in view("ca_trust", year=2020)["trust"]["rows"]}
+    assert T4["лещ"]["gears"]["ratio"] is None and not T4["лещ"]["gears"]["hit"] and not T4["лещ"]["gears"]["one"]
+    assert view("ca_passport")["rows"] and view("ca_z")["rows"]
 
 
 def test_model_checks_views(tmp_path, monkeypatch):

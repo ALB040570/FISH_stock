@@ -1587,7 +1587,8 @@ def _trust_row(ctx, key, sp, y, yi):
     tn, ts = mb["totals"][G["net"]], mb["totals"][G["seine"]]
     vn, vs = tn[yi], ts[yi]
     one_gear = not any(v for v in tn) or not any(v for v in ts)
-    ratio = (vs / vn) if (not one_gear and vn and vs is not None) else None
+    # нулевая оценка одного из орудий за год (вид не попался неводом или сетью) — сравнивать не с чем
+    ratio = (vs / vn) if (not one_gear and vn and vs) else None
     rs = sorted(s_ / n_ for s_, n_ in zip(ts, tn) if n_ and s_)
     r_med = (rs[len(rs) // 2] if len(rs) % 2 else (rs[len(rs) // 2 - 1] + rs[len(rs) // 2]) / 2) if rs else None
     g_hit = en_g and ratio is not None and (ratio > R or ratio < 1 / R)
