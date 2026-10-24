@@ -69,12 +69,22 @@ export function buildFlow({ names = {}, data = {}, runs = {}, queue = null }) {
   }
   for (const s of Object.keys(byStage)) byStage[s].sort((a, b) => a.name.localeCompare(b.name, 'ru'))
   const withData = STAGES.reduce((n, s) => n + byStage[s].length, 0)
+  // итог для первого взгляда: ПДУ по основным расчётам (этап «готово»); числа — из результата расчёта, без пересчёта,
+  // виды не складываются (№ 45); ПДУ приложения (F = k·M) подписан как таковой и не смешивается с ПДУ НПЦ (№ 44)
+  const results = byStage.ready.map((w) => {
+    const pdu = runs[w.code]?.pdu
+    const rows = (pdu?.rows || []).filter((r) => r.pdu_t !== null && r.pdu_t !== undefined).sort((a, b) => b.pdu_t - a.pdu_t)
+    return { code: w.code, name: w.name, year: rows[0]?.year || null, rows }
+  })
   return {
-    byStage, datasets, lastUpload, withData,
+    byStage, datasets, lastUpload, withData, total: Object.keys({ ...names, ...data }).length, results,
     running: (queue?.running || []).length, queued: (queue?.queued || []).length,
     waiting: byStage.wait_calc.length + byStage.wait_main.length,
   }
 }
+
+/** ПДУ водоёма в мониторинге: рассчитанный в приложении (если есть прогноз) или официальный НПЦ. */
+export const resultLink = (r) => `/monitoring/waterbody/${r.code}?tab=pdu&s=${r.rows.length ? 'app' : 'npc'}`
 
 /** Куда ведёт водоём в трубе: следующее действие этапа. */
 export function stageLink(item) {
