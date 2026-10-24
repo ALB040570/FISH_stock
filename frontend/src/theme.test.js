@@ -42,7 +42,7 @@ describe.each(['light', 'dark'])('схема %s', (mode) => {
       ['text', 'bg'], ['text', 'card'], ['muted', 'bg'], ['muted', 'card'], ['muted', 'card-soft'],
       ['primary', 'card'], ['primary', 'selected'], ['primary-hover', 'selected'], ['accent-text', 'card'],
       ['nav-text', 'nav'], ['nav-muted', 'nav'], ['nav-text', 'nav-active'], ['success', 'card'], ['warning', 'card'],
-      ['danger', 'card'], ['on-primary', 'primary'],
+      ['danger', 'card'], ['on-primary', 'primary'], ['link', 'card'], ['link', 'bg'], ['link', 'selected'],
     ]
     for (const [fg, bg] of pairs) expect(contrast(c[fg], c[bg]), `${mode}: ${fg} на ${bg}`).toBeGreaterThanOrEqual(4.5)
   })

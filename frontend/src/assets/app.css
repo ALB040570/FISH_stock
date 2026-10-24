@@ -7,23 +7,24 @@
   --fs-primary-2: #00A3C4;
   --fs-primary-soft: #B9D9E6;
   --fs-on-primary: #FFFFFF;
-  --fs-selected: #E6EEF6;
-  --fs-hover: #F0F4F8;
+  --fs-link: #00708A;
+  --fs-selected: #E1F1F6;
+  --fs-hover: #F3EFE5;
   --fs-accent: #E8B40C;
   --fs-accent-text: #8A6A00;
-  --fs-nav: #16324F;
-  --fs-nav-active: #0F2540;
+  --fs-nav: #1B3D63;
+  --fs-nav-active: #235378;
   --fs-nav-text: #E3EAF2;
   --fs-nav-muted: #A9BCD0;
-  --fs-bg: #F6F7F9;
+  --fs-bg: #F7F4EC;
   --fs-card: #FFFFFF;
-  --fs-card-soft: #FAFBFC;
-  --fs-line: #DDE2EA;
-  --fs-line-soft: #ECEFF3;
+  --fs-card-soft: #FBF9F4;
+  --fs-line: #E3DDCF;
+  --fs-line-soft: #EEE9DE;
   --fs-text: #1A2230;
   --fs-muted: #566275;
   --fs-faint: #737F8F;
-  --fs-code: #F2F4F7;
+  --fs-code: #F4F1EA;
   --fs-success: #1B7A4B;
   --fs-warning: #A9650F;
   --fs-danger: #C0392B;
@@ -73,10 +74,10 @@
   --el-text-color-regular: #2E3A4B;
   --el-text-color-secondary: var(--fs-muted);
   --el-text-color-placeholder: #8A95A5;
-  --el-border-color: #CED5DF;
+  --el-border-color: #D8D1C2;
   --el-border-color-light: var(--fs-line);
   --el-border-color-lighter: var(--fs-line-soft);
-  --el-border-color-extra-light: #F2F4F7;
+  --el-border-color-extra-light: #F4F1EA;
   --el-fill-color-light: var(--fs-hover);
   --el-fill-color-lighter: var(--fs-card-soft);
   --el-bg-color-page: var(--fs-bg);
@@ -92,12 +93,13 @@ html.dark {
   --fs-primary-2: #7CCBE2;
   --fs-primary-soft: #2E4A63;
   --fs-on-primary: #0B1620;
+  --fs-link: #7CCBE2;
   --fs-selected: #233649;
   --fs-hover: #1F2C3A;
   --fs-accent: #F0C548;
   --fs-accent-text: #F0C548;
   --fs-nav: #0D141C;
-  --fs-nav-active: #1D2C3C;
+  --fs-nav-active: #173548;
   --fs-nav-text: #D8E0E9;
   --fs-nav-muted: #93A3B5;
   --fs-bg: #121A24;
@@ -182,8 +184,8 @@ html.dark {
 html, body, #app { height: 100%; margin: 0; }
 body { background: var(--fs-bg); color: var(--fs-text); font-family: var(--el-font-family); font-size: 14px;
   font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased; }
-a { color: var(--fs-primary); text-decoration: none; }
-a:hover { color: var(--fs-primary-hover); text-decoration: underline; }
+a { color: var(--fs-link); text-decoration: none; }
+a:hover { color: var(--fs-link); text-decoration: underline; }
 h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.25; }
 h2 { font-size: 17px; margin: 18px 0 10px; font-weight: 600; letter-spacing: -0.01em; }
 h3 { font-size: 15px; margin: 12px 0 8px; font-weight: 600; }
@@ -217,6 +219,8 @@ h3 { font-size: 15px; margin: 12px 0 8px; font-weight: 600; }
 .el-table th.el-table__cell { font-weight: 600; color: var(--fs-muted); font-size: 12.5px; }
 .el-table td.el-table__cell { font-variant-numeric: tabular-nums; }
 .el-tabs__item { font-weight: 500; }
+.el-tabs__active-bar { background-color: var(--fs-accent); height: 3px; border-radius: 2px; } /* золото — выбранная вкладка */
+.el-tabs__item.is-active { color: var(--fs-text); }
 .el-button { font-weight: 500; }
 .el-alert__title { font-weight: 500; }
 
