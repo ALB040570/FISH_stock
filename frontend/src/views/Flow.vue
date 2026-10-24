@@ -29,19 +29,25 @@
       <div class="hello">
         <div class="hello-text">
           <h1>{{ greeting }}{{ firstName ? ', ' + firstName : '' }}</h1>
-          <div class="muted">
-            {{ $t('roles.' + auth.role) }}
-            <template v-if="flow"> · {{ $t('flow.with_data', { n: flow.withData }) }}</template>
-            <span v-if="updatedAt" class="faint"> · {{ $t('flow.updated', { t: updatedAt }) }}</span>
+          <div class="muted meta">
+            <span>{{ $t('roles.' + auth.role) }}<template v-if="flow"> · {{ $t('flow.with_data', { n: flow.withData }) }}</template><span v-if="updatedAt" class="faint"> · {{ $t('flow.updated', { t: updatedAt }) }}</span></span>
+            <span v-if="flow?.waiting" class="attn"><span class="dot" :style="{ background: MAP_STATE.stale }" />{{ $t('flow.waiting', { n: flow.waiting }) }}</span>
           </div>
-          <div v-if="flow?.waiting" class="attn"><span class="dot" :style="{ background: MAP_STATE.stale }" />{{ $t('flow.waiting', { n: flow.waiting }) }}</div>
         </div>
         <a v-if="last && last.cab" class="continue" :href="last.path" data-test="continue">
           <el-icon><Clock /></el-icon><span><span class="faint">{{ $t('flow.continue') }}:</span> {{ lastLabel }}</span><el-icon><Right /></el-icon>
         </a>
       </div>
 
-      <div class="section-label on-hero"><b>{{ $t('flow.path') }}:</b> {{ $t('flow.path_hint') }}</div>
+      <div class="pathrow">
+        <div class="path" data-test="path"><b>{{ $t('flow.path') }}:</b> {{ $t('flow.path_hint') }}</div>
+        <div class="legend">
+          <span><i class="dot" :style="{ background: MAP_STATE.stale }" />{{ $t('flow.legend_wait') }}</span>
+          <span><i class="dot" :style="{ background: RUN_STEP.running }" />{{ $t('flow.legend_run') }}</span>
+          <span><i class="dot" :style="{ background: MAP_STATE.has_data }" />{{ $t('flow.legend_main') }}</span>
+          <span><i class="dot" :style="{ background: MAP_STATE.has_run }" />{{ $t('flow.legend_ready') }}</span>
+        </div>
+      </div>
     </section>
 
     <main class="body">
@@ -101,43 +107,38 @@
         </div>
       </div>
 
-      <div class="legend">
-        <span><i class="dot" :style="{ background: MAP_STATE.stale }" />{{ $t('flow.legend_wait') }}</span>
-        <span><i class="dot" :style="{ background: RUN_STEP.running }" />{{ $t('flow.legend_run') }}</span>
-        <span><i class="dot" :style="{ background: MAP_STATE.has_data }" />{{ $t('flow.legend_main') }}</span>
-        <span><i class="dot" :style="{ background: MAP_STATE.has_run }" />{{ $t('flow.legend_ready') }}</span>
+      <!-- низ «Главной» (без прокрутки, замечание 24.10): слева ПДУ по основным расчётам — один ряд, лишнее листается
+           по горизонтали; справа настройка системы -->
+      <div class="bottom" :class="{ 'no-base': !baseCabs.length }">
+        <section v-if="flow" class="res-zone">
+          <div class="section-label">{{ $t('flow.res_title') }}</div>
+          <div v-if="flow.results.length" class="results">
+            <a v-for="r in flow.results" :key="r.code" class="res" :href="resultLink(r, auth.can('results.view'))" :data-result="r.code">
+              <div class="rname" :title="r.name">{{ r.name }}</div>
+              <template v-if="r.rows.length">
+                <div class="runit">{{ $t('flow.res_unit', { y: r.year }) }}</div>
+                <div v-for="x in r.rows.slice(0, 3)" :key="x.species" class="rrow"><span>{{ x.species }}</span><b>{{ fmtT(x.pdu_t) }}</b></div>
+                <div v-if="r.rows.length > 3" class="rmore">{{ $t('flow.res_more', { n: r.rows.length - 3 }) }}</div>
+              </template>
+              <div v-else class="runit">{{ $t('flow.res_npc') }}</div>
+              <span class="act">{{ $t('flow.res_open') }} →</span>
+            </a>
+          </div>
+          <div v-else class="note">{{ $t('flow.res_empty') }}</div>
+        </section>
+        <section v-if="baseCabs.length" class="base-zone">
+          <div class="section-label">{{ $t('flow.base') }}</div>
+          <div class="base">
+            <a v-for="c in baseCabs" :key="c.key" class="tile row" :href="c.base" :data-cabinet="c.key">
+              <el-icon :size="18" class="bicon"><component :is="c.icon" /></el-icon>
+              <div class="grow">
+                <div class="tname">{{ $t('cab.' + c.key) }}<kbd>{{ keyOf(c.key) }}</kbd></div>
+                <div class="tdesc">{{ baseLine(c.key) || $t('cab.' + c.key + '_d') }}</div>
+              </div>
+            </a>
+          </div>
+        </section>
       </div>
-
-      <!-- итог для первого взгляда: ПДУ по основным расчётам (золото — только ПДУ, тема «Степь и небо») -->
-      <template v-if="flow">
-        <div class="section-label">{{ $t('flow.res_title') }}</div>
-        <div v-if="flow.results.length" class="results">
-          <a v-for="r in flow.results" :key="r.code" class="res" :href="resultLink(r, auth.can('results.view'))" :data-result="r.code">
-            <div class="rname">{{ r.name }}</div>
-            <template v-if="r.rows.length">
-              <div class="runit">{{ $t('flow.res_unit', { y: r.year }) }}</div>
-              <div v-for="x in r.rows.slice(0, 3)" :key="x.species" class="rrow"><span>{{ x.species }}</span><b>{{ fmtT(x.pdu_t) }}</b></div>
-              <div v-if="r.rows.length > 3" class="rmore">{{ $t('flow.res_more', { n: r.rows.length - 3 }) }}</div>
-            </template>
-            <div v-else class="runit">{{ $t('flow.res_npc') }}</div>
-            <span class="act">{{ $t('flow.res_open') }} →</span>
-          </a>
-        </div>
-        <div v-else class="note">{{ $t('flow.res_empty') }}</div>
-      </template>
-
-      <template v-if="baseCabs.length">
-        <div class="section-label">{{ $t('flow.base') }}</div>
-        <div class="base">
-          <a v-for="c in baseCabs" :key="c.key" class="tile row" :href="c.base" :data-cabinet="c.key">
-            <el-icon :size="22" class="bicon"><component :is="c.icon" /></el-icon>
-            <div class="grow">
-              <div class="tname">{{ $t('cab.' + c.key) }}<kbd>{{ keyOf(c.key) }}</kbd></div>
-              <div class="tdesc">{{ baseLine(c.key) || $t('cab.' + c.key + '_d') }}</div>
-            </div>
-          </a>
-        </div>
-      </template>
       <el-alert v-if="error" type="warning" :closable="false" :title="error" style="margin-top:14px" />
     </main>
     <AppCredits class="credits" />
@@ -267,15 +268,17 @@ function onCmd(c) {
 }
 </script>
 <style scoped>
+/* «Главная» помещается в экран компьютера без прокрутки (замечание заказчика 24.10.2026): проверено на 1366×768,
+   1440×900, 1512×827 с 4 водоёмами — при новых блоках сверяйте высоту (e2e test_cabinets_flow) */
 .flow-page { min-height: 100vh; display: flex; flex-direction: column; background: var(--fs-bg); color: var(--fs-text); }
 .flow-page > .body { flex: 1; width: 100%; box-sizing: border-box; }
-.credits { border-top: 1px solid var(--fs-line); padding: 8px 16px; }
+.credits { border-top: 1px solid var(--fs-line); padding: 6px 16px; }
 /* полоса «Степь и небо»: тёмно-синий фон меню, светлый текст, волны как на экране входа */
-.hero { position: relative; overflow: hidden; color: var(--fs-nav-text); padding-bottom: 92px;
+.hero { position: relative; overflow: hidden; color: var(--fs-nav-text); padding-bottom: 58px;
   background: linear-gradient(160deg, var(--fs-nav-active) 0%, var(--fs-nav) 60%, var(--fs-nav) 100%); }
-.waves { position: absolute; left: -10%; right: -10%; bottom: -70px; height: 190px; border-radius: 50%; pointer-events: none;
-  background: rgba(255, 255, 255, .05); box-shadow: 0 -36px 0 rgba(255, 255, 255, .035); }
-.top { position: relative; display: flex; align-items: center; gap: 14px; padding: 10px 24px; border-bottom: 1px solid rgba(255, 255, 255, .1); }
+.waves { position: absolute; left: -10%; right: -10%; bottom: -80px; height: 160px; border-radius: 50%; pointer-events: none;
+  background: rgba(255, 255, 255, .05); box-shadow: 0 -30px 0 rgba(255, 255, 255, .035); }
+.top { position: relative; display: flex; align-items: center; gap: 14px; padding: 8px 24px; border-bottom: 1px solid rgba(255, 255, 255, .1); }
 .brand { display: flex; gap: 10px; align-items: center; }
 .b1 { font-weight: 600; font-size: 16px; }
 .b2 { font-size: 11px; color: var(--fs-nav-muted); }
@@ -290,80 +293,92 @@ function onCmd(c) {
 .user { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--fs-nav-text); }
 .uname { font-size: 13px; line-height: 1.15; }
 .urole { color: var(--fs-nav-muted); font-size: 11px; }
-.hello { position: relative; max-width: 1180px; margin: 0 auto; padding: 30px 24px 0; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.hello { position: relative; max-width: 1180px; margin: 0 auto; padding: 14px 24px 0; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .hello-text { flex: 1; min-width: 240px; }
-.hello h1 { font-size: 28px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.015em; color: var(--fs-nav-text); }
-.hero .muted { color: var(--fs-nav-muted); font-size: 14px; }
+.hello h1 { font-size: 23px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.015em; color: var(--fs-nav-text); }
+.hero .muted { color: var(--fs-nav-muted); font-size: 13px; }
 .hero .faint { color: var(--fs-nav-muted); opacity: .8; }
-.attn { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; padding: 4px 12px; border-radius: 999px; font-size: 13px;
+.meta { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; }
+.attn { display: inline-flex; align-items: center; gap: 8px; padding: 2px 10px; border-radius: 999px; font-size: 12px;
   font-weight: 500; background: rgba(255, 255, 255, .1); color: var(--fs-nav-text); }
-.continue { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: var(--fs-radius); max-width: 100%;
-  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .18); color: var(--fs-nav-text); text-decoration: none; font-size: 14px; }
+.continue { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: var(--fs-radius); max-width: 100%;
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .18); color: var(--fs-nav-text); text-decoration: none; font-size: 13px; }
 .continue:hover { background: rgba(255, 255, 255, .14); border-color: var(--fs-primary-2); }
 .continue .faint { color: var(--fs-nav-muted); }
-.section-label { font-size: 13px; color: var(--fs-muted); margin: 6px 0 10px; font-weight: 500; }
-.section-label.on-hero { position: relative; max-width: 1180px; margin: 22px auto 0; padding: 0 24px; color: var(--fs-nav-muted); }
-.body { position: relative; max-width: 1180px; margin: -80px auto 0; padding: 0 24px 40px; }
+.pathrow { position: relative; max-width: 1180px; margin: 12px auto 0; padding: 0 24px; display: flex; align-items: baseline;
+  gap: 6px 20px; flex-wrap: wrap; font-size: 13px; color: var(--fs-nav-muted); }
+.path { flex: 1 1 520px; }
+.path b { color: var(--fs-nav-text); font-weight: 600; }
+.legend { display: flex; gap: 4px 14px; flex-wrap: wrap; font-size: 12px; color: var(--fs-nav-muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.section-label { font-size: 13px; color: var(--fs-muted); margin: 0 0 6px; font-weight: 500; }
+.body { position: relative; max-width: 1180px; margin: -46px auto 0; padding: 0 24px 14px; }
 .muted { color: var(--fs-muted); font-size: 14px; }
 .faint { color: var(--fs-faint); }
-.small { font-size: 12px; }
 .flow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(72px, .4fr) minmax(0, 1fr) minmax(72px, .4fr) minmax(0, 1fr); align-items: stretch; }
 .flow.loading { opacity: .6; }
-.tile { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 8px; padding: 18px 18px 16px; border-radius: var(--fs-radius);
+.tile { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; padding: 12px 16px 12px; border-radius: var(--fs-radius);
   background: var(--fs-card); border: 1px solid var(--fs-line); color: var(--fs-text); text-decoration: none; min-width: 0;
   transition: border-color .15s, box-shadow .15s; }
 .tile:hover, .tile:focus-visible { border-color: var(--fs-primary-2); box-shadow: var(--fs-shadow-pop); outline: none; }
 .flow .tile { border-top: 3px solid var(--fs-primary-2); box-shadow: var(--fs-shadow-pop); }
-.tname > .el-icon { width: 32px; height: 32px; border-radius: 50%; flex: none;
+.tname > .el-icon { width: 28px; height: 28px; border-radius: 50%; flex: none;
   background: color-mix(in srgb, var(--fs-primary-2) 16%, var(--fs-card)); }
-.tname { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; }
+.tname { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; line-height: 1.25; }
 .tname .el-icon { color: var(--fs-primary-2); }
 .tname a { color: inherit; text-decoration: none; }
 .tile[role=link] { cursor: pointer; }
 kbd { margin-left: auto; font: 500 11px/1 inherit; color: var(--fs-faint); border: 1px solid var(--fs-line); border-radius: 4px; padding: 3px 6px; }
-.tdesc { font-size: 13px; color: var(--fs-muted); line-height: 1.4; }
-.metrics { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 2px; }
-.metrics b { display: block; font-size: 22px; font-weight: 600; line-height: 1.2; }
+.tdesc { font-size: 12px; color: var(--fs-muted); line-height: 1.35; }
+.metrics { display: flex; gap: 4px 18px; flex-wrap: wrap; }
+.metrics b { display: block; font-size: 20px; font-weight: 600; line-height: 1.2; }
 .metrics span { font-size: 12px; color: var(--fs-muted); }
 .note { font-size: 12px; color: var(--fs-muted); }
-.act { margin-top: auto; padding-top: 6px; font-size: 13px; color: var(--fs-primary); font-weight: 500; }
-.inner { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.act { margin-top: auto; padding-top: 2px; font-size: 13px; color: var(--fs-primary); font-weight: 500; }
+/* водоёмы в плитке — в строку с переносом, чтобы плитка не росла вниз */
+.inner { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 
-.chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 10px; font-size: 13px; line-height: 1.3;
+.chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 9px; font-size: 12px; line-height: 1.35;
   background: var(--fs-card); border: 1px solid var(--fs-line); color: var(--fs-text); text-decoration: none; cursor: pointer; font-family: inherit;
   border-radius: 12px; overflow-wrap: anywhere; }
 .chip:hover { border-color: var(--fs-primary); color: var(--fs-primary); }
 .chip.more { color: var(--fs-muted); background: transparent; justify-content: center; }
 
-.ci { font-size: 14px; color: var(--fs-muted); }
 .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
 .pulse { animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
-.legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 12px 0 22px; font-size: 12px; color: var(--fs-muted); }
-.legend span { display: inline-flex; align-items: center; gap: 6px; }
-.legend { margin-top: 14px; }
-.results { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-bottom: 22px; }
-.res { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border-radius: var(--fs-radius); background: var(--fs-card);
-  border: 1px solid var(--fs-line); border-left: 4px solid var(--fs-accent); color: var(--fs-text); text-decoration: none; }
+
+.bottom { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; margin-top: 14px; align-items: start; }
+.bottom.no-base { grid-template-columns: minmax(0, 1fr); }
+.res-zone { min-width: 0; }
+/* один ряд карточек; если водоёмов больше, чем помещается, — листание по горизонтали */
+.results { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, 1fr); gap: 12px; overflow-x: auto;
+  padding-bottom: 4px; scrollbar-width: thin; }
+.res { display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; border-radius: var(--fs-radius); background: var(--fs-card);
+  border: 1px solid var(--fs-line); border-left: 4px solid var(--fs-accent); color: var(--fs-text); text-decoration: none; min-width: 0; }
 .res:hover { box-shadow: var(--fs-shadow-pop); border-color: var(--fs-accent); }
-.rname { font-size: 16px; font-weight: 600; }
-.runit { font-size: 12px; color: var(--fs-muted); }
-.rrow { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.rname { font-size: 15px; font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.runit { font-size: 11px; color: var(--fs-muted); line-height: 1.3; }
+.rrow { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; line-height: 1.35; }
 .rrow b { color: var(--fs-accent-text); font-variant-numeric: tabular-nums; }
-.rmore { font-size: 12px; color: var(--fs-faint); }
-.section-label.on-hero b { color: var(--fs-nav-text); font-weight: 600; }
-.base { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
-.tile.row { flex-direction: row; align-items: center; gap: 14px; background: var(--fs-card); }
-.bicon { color: var(--fs-nav-text); background: var(--fs-nav); width: 42px; height: 42px; border-radius: 50%; flex: none; }
-.keys { margin-top: 18px; }
+.rmore { font-size: 11px; color: var(--fs-faint); }
+.res .act { padding-top: 4px; font-size: 12px; }
+.base { display: flex; flex-direction: column; gap: 10px; }
+.tile.row { flex-direction: row; align-items: center; gap: 12px; padding: 10px 14px; background: var(--fs-card); }
+.tile.row .tname { font-size: 15px; }
+.bicon { color: var(--fs-nav-text); background: var(--fs-nav); width: 34px; height: 34px; border-radius: 50%; flex: none; }
+@media (max-width: 1100px) {
+  .bottom { grid-template-columns: minmax(0, 1fr); }
+  .base { flex-direction: row; flex-wrap: wrap; }
+  .base > .tile { flex: 1 1 260px; }
+}
 @media (max-width: 900px) {
   .flow { grid-template-columns: minmax(0, 1fr); }
   .top { flex-wrap: wrap; padding: 10px 16px; }
-  .hello { padding: 20px 16px 0; }
-  .section-label.on-hero { padding: 0 16px; }
-  .body { padding: 0 16px 32px; }
+  .hello { padding: 16px 16px 0; }
+  .pathrow { padding: 0 16px; }
+  .body { padding: 0 16px 24px; }
   .uname { display: none; }
-  .keys { display: none; }
 }
 </style>
