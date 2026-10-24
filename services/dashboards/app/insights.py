@@ -205,7 +205,7 @@ class Data:
 
 
 DTYPE_TITLES = {"catches": ("Уловы по ловам", "Аулаулар бойынша ауланым"),
-                "age_samples": ("Возрастные пробы", "Жас сынамалары"),
+                "age_samples": ("Рыбы, подвергнутые биологической обработке", "Биологиялық өңдеуден өткен балықтар"),
                 "mean_weights": ("Средний вес по возрастам", "Жас бойынша орташа салмақ"),
                 "species_props": ("Биологические параметры видов", "Түрлердің биологиялық параметрлері"),
                 "yearly_conditions": ("Условия по годам", "Жылдар бойынша жағдайлар"),
@@ -546,7 +546,7 @@ def v_hauls_count(D, opt):
     }
 
 
-# ------------------------------------------------------------------ 2. Возрастные пробы
+# ------------------------------------------------------------------ 2. Рыбы, подвергнутые биологической обработке
 def _pick_species(D, rows, spc, opt):
     sp = opt.get("species")
     if sp:
@@ -556,9 +556,9 @@ def _pick_species(D, rows, spc, opt):
         rows, spc = sample, meta["species"]
     tot = {s: sum(r.get(s) or 0 for r in rows) for s in spc}
     if not tot or not any(tot.values()):
-        raise NoData("В пробах нет рыб")
+        raise NoData("Нет рыб, подвергнутых биологической обработке")
     best = max(tot, key=tot.get)
-    return best, f"Вид не выбран — показан вид с самой большой пробой: {D.sp_name(best)}"
+    return best, f"Вид не выбран — показан вид, у которого больше всего рыб подвергнуто биологической обработке: {D.sp_name(best)}"
 
 
 def v_age_heatmap(D, opt):
@@ -762,9 +762,9 @@ def v_biomass_structure(D, opt):
     return {
         "columns": [col("year", tt("year", lang), "integer")] + [col(s["key"], s["name"], "number", "%") for s in series],
         "rows": [{"year": y, **{s["key"]: s["values"][i] for s in series}} for i, y in enumerate(years)],
-        "chart": {"kind": "series", "x": years, "x_is_year": True, "y_title": "Доля массы пробы, %" if lang != "kk"
-                  else "Сынама массасының үлесі, %", "default": "stack100", "allowed": ["stack100", "line"], "series": series},
-        "notes": [n for n in [note, "Масса возрастной группы = число рыб в пробе × средний вес"] if n],
+        "chart": {"kind": "series", "x": years, "x_is_year": True, "y_title": "Доля массы, %" if lang != "kk"
+                  else "Массаның үлесі, %", "default": "stack100", "allowed": ["stack100", "line"], "series": series},
+        "notes": [n for n in [note, "Масса возрастной группы = число рыб, подвергнутых биологической обработке, × средний вес"] if n],
         "sources": _sources(D, "age_samples", "mean_weights"),
         "drill": {"dataset_type": "age_samples", "x": "year"}, "species_shown": sp,
     }
@@ -1021,7 +1021,7 @@ def quality_issues(D, rules: dict) -> list[dict]:
             for s in meta_a["species"]:
                 vals = [r.get(s) for r in rows_a if r["year"] == y and r.get(s) is not None]
                 if vals and 0 < sum(vals) < lim:
-                    out.append({"issue": f"Малая возрастная проба: {D.sp_name(s)} — {sum(vals):g} рыб (меньше {lim})",
+                    out.append({"issue": f"Мало рыб, подвергнутых биологической обработке: {D.sp_name(s)} — {sum(vals):g} (меньше {lim})",
                                 "year": y, "count": sum(vals), "dataset_type": "age_samples", "where": {"year": y},
                                 "level": "warning"})
     return out
@@ -1103,9 +1103,9 @@ RULES = [
     {"code": "hauls_drop", "title_ru": "Мало научных ловов", "title_kk": "Ғылыми аулаулар аз",
      "description": "Число научных ловов последнего года меньше среднего",
      "params": {"pct": {"title": "Меньше среднего более чем на, %", "default": 30, "min": 1, "max": 100}}},
-    {"code": "small_sample", "title_ru": "Малая возрастная проба", "title_kk": "Жас сынамасы аз",
-     "description": "Число рыб в возрастной пробе вида за год меньше порога",
-     "params": {"min_fish": {"title": "Минимум рыб в пробе", "default": 35, "min": 1, "max": 10000}}},
+    {"code": "small_sample", "title_ru": "Мало рыб, подвергнутых биологической обработке", "title_kk": "Биологиялық өңдеуден өткен балық аз",
+     "description": "Число рыб вида, подвергнутых биологической обработке за год, меньше порога",
+     "params": {"min_fish": {"title": "Минимум рыб, подвергнутых биологической обработке", "default": 35, "min": 1, "max": 10000}}},
     {"code": "outlier_haul", "title_ru": "Один лов дал большую часть улова", "title_kk": "Бір аулау ауланымның көп бөлігін берді",
      "description": "Доля одного лова в годовой сумме улова вида больше порога",
      "params": {"pct": {"title": "Доля одного лова больше, %", "default": 50, "min": 10, "max": 100},
@@ -1133,7 +1133,7 @@ RULES = [
      "params": {"ratio": {"title": "Невод и сеть расходятся больше чем в, раз", "default": 2, "min": 1.1, "max": 100, "step": 0.1}}},
     {"code": "cohort_growth", "group": "catchability", "title_ru": "Поколения растут", "title_kk": "Ұрпақтар өседі",
      "description": "Поколение не может вырасти за год: ожидается убыль. Рост больше допуска у заметной доли поколений — "
-                    "повод проверить уловистость и пробы. Предварительное значение, 22.10.2026",
+                    "повод проверить уловистость и данные биологической обработки. Предварительное значение, 22.10.2026",
      "params": {"growth": {"title": "Рост поколения больше, %", "default": 100, "min": 0, "max": 1000},
                 "share": {"title": "Сообщать, если выросло поколений больше, %", "default": 25, "min": 1, "max": 100}}},
     {"code": "fit_r2_low", "group": "catchability", "title_ru": "Слабая подгонка сигмоиды невода", "title_kk": "Сүзекі сигмоидасы әлсіз сәйкестендірілген",
@@ -1255,7 +1255,7 @@ def signals(D, rules: dict) -> list[dict]:
                     small_codes.append(s)
             if small:
                 out.append({"level": "warning", "rule": "small_sample", "section": "ages", "species_list": small_codes,
-                            "text": f"Возрастные пробы {y1} года меньше {p['min_fish']} рыб: " + ", ".join(small)})
+                            "text": f"Рыб, подвергнутых биологической обработке в {y1} году, меньше {p['min_fish']}: " + ", ".join(small)})
     en, p = on("weight_dev")
     if en:
         r_w, m_w = D.table("mean_weights")
@@ -1449,12 +1449,12 @@ def explain_haul(D, where: dict, opt: dict) -> dict:
     title = (f"{D.sp_name(sp).capitalize()}, лов №{haul}: {_ru_date(rec['_iso'])}, "
              f"{D.place(rec.get('place')) or '—'}, {rec['gear']}")
     return {
-        "columns": [col("age", tt("age", lang), "integer"), col("n", "В пробе, шт" if lang != "kk" else "Сынамада, дана", "number"),
+        "columns": [col("age", tt("age", lang), "integer"), col("n", "Подвергнуто биол. обработке, шт" if lang != "kk" else "Биол. өңдеуден өткен, дана", "number"),
                     col("q", "Доля q_ij" if lang != "kk" else "Үлес q_ij", "number"),
                     col("Y", "Y_id, шт", "number"), col("Yj", "Y_ijd = Y_id · q_ij, шт", "number")],
         "rows": out, "total": len(out), "title": title,
-        "formula": f"Y_ijd = Y_id · q_ij(t_d); Y_id = {rec.get('total'):g} шт; q_ij — доли сглаженной пробы {rec['year']} года "
-                   f"(группы j ≤ m1{f' = {m1}' if m1 else ''}; см. справку «Улов по возрастам»); сумма по возрастам = {sum(r['Yj'] or 0 for r in out):.4g} шт",
+        "formula": f"Y_ijd = Y_id · q_ij(t_d); Y_id = {rec.get('total'):g} шт; q_ij — доли возрастов среди рыб, подвергнутых биологической обработке в {rec['year']} году, "
+                   f"со сглаживанием (группы j ≤ m1{f' = {m1}' if m1 else ''}; см. справку «Улов по возрастам»); сумма по возрастам = {sum(r['Yj'] or 0 for r in out):.4g} шт",
         "dataset_id": None, "meta": meta, "help": HOW_20,
     }
 

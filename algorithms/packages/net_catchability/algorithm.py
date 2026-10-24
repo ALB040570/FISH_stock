@@ -12,7 +12,7 @@ def run(ctx):
     stepkit.apply_fixed(ctx.params)
     b = stepkit.bundle(ctx, *DATASETS)
     if not b.catch_years():
-        raise UserError("За период расчёта нет лет, где есть и уловы, и возрастные пробы")
+        raise UserError("За период расчёта нет лет, где есть и уловы, и рыбы, подвергнутые биологической обработке")
     ctx.progress(0.1, phase="парабола уловистости сети")
     props = load_fish_props(ctx.water_body, b)
     hc = build_haul_catch(config.GEAR_NET, ctx.water_body, b, props)

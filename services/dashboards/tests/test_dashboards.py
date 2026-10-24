@@ -210,7 +210,7 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     assert T["сазан"]["cohorts"]["hit"] and not T["лещ"]["cohorts"]["hit"]
     assert [s_ for s_, r in T.items() if r["bounds"]["hit"]] == ["судак", "окунь", "плотва", "карась"]
     assert T["лещ"]["verdict"]["phrase"] == "Есть вопросы: невод даёт в 9,8 раза больше сети."
-    assert T["сазан"]["verdict"]["label"] == "Орудия, поколения, мало рыб" and T["язь"]["verdict"]["label"] == "Проба за все годы, орудия"
+    assert T["сазан"]["verdict"]["label"] == "Орудия, поколения, мало рыб" and T["язь"]["verdict"]["label"] == "Биол. обработка за все годы, орудия"
     assert "(24)" not in str(tr) and "стар" not in str(tr).lower()
     # первый год ряда — проверять поколения не с чем
     first = view("ca_trust", year=min(seine["years"]))
@@ -230,7 +230,7 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     pp = view("ca_passport")
     assert pp["chart"]["y"][:2] == [tr["trust"]["rows"][0]["species"], tr["trust"]["rows"][1]["species"]] and len(pp["chart"]["y_codes"]) == 8
     yaz = next(r for r in pp["rows"] if r["species"] == "язь" and r["year"] == 2024)
-    assert "проба за все годы" in yaz["issues"] and yaz["_level"] == "warning"
+    assert "данные биол. обработки за все годы" in yaz["issues"] and yaz["_level"] == "warning"
     z = view("ca_z", "lesh")
     assert len(z["chart"]["series"]) == 2 and next(r for r in z["rows"] if r["year"] == 2024)["Z"] == f["Z"]
     assert len(view("ca_z")["chart"]["series"]) == 8

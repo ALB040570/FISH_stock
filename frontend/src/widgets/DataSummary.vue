@@ -15,7 +15,7 @@ import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 const p = defineProps({ data: Object })
 const { t } = useI18n()
-const ALL = { catches: 'Уловы по ловам', age_samples: 'Возрастные пробы', mean_weights: 'Средний вес', species_props: 'Биол. параметры видов',
+const ALL = { catches: 'Уловы по ловам', age_samples: 'Рыбы, подвергнутые биол. обработке', mean_weights: 'Средний вес', species_props: 'Биол. параметры видов',
   yearly_conditions: 'Условия по годам', npc_stock: 'Оценка запаса НПЦ', npc_pdu: 'ПДУ НПЦ' }
 const d = computed(() => p.data?.data || { datasets: {}, years: [] })
 const years = computed(() => (d.value.years?.length ? `${d.value.years[0]}–${d.value.years[d.value.years.length - 1]}` : '—'))

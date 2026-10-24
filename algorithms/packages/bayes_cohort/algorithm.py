@@ -52,11 +52,11 @@ def run(ctx):
     wanted = ctx.params.get("species") or [code_by_ru.get(s, s) for s in res.species if code_by_ru.get(s, s) in profiles]
     if not wanted:
         raise UserError("В параметрах алгоритма нет значений ни для одного вида данных водоёма. "
-                        "Добавьте виды в набор параметров: Расчёты запасов рыб → Параметры алгоритмов.")
+                        "Добавьте виды в набор параметров: Расчёт запасов рыб → Параметры алгоритмов.")
     missing = [s for s in wanted if s not in profiles]
     if missing:
         raise UserError("В параметрах алгоритма нет значений для видов: " + ", ".join(ctx.species_names.get(s, s) for s in missing)
-                        + " (Расчёты запасов рыб → Параметры алгоритмов → Добавить вид)")
+                        + " (Расчёт запасов рыб → Параметры алгоритмов → Добавить вид)")
     run_over = {k: ctx.params[k] for k in RUN_KEYS if ctx.params.get(k) is not None}
     runtime = {}
     for code in wanted:

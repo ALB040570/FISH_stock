@@ -10,7 +10,7 @@ def run(ctx):
     stepkit.apply_fixed(ctx.params)
     b = stepkit.bundle(ctx, *DATASETS)
     if not b.catch_years():
-        raise UserError("За период расчёта нет лет, где есть и уловы, и возрастные пробы")
+        raise UserError("За период расчёта нет лет, где есть и уловы, и рыбы, подвергнутые биологической обработке")
     ctx.progress(0.1, phase="расчёт")
     ctx.log("подгонка сигмоид по видам и годам")
     res = compute_seine_catchability(ctx.water_body, b)

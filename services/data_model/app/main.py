@@ -77,6 +77,7 @@ def _seed() -> None:
             _create_record("regions", {"code": code, "name_ru": ru, "name_kk": kk}, "system")
     _migrate_regions()
     _upgrade_schemas()
+    _rename_age_samples()
 
     sp = have("species")
     for code, ru, kk, latin, pred in seed_defs.SPECIES:
@@ -102,6 +103,33 @@ def _seed() -> None:
         vals["shape"] = f.get("geometry")
         vals["basin"] = None
         _create_record("water_bodies", vals, "system", source=p.get("source"))
+
+
+def _rename_age_samples() -> None:
+    """Установки до 24.10.2026: «Возрастные пробы» → «Рыбы, подвергнутые биологической обработке» (решение № 68).
+    Меняются только тексты, совпадающие с прежней поставкой; названия, изменённые пользователем, не трогаются."""
+    t = dtypes.get("age_samples")
+    if not t:
+        return
+    old = seed_defs.AGE_SAMPLES_OLD
+    ch = {}
+    for k, new in (("title_ru", seed_defs.AGE_SAMPLES_TITLE[0]), ("title_kk", seed_defs.AGE_SAMPLES_TITLE[1]),
+                   ("description", seed_defs.AGE_SAMPLES_DESCRIPTION)):
+        if t.get(k) == old[k]:
+            ch[k] = new
+    sc = dict(t.get("species_columns") or {})
+    for k, o, new in (("title_ru", old["species_ru"], seed_defs.AGE_SAMPLES_SPECIES_TITLE[0]),
+                      ("title_kk", old["species_kk"], seed_defs.AGE_SAMPLES_SPECIES_TITLE[1])):
+        if sc.get(k) == o:
+            sc[k] = new
+            ch["species_columns"] = sc
+    if not ch:
+        return
+    dtypes.update("age_samples", ch, actor="system")
+    d = {**t, **ch}
+    dtypes.add_version("age_samples", {"schema.json": dumps(d).encode()},
+                       {"comment": "обновление поставки: «Возрастные пробы» → «Рыбы, подвергнутые биологической обработке»"},
+                       "system")
 
 
 def _migrate_regions() -> None:

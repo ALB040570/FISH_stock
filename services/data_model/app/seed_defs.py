@@ -340,6 +340,15 @@ def species_cols(value_type, unit, ru, kk, min_=0):
             "missing": "Пустая ячейка — вид не учитывался (не ноль). Ноль — вид учитывался, но не пойман."}
 
 
+# «Возрастные пробы» переименованы по таблице 2 методики (замечание заказчика 24.10.2026, решение № 68);
+# код набора age_samples не меняется. Работающие установки переводятся при запуске (main._rename_age_samples).
+AGE_SAMPLES_TITLE = ("Рыбы, подвергнутые биологической обработке", "Биологиялық өңдеуден өткен балықтар")
+AGE_SAMPLES_DESCRIPTION = "Число рыб, подвергнутых биологической обработке, по возрастам (на год, по всем орудиям)."
+AGE_SAMPLES_SPECIES_TITLE = ("Число рыб, подвергнутых биологической обработке, шт", "Биологиялық өңдеуден өткен балық саны, дана")
+AGE_SAMPLES_OLD = {"title_ru": "Возрастные пробы", "title_kk": "Жас сынамалары",
+                   "description": "Число рыб, прошедших биологический анализ, по возрастам (на год, по всем орудиям).",
+                   "species_ru": "Число рыб в пробе, шт", "species_kk": "Сынамадағы балық саны, дана"}
+
 DATASET_TYPES = [
     {
         "code": "catches", "title_ru": "Уловы по ловам", "title_kk": "Аулаулар бойынша ауланым",
@@ -361,12 +370,12 @@ DATASET_TYPES = [
         "species_columns": species_cols("integer", "шт", "Улов по видам, шт", "Түрлер бойынша ауланым, дана"),
     },
     {
-        "code": "age_samples", "title_ru": "Возрастные пробы", "title_kk": "Жас сынамалары",
-        "description": "Число рыб, прошедших биологический анализ, по возрастам (на год, по всем орудиям).",
+        "code": "age_samples", "title_ru": AGE_SAMPLES_TITLE[0], "title_kk": AGE_SAMPLES_TITLE[1],
+        "description": AGE_SAMPLES_DESCRIPTION,
         "period_field": "year", "system": True,
         "key_fields": ["year", "age"],
         "columns": [YEAR, AGE],
-        "species_columns": species_cols("integer", "шт", "Число рыб в пробе, шт", "Сынамадағы балық саны, дана"),
+        "species_columns": species_cols("integer", "шт", *AGE_SAMPLES_SPECIES_TITLE),
     },
     {
         "code": "mean_weights", "title_ru": "Средний вес по возрастам", "title_kk": "Жас бойынша орташа салмақ",

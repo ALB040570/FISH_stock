@@ -1,10 +1,10 @@
 <template>
   <el-container class="layout" :data-cabinet="cab.key">
     <el-aside :width="collapsed ? '64px' : '260px'" class="aside">
-      <div class="brand" @click="$router.push(cab.base)">
+      <a class="brand" :href="homeHref" :title="hasFlow(auth.role) ? $t('flow.title') : $t('cab.' + cab.key)" data-test="brand">
         <svg viewBox="0 0 64 64" width="30" height="30"><path class="logo-body" d="M6 32c10-14 30-16 42-6l10-8v28l-10-8c-12 10-32 8-42-6z"/><circle class="logo-eye" cx="20" cy="29" r="3"/></svg>
         <div v-if="!collapsed"><div class="b1">FishStock</div><div class="b2">{{ $t('app.subtitle') }}</div></div>
-      </div>
+      </a>
       <div class="cab-title" :title="$t('cab.' + cab.key)">
         <el-icon :size="18"><component :is="cab.icon" /></el-icon><span v-if="!collapsed">{{ $t('cab.' + cab.key) }}</span>
       </div>
@@ -58,6 +58,7 @@
         </el-dropdown>
       </el-header>
       <el-main class="main"><slot /></el-main>
+      <el-footer class="footer" height="26px"><AppCredits :title="$t('app.credits')" /></el-footer>
     </el-container>
     <PasswordDialog v-model="pwd" :forced="forced" />
     <ProfileDialog v-model="prof" @password="prof = false; pwd = true" />
@@ -78,6 +79,7 @@ import { setLang, tr } from '../i18n'
 import { cabinetsFor, currentCabinet, hardGo, hasFlow, helpPath, helpRoute } from '../cabinets'
 import { saveLast } from '../lastPlace'
 import ThemeToggle from './ThemeToggle.vue'
+import AppCredits from './AppCredits.vue'
 import PasswordDialog from './PasswordDialog.vue'
 import ProfileDialog from './ProfileDialog.vue'
 import UserAvatar from './UserAvatar.vue'
@@ -109,6 +111,8 @@ async function loadDashboards() {
       .sort((x, y) => tr(x, 'title').localeCompare(tr(y, 'title'), 'ru'))
   } catch (e) { dashboards.value = [] }
 }
+// логотип FishStock — на «Главную» (замечание заказчика 24.10.2026); у ролей без неё — в главный кабинет
+const homeHref = computed(() => (hasFlow(auth.role) ? '/' : cab.base))
 const items = computed(() => {
   const t = (k) => i18n.t(k)
   const it = (index, key, icon, perm) => (!perm || auth.can(perm) ? [{ index, label: t(key), icon }] : [])
@@ -167,7 +171,7 @@ function onCmd(c) {
 <style scoped>
 .layout { height: 100vh; }
 .aside { background: var(--fs-nav); transition: width .2s; overflow-x: hidden; overflow-y: auto; }
-.brand { display: flex; gap: 10px; align-items: center; padding: 14px 16px 10px; cursor: pointer; color: var(--fs-nav-text); }
+.brand { display: flex; gap: 10px; align-items: center; padding: 14px 16px 10px; cursor: pointer; color: var(--fs-nav-text); text-decoration: none; }
 .logo-body { fill: var(--fs-accent); }
 .logo-eye { fill: var(--fs-nav); }
 .b1 { font-weight: 600; font-size: 16px; letter-spacing: .01em; }
@@ -190,6 +194,9 @@ function onCmd(c) {
 .uname { font-size: 13px; line-height: 1.15; }
 .urole { color: var(--fs-muted); font-size: 11px; }
 .main { padding: 0; overflow: auto; }
+/* строка разработчиков: высота 26 px учтена в MapHome.vue (высота карты) */
+.footer { padding: 0; border-top: 1px solid var(--fs-line); background: var(--fs-card); overflow: hidden; }
+.footer :deep(.fs-credits) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 25px; }
 .header > * { flex-shrink: 0; }
 .header > .grow { flex: 1 1 0; min-width: 0; }
 /* телефон: значки без подписей, без имени пользователя; справка по экрану — из «Справки» */

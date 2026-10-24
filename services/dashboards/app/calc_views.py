@@ -14,11 +14,17 @@ from .insights import NoData, col
 
 # алгоритмы каталога (решение № 70): уловистость невода — b, сети — a (σ балансовой модели — из d)
 ALG = {"seine": "seine_catchability", "net": "net_catchability"}
-CALC_HINT = ("Расчёты запасов рыб", "Балық қорларының есептеулері")
+CALC_HINT = ("Расчёт запасов рыб", "Балық қорын есептеу")
 
 
 def L(lang, ru, kk):
     return kk if lang == "kk" else ru
+
+
+def _pooled_status(status) -> bool:
+    """Подгонка года по данным биологической обработки за все годы. Текст статуса шага: до 24.10.2026 — «проба за все
+    годы…», с версий 2.0.1/2.0.3 — «данные биологической обработки за все годы…» (решение № 68); общее — «за все годы»."""
+    return "за все годы" in str(status or "")
 
 
 def nf(v, d=2):
@@ -149,7 +155,7 @@ def v_ca_species(D, opt, gear):
     if not rows:
         raise NoData(L(lang, f"Для {y} г. нет подгонок", f"{y} ж. үшін сәйкестендірулер жоқ"))
     sp = col("species", L(lang, "Вид", "Түр"))
-    tail = [col("n_sample", L(lang, "Рыб в пробе", "Сынамадағы балық"), "integer"),
+    tail = [col("n_sample", L(lang, "Рыб, подвергнутых биол. обработке", "Биол. өңдеуден өткен балық"), "integer"),
             col("total_catch", L(lang, "Улов неводом, шт", "Сүзекімен ауланым, дана") if gear == "seine"
                 else L(lang, "Улов сетью, шт", "Аумен ауланым, дана"), "integer"),
             col("status", L(lang, "Примечание", "Ескертпе"))]
@@ -172,8 +178,8 @@ def v_ca_tiles(D, opt, gear):
     lang = D.lang
     c = f.get("c") or []
     data_tile = {"label": L(lang, "Данные года", "Жыл деректері"), "value": f"{nf(f.get('n_sample'), 0)} " + L(lang, "рыб", "балық"),
-                 "hint": L(lang, f"в пробе; {'неводом' if gear == 'seine' else 'сетью'} {nf(f.get('total_catch'), 0)} шт за {f.get('n_hauls')} уловов",
-                           f"сынамада; {'сүзекімен' if gear == 'seine' else 'аумен'} {nf(f.get('total_catch'), 0)} дана, {f.get('n_hauls')} аулау")}
+                 "hint": L(lang, f"подвергнуто биол. обработке; {'неводом' if gear == 'seine' else 'сетью'} {nf(f.get('total_catch'), 0)} шт за {f.get('n_hauls')} уловов",
+                           f"биол. өңдеуден өтті; {'сүзекімен' if gear == 'seine' else 'аумен'} {nf(f.get('total_catch'), 0)} дана, {f.get('n_hauls')} аулау")}
     if gear == "seine":
         tiles = [
             {"label": L(lang, "Точка перегиба j50", "Иілу нүктесі j50"), "value": nf(f.get("j50"), 1),
@@ -240,7 +246,7 @@ def v_ca_catch(D, opt, gear):
     lang = D.lang
     ages = f.get("ages") or []
     is_catch = f.get("observed_is_catch")
-    obs = L(lang, "Факт: улов, шт", "Нақты: ауланым, дана") if is_catch else L(lang, "Факт: доля в пробе", "Нақты: сынамадағы үлес")
+    obs = L(lang, "Факт: улов, шт", "Нақты: ауланым, дана") if is_catch else L(lang, "Факт: доля среди рыб, подвергнутых биол. обработке", "Нақты: биол. өңдеуден өткен балықтар арасындағы үлес")
     series = [{"name": obs, "values": f.get("observed"), "type": "bar"}]
     if gear == "seine" and f.get("fitted"):
         series.append({"name": L(lang, "МНК-модель", "ЕКӘ-модель"), "values": f.get("fitted"), "type": "line"})
@@ -313,7 +319,7 @@ def v_ca_ages(D, opt, gear):
         if old:
             r["c_old"] = old[i] if i < len(old) else None
         rows.append(r)
-    obs = (L(lang, "Улов факт, шт", "Нақты ауланым, дана") if is_catch else L(lang, "Доля в пробе", "Сынамадағы үлес"))
+    obs = (L(lang, "Улов факт, шт", "Нақты ауланым, дана") if is_catch else L(lang, "Доля среди рыб, подвергнутых биол. обработке", "Биол. өңдеуден өткен балықтар арасындағы үлес"))
     cols = [col("age", L(lang, "Возраст, лет", "Жасы, жыл")), col("observed", obs, "number")]
     if gear == "seine":
         cols += [col("fitted", L(lang, "Улов модель", "Модель ауланымы"), "number"), col("weight", L(lang, "Вес МНК", "ЕКӘ салмағы"), "number"),
@@ -407,7 +413,7 @@ def v_ca_params(D, opt, gear):
                       "c_first": c[0], "c_last": c[-1], "n_hauls": d.get("n_hauls")})
         rows.append(r)
     yr = col("year", L(lang, "Год", "Жыл"), "integer")
-    tail = [col("n_sample", L(lang, "Рыб в пробе", "Сынамадағы балық"), "integer"),
+    tail = [col("n_sample", L(lang, "Рыб, подвергнутых биол. обработке", "Биол. өңдеуден өткен балық"), "integer"),
             col("total_catch", L(lang, "Улов неводом, шт", "Сүзекімен ауланым, дана") if gear == "seine" else L(lang, "Улов сетью, шт", "Аумен ауланым, дана"), "integer")]
     if gear == "seine":
         cols = [yr, col("a", "a", "number"), col("j50", "j50 " + L(lang, "МНК", "ЕКӘ"), "number"), col("j50_rule", L(lang, "j50 по правилу", "Ереже бойынша j50"), "integer"),
@@ -1628,15 +1634,15 @@ def _trust_row(ctx, key, sp, y, yi):
     # 4. качество проб
     n_s = fs.get("n_sample") if fs else None
     r2 = fs.get("r2") if fs else None
-    pooled = bool(fs and "проба за все годы" in str(fs.get("status") or ""))
+    pooled = bool(fs and _pooled_status(fs.get("status")))
     small = en_s and not pooled and n_s is not None and n_s < p_s["min_fish"]
     r2low = en_r and r2 is not None and r2 < p_r["r2"]
     n_net = fn.get("n_sample") if fn else None
     # 5. вывод
     items, short = [], []
     if pooled:
-        items.append(L(lang, "проба за все годы — параметры года взяты из сводной пробы", "барлық жылдардың сынамасы — жыл параметрлері жиынтық сынамадан алынды"))
-        short.append(("all", L(lang, "проба за все годы", "барлық жылдар сынамасы")))
+        items.append(L(lang, "данные биологической обработки за все годы — параметры года взяты из сводных данных", "барлық жылдардағы биологиялық өңдеу деректері — жыл параметрлері жиынтық деректерден алынды"))
+        short.append(("all", L(lang, "биол. обработка за все годы", "барлық жылдардағы биол. өңдеу")))
     if b_hit:
         gw = L(lang, "невода" if gears_f == {"seine"} else "сети" if gears_f == {"net"} else "невода и сети",
                "сүзекінің" if gears_f == {"seine"} else "аудың" if gears_f == {"net"} else "сүзекі мен аудың")
@@ -1652,7 +1658,7 @@ def _trust_row(ctx, key, sp, y, yi):
                        f"{n} ұрпақтың {k}-і бір жылда {grow_words} өсті (ең үлкен өсу ×{nf(best[0], 1)})"))
         short.append(("cohorts", L(lang, "поколения", "ұрпақтар")))
     if small:
-        items.append(L(lang, f"в пробе {nf(n_s, 0)} рыб", f"сынамада {nf(n_s, 0)} балық"))
+        items.append(L(lang, f"биол. обработке подвергнуто {nf(n_s, 0)} рыб", f"биол. өңдеуден {nf(n_s, 0)} балық өтті"))
         short.append(("small", L(lang, "мало рыб", "балық аз")))
     if r2low:
         items.append(L(lang, f"R² подгонки {nf(r2, 2)}", f"сәйкестендіру R² {nf(r2, 2)}"))
@@ -1666,7 +1672,7 @@ def _trust_row(ctx, key, sp, y, yi):
         if len(short) >= 4:
             label = f"{len(short)} " + L(lang, _plural(len(short), "вопрос", "вопроса", "вопросов"), "сұрақ")
         elif len(short) == 1:
-            label = {"all": L(lang, "Проба за все годы", "Барлық жылдар сынамасы"), "bounds": L(lang, "Границы", "Шектер"),
+            label = {"all": L(lang, "Биол. обработка за все годы", "Барлық жылдардағы биол. өңдеу"), "bounds": L(lang, "Границы", "Шектер"),
                      "gears": L(lang, "Орудия", "Құралдар"), "cohorts": L(lang, "Поколения растут", "Ұрпақтар өседі"),
                      "small": L(lang, "Мало рыб", "Балық аз"), "r2": L(lang, "R² низкий", "R² төмен")}[short[0][0]]
         else:
@@ -1719,8 +1725,8 @@ def v_ca_trust(D, opt, rules=None):
         for c in r["_reasons"]:
             cnt[c] = cnt.get(c, 0) + 1
     reason_w = {"bounds": L(lang, "запас на границах уловистости", "қор аулағыштық шектерінде"), "gears": L(lang, "расходятся невод и сеть", "сүзекі мен ау алшақ"),
-                "cohorts": L(lang, "растут поколения", "ұрпақтар өседі"), "all": L(lang, "проба за все годы", "барлық жылдар сынамасы"),
-                "small": L(lang, "мало рыб в пробе", "сынамада балық аз"), "r2": L(lang, "слабая подгонка", "әлсіз сәйкестендіру")}
+                "cohorts": L(lang, "растут поколения", "ұрпақтар өседі"), "all": L(lang, "данные биол. обработки за все годы", "барлық жылдардағы биол. өңдеу"),
+                "small": L(lang, "мало рыб, подвергнутых биол. обработке", "биол. өңдеуден өткен балық аз"), "r2": L(lang, "слабая подгонка", "әлсіз сәйкестендіру")}
     imp = ["all", "bounds", "gears", "cohorts", "small", "r2"]          # при равенстве — более важная причина
     top = max(cnt, key=lambda c: (cnt[c], -imp.index(c))) if cnt else None
     head = L(lang, f"Проверки пройдены у {ok} из {len(rows)} видов", f"{len(rows)} түрдің {ok}-інде тексерулер өтті") + \
@@ -1733,8 +1739,8 @@ def v_ca_trust(D, opt, rules=None):
             col("b_ages", L(lang, "Возрасты на границе", "Шектегі жастар")), col("ratio", L(lang, "Невод ÷ сеть, раз", "Сүзекі ÷ ау, есе"), "number"),
             col("r_med", L(lang, "Обычно (медиана по годам), раз", "Әдетте (жылдар медианасы), есе"), "number"),
             col("coh", L(lang, "Поколения выросли", "Өскен ұрпақтар")), col("best", L(lang, "Наибольший рост, раз", "Ең үлкен өсу, есе"), "number"),
-            col("n_s", L(lang, "Рыб в пробе", "Сынамадағы балық"), "integer"), col("r2", "R²", "number"),
-            col("pooled", L(lang, "Проба за все годы", "Барлық жылдар сынамасы")), col("verdict", L(lang, "Вывод", "Қорытынды")),
+            col("n_s", L(lang, "Рыб, подвергнутых биол. обработке", "Биол. өңдеуден өткен балық"), "integer"), col("r2", "R²", "number"),
+            col("pooled", L(lang, "Биол. обработка за все годы", "Барлық жылдардағы биол. өңдеу")), col("verdict", L(lang, "Вывод", "Қорытынды")),
             col("phrase", L(lang, "Пояснение", "Түсініктеме"))]
     return {"trust": {"rows": rows, "head": head, "thresholds": thr, "year": y}, "columns": cols, "rows": flat,
             "default_view": "trust", "chart": None, "row_action": "species",
@@ -1933,7 +1939,7 @@ def _sample_issues(r, lang):
     b, s = r["bounds"], r["sample"]
     out = []
     if s["pooled"]:
-        out.append(L(lang, "проба за все годы", "барлық жылдар сынамасы"))
+        out.append(L(lang, "данные биол. обработки за все годы", "барлық жылдардағы биол. өңдеу"))
     if s["small"]:
         out.append(L(lang, f"мало рыб ({nf(s['n'], 0)})", f"балық аз ({nf(s['n'], 0)})"))
     if s["r2low"]:
@@ -1966,7 +1972,7 @@ def v_ca_passport(D, opt, rules=None):
                 continue
             iss = _sample_issues(r, lang)
             s = r["sample"]
-            tip = (L(lang, f"проба {nf(s['n'], 0)} рыб", f"сынама {nf(s['n'], 0)} балық") if s["n"] is not None else "") + \
+            tip = (L(lang, f"биол. обработка: {nf(s['n'], 0)} рыб", f"биол. өңдеу: {nf(s['n'], 0)} балық") if s["n"] is not None else "") + \
                   (f"; R² {nf(s['r2'], 2)}" if s["r2"] is not None else "") + \
                   (L(lang, f"; на границах {nf(r['bounds']['pct'], 0)} %", f"; шектерде {nf(r['bounds']['pct'], 0)} %") if r["bounds"]["pct"] is not None else "")
             if iss:
@@ -1977,12 +1983,12 @@ def v_ca_passport(D, opt, rules=None):
     return {"chart": {"kind": "heatmap", "x": years, "y": ylab, "y_codes": codes, "cells": cells, "fmt": "level",
                       "x_title": _yr(lang), "y_title": L(lang, "Вид", "Түр"), "value_title": L(lang, "Вопросов", "Сұрақтар"),
                       "x_is_year": True, "pick_year": True, "selected_y": y},
-            "columns": [col("species", L(lang, "Вид", "Түр")), col("year", _yr(lang), "integer"), col("n", L(lang, "Рыб в пробе", "Сынамадағы балық"), "integer"),
-                        col("r2", "R²", "number"), col("pooled", L(lang, "Проба за все годы", "Барлық жылдар сынамасы")),
+            "columns": [col("species", L(lang, "Вид", "Түр")), col("year", _yr(lang), "integer"), col("n", L(lang, "Рыб, подвергнутых биол. обработке", "Биол. өңдеуден өткен балық"), "integer"),
+                        col("r2", "R²", "number"), col("pooled", L(lang, "Биол. обработка за все годы", "Барлық жылдардағы биол. өңдеу")),
                         col("b_pct", L(lang, "Запас на границах, %", "Шектердегі қор, %"), "number"), col("issues", L(lang, "Вопросы", "Сұрақтар"))],
             "rows": flat, "row_action": "species",
-            "notes": [L(lang, "Клетка — вид и год; число — рыб в пробе невода. Жёлтая клетка — есть вопросы к пробе: проба за все годы, мало рыб, низкий R² или запас на границах уловистости. Щелчок — все данные по виду за этот год.",
-                        "Ұяшық — түр мен жыл; сан — сүзекі сынамасындағы балық. Сары ұяшық — сынамаға сұрақтар бар: барлық жылдар сынамасы, балық аз, R² төмен немесе қор аулағыштық шектерінде. Басу — осы жылғы түр бойынша барлық деректер.")],
+            "notes": [L(lang, "Клетка — вид и год; число — рыб, подвергнутых биологической обработке (невод). Жёлтая клетка — есть вопросы к данным: данные биологической обработки за все годы, мало рыб, низкий R² или запас на границах уловистости. Щелчок — все данные по виду за этот год.",
+                        "Ұяшық — түр мен жыл; сан — биологиялық өңдеуден өткен балық (сүзекі). Сары ұяшық — деректерге сұрақтар бар: барлық жылдардағы биол. өңдеу, балық аз, R² төмен немесе қор аулағыштық шектерінде. Басу — осы жылғы түр бойынша барлық деректер.")],
             **_tcommon(D, ctx, None)}
 
 
@@ -2008,10 +2014,10 @@ def v_ca_z(D, opt, rules=None):
                  "r2": (R.get(yy) or {}).get("sample", {}).get("r2"),
                  "why": ", ".join(_sample_issues(R[yy], lang)[:3]) if yy in R and _unreliable(R[yy]) else "—",
                  "_level": "warning" if bad[i] is not None else None} for i, yy in enumerate(years)]
-        cols = [col("year", _yr(lang), "integer"), col("Z", "Z", "number"), col("n", L(lang, "Рыб в пробе", "Сынамадағы балық"), "integer"),
+        cols = [col("year", _yr(lang), "integer"), col("Z", "Z", "number"), col("n", L(lang, "Рыб, подвергнутых биол. обработке", "Биол. өңдеуден өткен балық"), "integer"),
                 col("r2", "R²", "number"), col("why", L(lang, "Почему ненадёжен", "Неге сенімсіз"))]
-        notes = [L(lang, "Общая смертность Z — наклон кривой улова невода. Жёлтые точки — годы, где проба за все годы, мало рыб или низкий R²: там Z не опирается на данные года.",
-                   "Жалпы өлім-жітім Z — сүзекі ауланым қисығының көлбеулігі. Сары нүктелер — барлық жылдар сынамасы, балық аз немесе R² төмен жылдар: онда Z жыл деректеріне сүйенбейді.")]
+        notes = [L(lang, "Общая смертность Z — наклон кривой улова невода. Жёлтые точки — годы, где данные биологической обработки за все годы, мало рыб или низкий R²: там Z не опирается на данные года.",
+                   "Жалпы өлім-жітім Z — сүзекі ауланым қисығының көлбеулігі. Сары нүктелер — барлық жылдардағы биол. өңдеу, балық аз немесе R² төмен жылдар: онда Z жыл деректеріне сүйенбейді.")]
         extra = {"z_bad": [yy for i, yy in enumerate(years) if bad[i] is not None]}
     else:
         per = []

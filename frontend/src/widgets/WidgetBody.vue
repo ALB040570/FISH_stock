@@ -1,5 +1,5 @@
 <template>
-  <div class="wbody">
+  <div ref="rootEl" class="wbody">
     <!-- графики -->
     <template v-if="mode === 'chart'">
       <EChart v-if="chartOption" ref="ec" :option="chartOption" :height="chartHeight" @pick="onPick" />
@@ -11,7 +11,7 @@
     <div v-else-if="mode === 'tiles' && data.warnings?.length" class="warns">
       <div v-for="(w, i) in data.warnings" :key="i" class="sig lv-warning"><el-icon class="si"><WarningFilled /></el-icon><span>{{ w.text }}</span></div>
     </div>
-    <div v-if="mode === 'tiles'" class="fs-tiles tiles">
+    <div v-if="mode === 'tiles'" ref="tilesEl" class="fs-tiles tiles" :class="{ compact: dense }">
       <div v-for="(t, i) in tiles" :key="i" class="fs-tile tile" :class="{ link: t.section, warn: t.level === 'warning' }" @click="t.section && $emit('section', t.section)">
         <div class="ft-l">{{ t.label }}</div>
         <div class="ft-v" :class="signCls(t)">{{ tileValue(t) }}<span v-if="t.unit" class="ft-u">{{ t.unit === '%' ? ' %' : ' ' + shortUnit(t.unit) }}</span></div>
@@ -57,7 +57,7 @@
   </div>
 </template>
 <script setup>
-import { computed, inject, ref } from 'vue'
+import { computed, inject, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EChart from '../components/EChart.vue'
 import { base, buildChart, fmt } from '../components/charts'
@@ -76,6 +76,17 @@ const ec = ref(null)
 const special = computed(() => specials[p.widget.options?.kind])
 const spName = (c) => p.species?.[c] || c
 const table = computed(() => tableOf(p.widget, p.data, spName))
+// слайд (высота тела ограничена): крупные плитки не помещаются — компактный вид, без прокрутки внутри
+const rootEl = ref(null)
+const tilesEl = ref(null)
+const dense = ref(false)
+watch(() => [p.height, p.mode, p.data], () => {
+  dense.value = false
+  nextTick(() => {
+    const r = rootEl.value
+    if (r?.style.maxHeight && tilesEl.value && r.scrollHeight > r.clientHeight + 2) dense.value = true
+  })
+}, { immediate: true })
 const highlight = computed(() => board?.highlight.value ?? null)
 // тепловая карта с множеством строк (ловы) — выше, чтобы подписи строк не пропадали
 const chartHeight = computed(() => {

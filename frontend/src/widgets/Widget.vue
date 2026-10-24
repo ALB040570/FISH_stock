@@ -1,5 +1,5 @@
 <template>
-  <div class="widget card" :style="{ gridColumn: 'span ' + (widget.w || 6) }">
+  <div ref="rootEl" class="widget card" :class="{ big }" :style="big && board?.slideHeight ? { height: board.slideHeight.value } : { gridColumn: 'span ' + (widget.w || 6) }">
     <div class="wh">
       <div class="wtt">
         <div class="wt"><span v-if="spTitle" class="spt">{{ spTitle }} · </span>{{ tr(widget, 'title') }}</div>
@@ -51,6 +51,7 @@
     <StateBlock :loading="loading" :error="error" :empty="!!data?.empty" :empty-text="emptyText" :retry="load">
       <template v-if="data">
         <WidgetBody ref="body" :widget="widget" :data="data" :mode="mode" :ctype="curCtype" :height="height" :filters="filters"
+                    :style="big && bodyH ? { maxHeight: bodyH + 'px', overflow: 'auto' } : null"
                     :species="species" :title="fullTitle" @pick="onPick" @section="goSection" @row="onRow" @species="(c) => board?.setSpecies(c)" />
         <div class="foot">
           <div v-if="sel" class="selbar">
@@ -120,7 +121,7 @@
   </div>
 </template>
 <script setup>
-import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { api, downloadDataUrl, downloadPost } from '../api'
@@ -150,7 +151,33 @@ const yearSel = ref(null)
 const optSel = reactive({})  // переключатели расчёта (уловистость по возрастам / средняя, по запасам / по улову)
 const full = ref(false)
 const fullHeight = computed(() => Math.max(380, window.innerHeight - 220) + 'px')
-const height = computed(() => (p.big && board?.slideHeight ? board.slideHeight.value : (p.widget.h || 4) * 62 + 'px'))
+// слайд: карточка ровно в высоту слайда, тело (график, таблица, плитки) — всё, что осталось после заголовка,
+// переключателей и подписей внизу; не помещается — прокрутка внутри тела (замечание заказчика 24.10.2026)
+const rootEl = ref(null)
+const bodyH = ref(0)
+function measureBody() {
+  if (!p.big || !rootEl.value) return
+  const box = parseFloat(board?.slideHeight?.value) || 0
+  const bEl = body.value?.$el
+  if (!box || !bEl) return
+  const px = (el, k) => parseFloat(getComputedStyle(el)[k]) || 0
+  const r = rootEl.value
+  // всё, кроме тела: отступы и рамка карточки + заголовок, переключатели, низ карточки (с их полями)
+  let over = px(r, 'paddingTop') + px(r, 'paddingBottom') + px(r, 'borderTopWidth') + px(r, 'borderBottomWidth')
+  for (const c of r.children) {
+    if (c === bEl) { over += px(c, 'marginTop') + px(c, 'marginBottom'); continue }
+    over += c.offsetHeight + px(c, 'marginTop') + px(c, 'marginBottom')
+  }
+  bodyH.value = Math.max(160, Math.floor(box - over))
+}
+let bodyRO = null
+onMounted(() => {
+  if (!p.big || !window.ResizeObserver) return
+  bodyRO = new ResizeObserver(() => measureBody())
+  bodyRO.observe(rootEl.value)
+})
+onBeforeUnmount(() => bodyRO?.disconnect())
+const height = computed(() => (p.big && board?.slideHeight ? (bodyH.value ? bodyH.value + 'px' : board.slideHeight.value) : (p.widget.h || 4) * 62 + 'px'))
 // вид в названии: в режиме «Все данные по виду» у видовых виджетов
 const spTitle = computed(() => (p.filters?.species && ['species', 'both'].includes(p.widget.scope || '')
   ? (p.species?.[p.filters.species] || p.filters.species) : ''))
@@ -300,9 +327,13 @@ async function exportAs(kind) {
 let unreg = null
 onMounted(() => { if (board) unreg = board.register(p.widget.id, snapshot, () => !!data.value && !data.value.empty) })
 onBeforeUnmount(() => unreg && unreg())
+// слайд: пересчёт высоты тела после загрузки данных, смены вида и высоты слайда
+watch(() => [data.value, mode.value, loading.value, board?.slideHeight?.value], () => p.big && nextTick(measureBody))
 </script>
 <style scoped>
 .widget { min-width: 0; }
+.widget.big { box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; }
+.widget.big .foot { max-height: 64px; overflow-y: auto; flex: none; }
 .wh { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; gap: 8px; }
 .wtt { min-width: 0; }
 .wctl { display: flex; flex-wrap: wrap; gap: 8px; margin: -2px 0 10px; }

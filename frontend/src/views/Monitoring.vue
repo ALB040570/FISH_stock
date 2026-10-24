@@ -147,13 +147,13 @@ async function copy() {
 }
 </script>
 <style scoped>
-.mon { padding-top: 0; }
+.mon { padding-top: 0; padding-bottom: 12px; }
 .sentinel { height: 1px; }
-.mhead { position: sticky; top: 0; z-index: 20; background: var(--fs-bg); padding: 12px 0 10px; margin-bottom: 8px;
+.mhead { position: sticky; top: 0; z-index: 20; background: var(--fs-bg); padding: 8px 0 6px; margin-bottom: 4px;
   border-bottom: 1px solid transparent; transition: padding .15s; }
 .mhead.compact { padding: 6px 0; border-bottom-color: var(--fs-line); box-shadow: 0 4px 10px -8px var(--fs-muted); }
 .mline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.mtitle { margin: 0; font-size: 22px; }
+.mtitle { margin: 0; font-size: 20px; }
 .compact .mtitle { font-size: 16px; }
 .wbsel { width: 240px; }
 .compact .wbsel { width: 200px; }
@@ -167,10 +167,10 @@ async function copy() {
 .mrow { margin-bottom: 3px; }
 .status.last .sdot { background: var(--fs-warning); }
 .plink { display: inline-block; margin-top: 8px; }
-.chips { display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.chips { display: flex; gap: 6px; margin-top: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
 .compact .chips { margin-top: 6px; }
 .chip { flex: none; border: 1px solid var(--fs-line); background: var(--fs-card); color: var(--fs-text); border-radius: 16px;
-  padding: 4px 12px; font-size: 13px; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
+  padding: 3px 11px; font-size: 13px; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
 .chip:hover { border-color: var(--fs-primary-2); }
 .chip.on { background: var(--fs-primary); border-color: var(--fs-primary); color: var(--fs-on-primary); }
 .cdot { width: 7px; height: 7px; border-radius: 50%; background: var(--fs-danger); }

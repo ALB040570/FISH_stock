@@ -171,7 +171,7 @@ def load_year(year: int, waterbody: str = config.WATERBODY, data_dir: Path | Non
     if sample_key not in mod:  # как в calc_stock_npc.py: ищем любую qty_treated_fish_*
         sample_key = next((k for k in mod if k.startswith("qty_treated_fish_")), None)
     if sample_key is None:
-        raise ValueError(f"В файле {waterbody}_catch_{year}.py нет возрастной пробы qty_treated_fish_{year}")
+        raise ValueError(f"В файле {waterbody}_catch_{year}.py нет данных о рыбах, подвергнутых биологической обработке (qty_treated_fish_{year})")
 
     path = _data_catch_dir(data_dir) / f"{waterbody}_catch_{year}.py"
     raw = _raw_instruments_cached(str(path), path.stat().st_mtime, f"{waterbody}_catch_{year}")

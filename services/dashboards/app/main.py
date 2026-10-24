@@ -70,7 +70,40 @@ def _seed():
                                {"comment": f"обновление системного шаблона (ревизия {rev})"}, "system")
 
 
+def _renamed(x, names: dict):
+    """Копия x, где подписи (title*/subtitle*/description*) из names заменены новыми; второе значение — были ли замены."""
+    if isinstance(x, list):
+        out = [_renamed(v, names) for v in x]
+        return [v for v, _ in out], any(c for _, c in out)
+    if isinstance(x, dict):
+        res, changed = {}, False
+        for k, v in x.items():
+            if isinstance(v, str) and k.startswith(("title", "subtitle", "description")) and v in names:
+                res[k], changed = names[v], True
+            else:
+                res[k], c = _renamed(v, names)
+                changed = changed or c
+        return res, changed
+    return x, False
+
+
+def _rename_titles_68():
+    """Решение № 68: в дашбордах пользователей (копиях шаблона мониторинга) прежние подписи «возрастных проб»
+    заменяются новыми. Меняются только подписи, совпадающие с прежним шаблоном; свои подписи пользователя не трогаются."""
+    for b in boards.list():
+        if b.get("owner") == "system":
+            continue
+        d, changed = _renamed(b, templates.RENAMED_68)
+        if not changed:
+            continue
+        boards.update(b["id"], {k: v for k, v in d.items() if v != b.get(k)}, actor="system")
+        boards.add_version(b["id"], {"dashboard.json": dumps(d).encode()},
+                           {"comment": "обновление поставки: «Возрастные пробы» → «Рыбы, подвергнутые биологической обработке»"},
+                           "system")
+
+
 _seed()
+_rename_titles_68()
 
 
 def _can_view(d, user):

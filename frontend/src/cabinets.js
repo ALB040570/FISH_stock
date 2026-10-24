@@ -9,7 +9,7 @@ export const CABINETS = [
   { key: 'input', base: '/input/', icon: 'Upload', roles: [...STAFF, 'operator', 'presenter'] },
   { key: 'calc', base: '/calc/', icon: 'Odometer', roles: [...STAFF, 'presenter'] },
   { key: 'design', base: '/design/', icon: 'EditPen', roles: [...STAFF, 'presenter'] },
-  // каталог алгоритмов перенесён в «Расчёты запасов рыб» (решение № 70) — в «Администрировании» только пользователи и журнал
+  // каталог алгоритмов перенесён в «Расчёт запасов рыб» (решение № 70) — в «Администрировании» только пользователи и журнал
   { key: 'admin', base: '/admin/', icon: 'Setting', roles: ['admin'] },
 ]
 

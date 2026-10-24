@@ -87,13 +87,22 @@ def test_cabinets_flow(browser):
     page.wait_for_selector(".flow .tile")
     assert page.locator("[data-cabinet]").count() == 5
     assert page.locator("[data-pipe]").count() == 2
+    assert page.locator("[data-pipe] .plabel:visible").count() == 0           # стрелки: подписи — в подсказке
+    assert page.locator("[data-test=credits]").count() == 1                 # строка разработчиков
+    assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")  # «Главная» без прокрутки (24.10)
     page.keyboard.press("2")
     page.wait_for_url(URL + "/calc/calculations")
-    assert page.locator(".cab-title").inner_text().strip() == "Расчёты запасов рыб"
+    assert page.locator(".cab-title").inner_text().strip() == "Расчёт запасов рыб"
     # переключатель кабинетов в шапке
     page.locator(".cab-switch button").click()
-    page.locator(".el-dropdown-menu__item").filter(has_text="Конструктор").click()
+    page.locator(".el-dropdown-menu__item").filter(has_text="Моделирование").click()
     page.wait_for_url(URL + "/design/dictionaries")
+    # логотип ведёт на «Главную»; слайд мониторинга помещается в экран без прокрутки (замечания 24.10)
+    assert page.locator("[data-test=brand]").get_attribute("href") == "/"
+    page.goto(URL + "/monitoring/waterbody/zhaysan")
+    page.wait_for_selector(".slide .widget")
+    page.wait_for_timeout(1500)
+    assert page.evaluate("(() => { const m = document.querySelector('.main'); return m.scrollHeight <= m.clientHeight })()")
     # старые адреса единого интерфейса
     for old, new in (("/data?wb=zhaysan", "/input/datasets?wb=zhaysan"), ("/runs", "/calc/calculations"),
                      ("/monitoring/zhaysan?tab=pdu", "/monitoring/waterbody/zhaysan?tab=pdu"), ("/users", "/admin/users"),
@@ -207,7 +216,7 @@ def test_presenter(browser):
         assert page.get_by_text(txt, exact=True).count() == 0, txt
     page.goto(URL + "/calc/params")
     page.wait_for_url(lambda u: not u.startswith(URL + "/calc/params"))
-    page.goto(URL + "/design/catalog")                                  # перенесён в «Расчёты запасов рыб» (№ 70)
+    page.goto(URL + "/design/catalog")                                  # перенесён в «Расчёт запасов рыб» (№ 70)
     page.wait_for_url(URL + "/calc/catalog")
     page.wait_for_selector("text=Запас по математической модели")
     assert page.get_by_text("Код версии", exact=True).count() == 0 and page.locator("[data-test=run-bayes_cohort]").count() == 0
@@ -448,7 +457,7 @@ def test_users_edit_delete_profile(browser, tmp_path):
 
 
 def test_calcs_catalog_params(browser):
-    """Расчёты запасов рыб (решение № 70): расчёты a–h водоёма, каталог a–k (k — «Планируется»), запуск алгоритма из
+    """Расчёт запасов рыб (решение № 70): расчёты a–h водоёма, каталог a–k (k — «Планируется»), запуск алгоритма из
     каталога с параметрами по умолчанию, альтернативный → основной, устаревшие и «Пересчитать устаревшие», набор
     параметров на основе «По умолчанию» с новой версией."""
     page = browser.new_page(viewport={"width": 1440, "height": 900})
