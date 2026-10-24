@@ -136,7 +136,7 @@ import { tableOf } from './views'
 const canGo = (p) => canGoRole(p, useAuth().role)
 // ссылки в кабинет, куда роль не входит, показываются текстом (docs/decisions.md, № 52)
 
-const MODE_ICON = { chart: 'TrendCharts', table: 'Grid', tiles: 'Menu', cards: 'Postcard', signals: 'Bell', traffic: 'Odometer', journal: 'Notebook', trust: 'CircleCheck' }
+const MODE_ICON = { chart: 'TrendCharts', table: 'Grid', tiles: 'Menu', cards: 'Postcard', signals: 'Bell', traffic: 'Odometer', journal: 'Notebook', trust: 'CircleCheck', stock_trust: 'CircleCheck' }
 const p = defineProps({ widget: Object, filters: Object, species: Object, big: Boolean })
 const board = inject('board', null)
 const { t, te } = useI18n()
@@ -189,6 +189,7 @@ const modes = computed(() => {
   if (!d || d.empty) return []
   const m = []
   if (d.default_view === 'trust') m.push('trust')
+  if (d.default_view === 'stock_trust') m.push('stock_trust')
   if (d.default_view === 'traffic') m.push('traffic')
   if (d.journal) m.push('journal')
   if (d.signals) m.push('signals')
@@ -310,6 +311,7 @@ onBeforeUnmount(() => unreg && unreg())
 .cmn { margin-left: 3px; font-size: 11.5px; font-weight: 600; color: var(--fs-primary); }
 .ws { font-size: 12.5px; color: var(--fs-muted); line-height: 1.35; margin-top: 2px; }
 .tools { display: flex; align-items: center; gap: 2px; flex: none; }
+@media (max-width: 640px) { .wh { flex-wrap: wrap; } .wtt { flex: 1 1 100%; } .tools { flex-wrap: wrap; } }
 .tools :deep(.el-radio-button__inner) { padding: 5px 8px; }
 .foot { margin-top: 6px; font-size: 12px; color: var(--fs-muted); }
 .note { margin-top: 2px; }

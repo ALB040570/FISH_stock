@@ -321,4 +321,11 @@ async function report() {
   .slide { grid-template-columns: 30px minmax(0, 1fr) 30px; }
   .slide-side { grid-column: 2; grid-row: 2; position: static; max-height: none; }
 }
+/* телефон: стрелки листания не занимают колонки (листать — номерами слайдов), карточка на всю ширину */
+@media (max-width: 640px) {
+  .slide { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .nav { display: none; }
+  .slide-side { grid-column: 1; }
+  .dots { margin: 10px 0 0; }
+}
 </style>

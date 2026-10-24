@@ -982,19 +982,39 @@ def v_by_deaths(D, opt):
     R, meta, code, y, years = _bayes_species(D, opt)
     lang = D.lang
     dd = R["deaths"]
+    share = opt.get("dshare") == "share"
+    toggles = [{"key": "dshare", "title": L(lang, "Показать", "Көрсету"), "value": "share" if share else "pcs",
+                "options": [{"value": "pcs", "label": L(lang, "штуки", "дана")}, {"value": "share", "label": L(lang, "доли, %", "үлес, %")}]}]
     poach = [v if v and v > 0 else None for v in dd["poaching"]]
-    series = [{"name": L(lang, "Естественная гибель", "Табиғи өлім"), "values": dd["natural"], "type": "bar", "c": 0},
-              {"name": L(lang, "Хищники", "Жыртқыштар"), "values": dd["predators"], "type": "bar", "c": 1},
-              {"name": L(lang, "ПДУ", "ШРА"), "values": dd["catch"], "type": "bar", "c": 2},
-              {"name": L(lang, "Браконьерство", "Браконьерлік"), "values": poach, "type": "bar", "c": 3}]
-    rows = [{"year": yy, "natural": dd["natural"][i], "predators": dd["predators"][i], "catch": dd["catch"][i], "poaching": poach[i],
-             "_current": yy == y} for i, yy in enumerate(years)]
-    return {"chart": {"kind": "fit", "x": years, "series": series, "x_title": L(lang, "Год", "Жыл"), "y_title": L(lang, "штук", "дана"),
-                      "allowed": ["log", "linear"], "default": "log", "pick_year": True},
-            "columns": [col("year", L(lang, "Год", "Жыл"), "integer")] + [col(k, s["name"], "integer") for k, s in zip(("natural", "predators", "catch", "poaching"), series)],
-            "rows": rows, "row_action": "year",
-            "notes": [L(lang, "Медианы, штук, сумма по возрастам: естественная гибель s·X, хищники γ·X, ПДУ, браконьерство (β − 1)·ПДУ.",
-                        "Медианалар, дана, жастар бойынша қосынды: табиғи өлім s·X, жыртқыштар γ·X, ШРА, браконьерлік (β − 1)·ШРА.")],
+    keys = ("natural", "predators", "catch", "poaching")
+    vals = {"natural": dd["natural"], "predators": dd["predators"], "catch": dd["catch"], "poaching": poach}
+    names = {"natural": L(lang, "Естественная гибель", "Табиғи өлім"), "predators": L(lang, "Хищники", "Жыртқыштар"),
+             "catch": L(lang, "ПДУ", "ШРА"), "poaching": L(lang, "Браконьерство", "Браконьерлік")}
+    tot = [sum((vals[k][i] or 0) for k in keys) for i in range(len(years))]
+    fish = [((dd["catch"][i] or 0) + (poach[i] or 0)) / tot[i] * 100 if tot[i] else None for i in range(len(years))]
+    if share:
+        pct = {k: [round((vals[k][i] or 0) / tot[i] * 100, 1) if tot[i] else None for i in range(len(years))] for k in keys}
+        chart = {"kind": "series", "x": years, "x_is_year": True, "series": [{"name": names[k], "values": pct[k]} for k in keys],
+                 "x_title": L(lang, "Год", "Жыл"), "allowed": ["stack100"], "default": "stack100", "pick_year": True}
+        rows = [{"year": yy, **{k: pct[k][i] for k in keys}, "fishing": round(fish[i], 1) if fish[i] is not None else None,
+                 "_current": yy == y} for i, yy in enumerate(years)]
+        cols = [col("year", L(lang, "Год", "Жыл"), "integer")] + [col(k, names[k] + ", %", "number") for k in keys] + \
+               [col("fishing", L(lang, "Вылов в убыли, %", "Кемудегі аулау, %"), "number")]
+    else:
+        series = [{"name": names[k], "values": vals[k], "type": "bar", "c": c} for c, k in enumerate(keys)]
+        chart = {"kind": "fit", "x": years, "series": series, "x_title": L(lang, "Год", "Жыл"), "y_title": L(lang, "штук", "дана"),
+                 "allowed": ["log", "linear"], "default": "log", "pick_year": True}
+        rows = [{"year": yy, **{k: vals[k][i] for k in keys}, "_current": yy == y} for i, yy in enumerate(years)]
+        cols = [col("year", L(lang, "Год", "Жыл"), "integer")] + [col(k, names[k], "integer") for k in keys]
+    notes = [L(lang, "Медианы, штук, сумма по возрастам: естественная гибель s·X, хищники γ·X, ПДУ, браконьерство (β − 1)·ПДУ.",
+               "Медианалар, дана, жастар бойынша қосынды: табиғи өлім s·X, жыртқыштар γ·X, ШРА, браконьерлік (β − 1)·ШРА.")]
+    if share:
+        notes.append(L(lang, "Доли посчитаны по медианам составляющих, а не по выборкам модели.",
+                       "Үлестер модель таңдамалары бойынша емес, құрамдастардың медианалары бойынша есептелген."))
+    yi = years.index(y)
+    known = [v for v in fish if v is not None]
+    return {"chart": chart, "columns": cols, "rows": rows, "row_action": "year", "toggles": toggles, "notes": notes,
+            "values": {"fishing": fish[yi], "fishing_mean": sum(known) / len(known) if known else None},
             **_bcommon(D, meta, years, y, code, R)}
 
 

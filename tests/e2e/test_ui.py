@@ -281,6 +281,25 @@ def test_monitoring_stock(browser):
 
 
 
+def test_monitoring_stock_summary(browser):
+    """Запасы открываются на «Сводке»: с полным расчётом — строки видов (щелчок → вид в «Байесовской модели»),
+    без него — понятное сообщение; «Запас в тоннах» работает и без модели."""
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("try{localStorage.removeItem('fishstock.monitoring.view')}catch(e){}")
+    login(page)
+    page.goto(URL + "/monitoring/waterbody/zhaysan?tab=stock")
+    page.wait_for_selector(".slide .tr.row, .slide :text('полный расчёт')")
+    assert "s=summary" in page.url
+    if page.locator(".slide .tr.row").count():
+        page.locator(".slide .tr.row").first.click()
+        page.wait_for_function("location.search.includes('s=bayes') && location.search.includes('sp=')")
+    page.goto(URL + "/monitoring/waterbody/zhaysan?tab=stock&s=by_catch&sp=lesh&w=st_biomass")
+    page.wait_for_selector(".slide canvas")
+    assert not errors, errors
+
+
 def test_users_edit_delete_profile(browser, tmp_path):
     """Пользователи и профиль (решение № 58): правка имени админом, удаление, свой профиль и фото."""
     import httpx
