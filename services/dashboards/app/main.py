@@ -433,7 +433,7 @@ def _insight(src, flt, opt, wb):
     o = {**{k: v for k, v in opt.items() if k not in ("raw",)}, "species": flt.get("species") or opt.get("species")}
     if flt.get("year"):
         o["year"] = flt["year"]
-    for k in ("variant", "method", "bages", "bdata", "bdetail", "scenario", "hmode"):      # варианты расчёта — общие для слайдов вкладки
+    for k in ("variant", "method", "bages", "bdata", "bdetail", "scenario", "hmode", "dshare"):      # варианты расчёта — общие для слайдов вкладки
         if flt.get(k):
             o[k] = flt[k]
     try:

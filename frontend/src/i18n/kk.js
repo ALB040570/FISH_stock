@@ -79,6 +79,9 @@ export default {
   trust: { title: 'Қорға сенуге бола ма', species: 'Түр', bounds: 'Шектердегі қор', gears: 'Сүзекі ÷ ау', cohorts: 'Өскен ұрпақтар',
     sample: 'Сынама', verdict: 'Қорытынды', one_gear: 'бір құрал', usually: 'әдетте', of: '{n}-нен {k}', fish: 'балық', pooled: 'барлық жылдар',
     net_more: 'ау {x}×', best_full: 'Ең үлкен өсу ×{x}: {y0} ж. {a} → {y1} ж. {b}', edit_rules: 'Шектерді өзгерту' },
+  strust: { model_short: 'модель', mln: 'млн', ths: 'мың', trend_tip: '{y} бастап: модель {m} · ауланым {c} · ҒӨО {n}', fishing_short: 'аулау кемудің {p} %', fishing_tip: 'Модель бойынша аулау (ШРА мен браконьерлік) — жылдағы барлық кемудің {p} %-ы; барлық жылдар бойынша орташа — {m} %', estimates: 'Жылдың үш бағасы', ratio: 'Модель ÷ ауланым', change: '{y} бастап өзгеріс', conv: 'Жинақталу', fishing: 'Кемудегі аулау',
+    model: 'модель (жолақ — 95 %)', catch: 'ауланым бойынша', npc: 'ҒӨО', npc_ratio: '÷ ҒӨО', catch_more: 'ауланым модельден {x}×',
+    npc_more: 'ҒӨО модельден {x}×', mean: 'орташа', skipped: 'түр үшін модель есептелмеді' },
   monitoring: {
     title: 'Мониторинг', choose: 'Су айдынын таңдаңыз', run_main: 'Негізгі іске қосу',
     run_last: 'Соңғы сәтті іске қосу — негізгі ретінде белгіленбеген', no_run: 'Су айдыны үшін әлі орындалған есептеу жоқ.',
@@ -195,7 +198,7 @@ export default {
   wv: {
     by_run: 'іске қосу бойынша', from: '', how: 'Қалай алынды',
     no_chart: 'Бұл деректер үшін график жоқ — кестеге ауысыңыз', no_signals: 'Ескертулер жоқ',
-    rules_group_data: 'Бастапқы деректер', rules_group_catchability: 'Аулағыштық', mode_chart: 'График', mode_table: 'Кесте', mode_tiles: 'Плиткалар', mode_cards: 'Карточкалар', mode_signals: 'Тізім',
+    rules_group_data: 'Бастапқы деректер', rules_group_catchability: 'Аулағыштық', rules_group_stock: 'Қорлар', mode_chart: 'График', mode_table: 'Кесте', mode_tiles: 'Плиткалар', mode_cards: 'Карточкалар', mode_signals: 'Тізім',
     chart_type: 'График түрі', ct_line: 'Сызықтар', ct_linear: 'Сызықтық', ct_log: 'Логарифм.', ct_bar: 'Бағандар', ct_stack: 'Жинақталған бағандар', ct_stack100: 'Үлестер, 100 %',
     fullscreen: 'Толық экран', download: 'Жүктеп алу', selected: 'Таңдалды', show_rows: 'Деректер жолдарын көрсету',
     rows_found: 'Жолдар: {n}', open_dataset: 'Деректер жиынтығын ашу', dataset: 'Деректер жиынтығы', compare: 'Жылдарды салыстыру', and: 'және',

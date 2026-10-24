@@ -1097,6 +1097,23 @@ RULES = [
      "description": "Кривая улова объясняет меньше заданной доли разброса — параметры года (j50, Z) ненадёжны. "
                     "Предварительное значение, 22.10.2026",
      "params": {"r2": {"title": "R² подгонки сигмоиды невода меньше", "default": 0.5, "min": 0, "max": 1, "step": 0.05}}},
+    # ---- запасы: «Сходятся ли оценки запаса» (предварительные значения, 24.10.2026, по данным Жайсана 2015–2024)
+    {"code": "model_vs_catch", "group": "stock", "title_ru": "Модель расходится с оценкой по уловам",
+     "title_kk": "Модель ауланым бағасынан алшақ",
+     "description": "Численность по модели за год отличается от окончательного запаса по уловам больше чем в заданное число раз. "
+                    "Модель обучена на оценках по уловам: расхождение вдвое — модель не воспроизводит свои данные. "
+                    "Предварительное значение, 24.10.2026",
+     "params": {"ratio": {"title": "Модель и оценка по уловам расходятся больше чем в, раз", "default": 2, "min": 1.1, "max": 100, "step": 0.1}}},
+    {"code": "model_vs_npc", "group": "stock", "title_ru": "Модель расходится с оценкой НПЦ", "title_kk": "Модель ҒӨО бағасынан алшақ",
+     "description": "Численность по модели за год отличается от оценки запаса НПЦ больше чем в заданное число раз: ПДУ приложения "
+                    "и официальный ПДУ НПЦ заведомо не сопоставимы. Предварительное значение, 24.10.2026",
+     "params": {"ratio": {"title": "Модель и НПЦ расходятся больше чем в, раз", "default": 2, "min": 1.1, "max": 100, "step": 0.1}}},
+    {"code": "trend_vs_catch", "group": "stock", "title_ru": "Модель и оценка по уловам меняются по-разному",
+     "title_kk": "Модель мен ауланым бағасы әртүрлі өзгереді",
+     "description": "Изменение численности по модели с первого года ряда отличается от изменения оценки по уловам больше чем в "
+                    "заданное число раз: направление важнее уровня, при расхождении динамики прогноз ненадёжен. "
+                    "Предварительное значение, 24.10.2026",
+     "params": {"ratio": {"title": "Изменения расходятся больше чем в, раз", "default": 2, "min": 1.1, "max": 100, "step": 0.1}}},
 ]
 RULES_BY = {r["code"]: r for r in RULES}
 
@@ -1533,13 +1550,15 @@ VIEWS = OrderedDict([
     ("quota", v_quota), ("quota_change", v_quota_change), ("quota_vs_stock", v_quota_vs_stock),
     ("completeness", v_completeness), ("quality", v_quality),
 ])
-NEEDS_RULES = {"overview", "signals", "quality", "traffic", "ca_trust", "ca_bounds_years", "ca_bounds_ages", "ca_cohorts",
+NEEDS_RULES = {"overview", "signals", "quality", "traffic", "ca_trust", "st_trust", "ca_bounds_years", "ca_bounds_ages", "ca_cohorts",
                "ca_gears_age", "ca_passport", "ca_z", "ca_blind", "ca_strong", "ca_seine_heat", "ca_net_heat"}
 
 # результаты расчёта (уловистость, запасы) — отдельный модуль
 from . import calc_views  # noqa: E402
+from . import calc_stock_views  # noqa: E402
 
 VIEWS.update(calc_views.VIEWS)
+VIEWS.update(calc_stock_views.VIEWS)
 
 
 # ------------------------------------------------------------------ сравнение двух лет
