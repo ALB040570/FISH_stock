@@ -54,8 +54,8 @@
               <component :is="view" :data="{ payload: result.payload }" :filters="{}" :options="{ kind: viewKind }" />
             </template>
             <template v-else-if="tab === 'tables' && result">
-              <div v-if="Object.keys(result.metrics || {}).length" class="kpis" style="margin-bottom:10px">
-                <div v-for="(m, k) in result.metrics" :key="k" class="kpi"><div class="v">{{ fmt(m.value, 'auto') }}{{ m.unit ? ' ' + m.unit : '' }}</div><div class="l">{{ m.title }}</div></div>
+              <div v-if="Object.keys(result.metrics || {}).length" class="fs-tiles" style="margin-bottom:12px">
+                <div v-for="(m, k) in result.metrics" :key="k" class="fs-tile"><div class="ft-l">{{ m.title }}</div><div class="ft-v">{{ fmt(m.value, 'auto') }}<span v-if="m.unit" class="ft-u">{{ ' ' + m.unit }}</span></div></div>
               </div>
               <el-alert v-for="n in result.notes" :key="n" type="info" :closable="false" :title="n" style="margin-bottom:6px" />
               <el-select v-model="tableCode" style="width:420px; margin-bottom:8px">

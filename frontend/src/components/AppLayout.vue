@@ -187,7 +187,7 @@ function onCmd(c) {
 .help-link { color: var(--fs-muted); }
 .aside :deep(.el-menu--collapse) { width: 64px; }
 .aside :deep(.el-menu-item.is-active) { color: var(--fs-nav-text); background: var(--fs-nav-active) !important; box-shadow: inset 3px 0 0 var(--fs-accent); font-weight: 500; }
-.header { display: flex; align-items: center; gap: 14px; background: var(--fs-card); border-bottom: 1px solid var(--fs-line); }
+.header { display: flex; align-items: center; gap: 14px; background: var(--fs-card); border-bottom: 2px solid var(--fs-primary-2); } /* «небо» — линия под шапкой */
 .user { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .uname { font-size: 13px; line-height: 1.15; }
 .urole { color: var(--fs-muted); font-size: 11px; }
