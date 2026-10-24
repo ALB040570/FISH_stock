@@ -9,7 +9,8 @@ export const CABINETS = [
   { key: 'input', base: '/input/', icon: 'Upload', roles: [...STAFF, 'operator', 'presenter'] },
   { key: 'calc', base: '/calc/', icon: 'Odometer', roles: [...STAFF, 'presenter'] },
   { key: 'design', base: '/design/', icon: 'EditPen', roles: [...STAFF, 'presenter'] },
-  { key: 'admin', base: '/admin/', icon: 'Setting', roles: ['admin', 'mathematician'] },
+  // каталог алгоритмов перенесён в «Расчёты запасов рыб» (решение № 66) — в «Администрировании» только пользователи и журнал
+  { key: 'admin', base: '/admin/', icon: 'Setting', roles: ['admin'] },
 ]
 
 export const cabinet = (key) => CABINETS.find((c) => c.key === key)
@@ -33,12 +34,10 @@ export function canGo(path, role) {
 const LEGACY = [
   ['/data', '/input/datasets'],
   ['/calculations', '/calc/calculations'],
-  ['/runs', '/calc/runs'],
-  ['/profiles', '/calc/profiles'],
   ['/dictionaries', '/design/dictionaries'],
   ['/algorithms', '/design/algorithms'],
   ['/dashboards', '/monitoring/dashboards'],
-  ['/catalog', '/admin/catalog'],
+  ['/catalog', '/calc/catalog'],
   ['/users', '/admin/users'],
   ['/audit', '/admin/audit'],
   ['/help', '/monitoring/help'],
@@ -46,12 +45,25 @@ const LEGACY = [
 
 const under = (p, prefix) => p === prefix || p.startsWith(prefix + '/')
 
+// перенесённые экраны (решение № 66): «хвост» адреса не сохраняется — у расчётов и запусков разные номера
+const MOVED = [
+  ['/runs', '/calc/calculations'],
+  ['/profiles', '/calc/params'],
+  ['/admin/catalog', '/calc/catalog'],
+  ['/design/catalog', '/calc/catalog'],
+  ['/calc/runs', '/calc/calculations'],
+  ['/calc/profiles', '/calc/params'],
+  ['/design/calculations', '/calc/calculations'],
+]
+
 /** Старый адрес → новый (с сохранением хвоста и параметров); null — адрес не старый. */
 export function legacyToNew(fullPath) {
   const m = String(fullPath || '').match(/^([^?#]*)(.*)$/)
   const p = m[1].replace(/\/+$/, '') || '/'
   const rest = m[2]
   if (p === '/') return null
+  // адреса кабинетов до решения № 66: каталог — в «Расчётах запасов рыб», запусков и параметров водоёмов больше нет
+  for (const [old, now] of MOVED) if (under(p, old)) return now + rest
   if (cabinetOf(p) && cabinetOf(p).key !== 'monitoring') return null
   if (p === '/monitoring') return null // главная кабинета (карта); прежний выбор водоёма — та же карта
   if (p.startsWith('/monitoring/')) {
@@ -71,11 +83,10 @@ const REVERSE = [
   ['/monitoring/dashboards', '/dashboards'],
   ['/input/datasets', '/data'],
   ['/calc/calculations', '/calculations'],
-  ['/calc/runs', '/runs'],
-  ['/calc/profiles', '/profiles'],
+  ['/calc/catalog', '/catalog'],
+  ['/calc/params', '/profiles'],
   ['/design/dictionaries', '/dictionaries'],
   ['/design/algorithms', '/algorithms'],
-  ['/admin/catalog', '/catalog'],
   ['/admin/users', '/users'],
   ['/admin/audit', '/audit'],
 ]

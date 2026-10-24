@@ -23,7 +23,7 @@ from fishcommon.storage import now_iso, read_json
 from . import classifiers
 from . import params as P
 from .clients import Clients
-from .engine import ACTIVE, CATALOG, CATALOG_BY_CODE, ORDER_ALL, STEP_ORDER, Engine, default_values, letter
+from .engine import ACTIVE, CATALOG, CATALOG_BY_CODE, ORDER_ALL, STEP_ORDER, Engine, algo_info, default_values, letter
 from .planning import algo_title, period_text, plan
 
 app = create_app("algo_admin", "Администрирование алгоритмов расчёта",
@@ -58,6 +58,17 @@ def catalog(user: User = Depends(require("catalog.view"))):
         vs = E.versions(code)
         latest = next((v for v in vs if v["enabled"]), None)
         out.append({**meta, **base, "description": (latest or (vs[0] if vs else {})).get("manifest", {}).get("description", meta.get("description")),
+                    "versions": [{k: v.get(k) for k in ("version", "checksum", "enabled", "source", "created_at",
+                                                        "created_by", "report")} for v in vs],
+                    "latest": latest["version"] if latest else None,
+                    "manifest": latest["manifest"] if latest else (vs[0]["manifest"] if vs else None),
+                    "classification": _classification(meta)})
+    # алгоритмы, опубликованные математиком в «Моделировании алгоритмов», — после a–k
+    for meta in sorted((m for m in E.catalog.list() if m["code"] not in CATALOG_BY_CODE), key=lambda m: m["code"]):
+        vs = E.versions(meta["code"])
+        latest = next((v for v in vs if v["enabled"]), None)
+        out.append({**meta, "letter": "", "planned": False, "order": 100,
+                    "inputs": ((latest or {}).get("manifest") or {}).get("requires", {}).get("steps", []),
                     "versions": [{k: v.get(k) for k in ("version", "checksum", "enabled", "source", "created_at",
                                                         "created_by", "report")} for v in vs],
                     "latest": latest["version"] if latest else None,
@@ -255,7 +266,7 @@ def _validate_set(code: str, values: dict) -> tuple[dict, list[str]]:
 def create_set(body: SetIn, user: User = Depends(require("profile.edit"))):
     base = E.param_sets.get(body.base) if body.base else None
     code = (base or {}).get("algorithm") or body.algorithm
-    if not code or code not in STEP_ORDER:
+    if not code or not E.catalog.exists(code):
         raise AppError("param_set.algorithm", "Укажите алгоритм каталога", 400)
     if not body.name.strip():
         raise AppError("param_set.name", "Укажите название набора", 400)
@@ -360,7 +371,7 @@ def _norm_period(p) -> dict | None:
 
 def _definition(body: CalcIn, cur: dict | None = None) -> dict:
     code = body.algorithm
-    a = CATALOG_BY_CODE.get(code)
+    a = algo_info(E, code)
     if not a:
         raise AppError("calc.algorithm", "Алгоритм не найден в каталоге", 404)
     if a.get("planned"):
@@ -415,7 +426,7 @@ def _pub(c: dict, stale: dict | None = None, wbs: dict | None = None) -> dict:
         inp[dep] = {"ref": ref, "calc_id": rid, "title": (ic or {}).get("title"), "letter": letter(dep),
                     "has_result": bool((ic or {}).get("result")), "state": (ic or {}).get("state")}
     return {**{k: v for k, v in c.items() if k not in ("worker",)}, "letter": letter(c["algorithm"]),
-            "algorithm_title": algo_title(c["algorithm"]), "is_main": (mains.get(c["algorithm"]) or {}).get("calc_id") == c["id"],
+            "algorithm_title": algo_title(c["algorithm"], E), "is_main": (mains.get(c["algorithm"]) or {}).get("calc_id") == c["id"],
             "param_set_name": (s or {}).get("name"), "param_set_current": (s or {}).get("current_version"),
             "param_set_default": bool((s or {}).get("is_default")), "inputs_resolved": inp,
             "stale": (stale or {}).get(c["id"], []), "has_result": bool(c.get("result")),

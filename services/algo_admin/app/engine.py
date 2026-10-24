@@ -60,6 +60,18 @@ def letter(code: str) -> str:
     return (CATALOG_BY_CODE.get(code) or {}).get("letter", "")
 
 
+def algo_info(E, code: str) -> dict | None:
+    """Алгоритм каталога: a–k (algorithms/catalog.json) или опубликованный математиком в «Моделировании алгоритмов»."""
+    a = CATALOG_BY_CODE.get(code)
+    if a:
+        return a
+    meta = E.catalog.get(code) if code else None
+    if meta:
+        return {"code": code, "letter": "", "title_ru": meta.get("title_ru", code), "title_kk": meta.get("title_kk", ""),
+                "planned": False, "inputs": []}
+    return None
+
+
 class Engine:
     def __init__(self, root: Path):
         self.root = Path(root)
@@ -185,11 +197,10 @@ class Engine:
         if (self.root / "main_runs.json").exists():
             (self.root / "main_runs.json").unlink()
             removed.append("main_runs.json")
-        keep = set(build.ORDER)
-        for a in self.catalog.list():
-            if a["code"] not in keep:
-                self.catalog.purge(a["code"])
-                removed.append(f"алгоритм {a['code']}")
+        for code in ("stock_by_catch", "bayes_checks"):          # опубликованные пользователями — не трогаются
+            if (self.catalog.dir / code).exists():
+                self.catalog.purge(code)
+                removed.append(f"алгоритм {code}")
         self._profiles_to_sets()
         done["catalog_v3"] = {"at": now_iso(), "removed": removed}
         atomic_write_json(self.migrations_path, done)
@@ -322,12 +333,19 @@ class Engine:
         return None
 
     def _inputs_pending(self, c: dict) -> bool:
-        for code in self.input_codes(c):
-            rid = self.resolve_input(c, code)
-            ic = self.calc(rid) if rid else None
-            if ic and ic.get("state") in ACTIVE:
-                return True
-        return False
+        return any(self.pending_input(c, code) for code in self.input_codes(c))
+
+    def pending_input(self, c: dict, code: str) -> dict | None:
+        """Расчёт-вход, который ещё в очереди или выполняется. Если основного расчёта входа нет, но расчёт этого
+        алгоритма для водоёма уже поставлен в очередь, — он (его первый результат станет основным)."""
+        rid = self.resolve_input(c, code)
+        if rid:
+            ic = self.calc(rid)
+            return ic if ic and ic.get("state") in ACTIVE else None
+        if ((c.get("inputs") or {}).get(code) or "main") != "main":
+            return None
+        return next((x for x in self.calc_list() if x["algorithm"] == code and x["water_body"] == c["water_body"]
+                     and x.get("state") in ACTIVE), None)
 
     def input_codes(self, c: dict) -> list[str]:
         """Алгоритмы-входы расчёта (по манифесту версии кода, которой он будет выполнен)."""

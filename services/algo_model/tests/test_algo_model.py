@@ -46,11 +46,12 @@ def test_new_algorithm_flow(algo_stack):
 
 
 def test_change_builtin_and_compare(algo_stack):
-    """Математик меняет неизменяемый параметр методики в новой версии — сверка показывает отличие."""
+    """Математик меняет значение параметра по умолчанию в новой версии — сверка показывает отличие; тестовый прогон
+    сам считает алгоритмы-входы (a–g) по их манифестам (решение № 66)."""
     dm, da, aa, am, mod = algo_stack
     d = am.post("/algorithms/pdu_by_age/drafts", headers=H("mathematician"), json={}).json()
     m = json.loads(am.get(f"/drafts/{d['id']}/file?path=manifest.json", headers=H("mathematician")).json()["text"])
-    assert m["version"] == "2.0.1"
+    assert m["version"] == "3.0.1"
     for p in m["parameters"]:
         if p["code"] == "PDU_MAX_ITER":
             p["default"] = 1          # одна итерация и не больше 1 % остатка возраста —
@@ -58,7 +59,7 @@ def test_change_builtin_and_compare(algo_stack):
             p["default"] = 0.01
     am.put(f"/drafts/{d['id']}/file", headers=H("mathematician"),
            json={"path": "manifest.json", "text": json.dumps(m, ensure_ascii=False)})
-    t = am.post(f"/drafts/{d['id']}/test", headers=H("mathematician"), json={"compare_with": "2.0.0"}).json()
+    t = am.post(f"/drafts/{d['id']}/test", headers=H("mathematician"), json={"compare_with": "3.0.0"}).json()
     t = wait_test(am, t["id"])
     assert t["status"] == "passed", t.get("message")
     by = {x["table"]: x for x in t["comparison"]["tables"]}

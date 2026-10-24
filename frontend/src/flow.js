@@ -1,56 +1,51 @@
-// Состояние водоёма на пути данных — общее для карты и стартовой страницы «Поток» (docs/decisions.md, № 53, 55).
-// Только факты из сервисов: наборы данных (data-admin /water-bodies/status), запуски и основной запуск
-// (algo-admin /water-bodies/status), очередь (algo-admin /queue). Новых правил и порогов нет.
+// Состояние водоёма на пути данных — общее для карты и стартовой страницы «Поток» (docs/decisions.md, № 53, 55, 66).
+// Только факты из сервисов: наборы данных (data-admin /water-bodies/status), основные расчёты алгоритмов водоёма и их
+// устаревание (algo-admin /water-bodies/status), очередь расчётов (algo-admin /queue). Новых правил и порогов нет.
 
-/** Цвет карты: нет данных / есть данные / есть расчёт / данные новее расчёта. */
+const hasMain = (r) => !!r && Object.keys(r.main || {}).length > 0
+
+/** Цвет карты: нет данных / есть данные / есть основные расчёты / основные расчёты устарели. */
 export function mapState(d, r, { hideInternal = false } = {}) {
   if (!d) return 'no_data'
-  const done = r && (r.main_run || r.last_done)
-  if (!done) return 'has_data'
-  const stale = !!(d.updated_at && done.finished_at && d.updated_at > done.finished_at)
-  // наблюдателю «данные новее расчёта» не показывается: мониторинг показывает готовый расчёт (№ 55)
-  return stale && !hideInternal ? 'stale' : 'has_run'
+  if (!hasMain(r)) return 'has_data'
+  // наблюдателю «устарел» не показывается: мониторинг показывает готовые основные расчёты (№ 55)
+  return (r.stale || []).length && !hideInternal ? 'stale' : 'has_run'
 }
 
-/** Активный запуск водоёма (идёт или в очереди) из ответа /queue. */
+/** Активный расчёт водоёма (идёт или в очереди) из ответа /queue. */
 export function activeRuns(queue) {
   const out = {}
-  for (const r of [...(queue?.queued || []), ...(queue?.running || [])]) {
-    const cur = out[r.water_body]
-    if (!cur || r.status === 'running') out[r.water_body] = r
+  for (const c of [...(queue?.queued || []), ...(queue?.running || [])]) {
+    const cur = out[c.water_body]
+    if (!cur || c.state === 'running') out[c.water_body] = c
   }
   return out
 }
 
-/** Этап запуска «k из n» (k — шаг, который выполняется). */
-export function runProgress(run) {
-  const steps = run?.steps || []
-  const done = steps.filter((s) => ['done', 'reused', 'skipped'].includes(s.status)).length
-  return { k: Math.min(done + 1, steps.length || 1), n: steps.length }
+/** Подпись идущего расчёта: буква алгоритма и ход выполнения, %. */
+export function runProgress(calc) {
+  const f = calc?.progress?.fraction
+  return { letter: calc?.letter || '', pct: typeof f === 'number' ? Math.round(f * 100) : 0 }
 }
 
 /**
  * Этап водоёма на пути данных:
- * no_data — данных нет; wait_calc — данные есть, расчёта нет или данные новее последнего расчёта;
- * running — запуск идёт или в очереди; wait_main — свежий расчёт есть, но основным не отмечен (или основной
- * старше данных); ready — основной расчёт не старше данных.
+ * no_data — данных нет; wait_calc — данные есть, основных расчётов нет (или последний расчёт с ошибкой);
+ * running — расчёт идёт или в очереди; stale — основные расчёты устарели (новые данные или пересчитан вход);
+ * ready — основные расчёты актуальны.
  */
 export function stageOf(d, r, active) {
   if (!d) return { stage: 'no_data' }
-  if (active) return { stage: 'running', run: active, queued: active.status === 'queued' }
-  const done = r?.last_done
-  if (!done || (d.updated_at && done.finished_at && d.updated_at > done.finished_at)) {
-    // последний запуск завершился ошибкой — тот же этап, но с пометкой и ссылкой на запуск
-    const last = r?.last_run
-    const failed = !!last && last.status === 'failed' && (!done || last.created_at > done.created_at)
-    return failed ? { stage: 'wait_calc', failed: true, run: last } : { stage: 'wait_calc' }
+  if (active) return { stage: 'running', run: active, queued: active.state === 'queued' }
+  if (!hasMain(r)) {
+    const f = r?.last_failed
+    return f ? { stage: 'wait_calc', failed: true, run: f } : { stage: 'wait_calc' }
   }
-  const main = r?.main_run
-  if (!main || (d.updated_at && main.finished_at && d.updated_at > main.finished_at)) return { stage: 'wait_main', run: done }
-  return { stage: 'ready', run: main }
+  if ((r.stale || []).length) return { stage: 'stale', n: r.stale.length }
+  return { stage: 'ready' }
 }
 
-export const STAGES = ['wait_calc', 'running', 'wait_main', 'ready']
+export const STAGES = ['wait_calc', 'running', 'stale', 'ready']
 
 /** Водоёмы по этапам + числа для плиток. names — { код: название }. */
 export function buildFlow({ names = {}, data = {}, runs = {}, queue = null }) {
@@ -74,24 +69,24 @@ export function buildFlow({ names = {}, data = {}, runs = {}, queue = null }) {
   const results = byStage.ready.map((w) => {
     const pdu = runs[w.code]?.pdu
     const rows = (pdu?.rows || []).filter((r) => r.pdu_t !== null && r.pdu_t !== undefined).sort((a, b) => b.pdu_t - a.pdu_t)
-    return { code: w.code, name: w.name, year: rows[0]?.year || null, rows }
+    return { code: w.code, name: w.name, year: rows[0]?.year || null, rows, source: pdu?.source || null }
   })
   return {
     byStage, datasets, lastUpload, withData, total: Object.keys({ ...names, ...data }).length, results,
     running: (queue?.running || []).length, queued: (queue?.queued || []).length,
-    waiting: byStage.wait_calc.length + byStage.wait_main.length,
+    waiting: byStage.wait_calc.length + byStage.stale.length,
   }
 }
 
 /** ПДУ водоёма в мониторинге: рассчитанный в приложении (если есть прогноз и он доступен роли) или официальный НПЦ. */
-export const resultLink = (r, full = true) => `/monitoring/waterbody/${r.code}?tab=pdu&s=${full && r.rows.length ? 'app' : 'npc'}`
+export const resultLink = (r, full = true) => `/monitoring/waterbody/${r.code}?tab=pdu&s=${full && r.rows.length && r.source !== 'npc' ? 'app' : 'npc'}`
 
 /** Куда ведёт водоём в трубе: следующее действие этапа. */
 export function stageLink(item) {
   switch (item.stage) {
-    case 'wait_calc': return item.failed ? { path: '/calc/runs/' + item.run.id } : { path: '/calc/calculations', query: { wb: item.code } }
-    case 'running': return { path: '/calc/runs/' + item.run.id }
-    case 'wait_main': return { path: '/calc/runs/' + item.run.id }
+    case 'wait_calc': return item.failed ? { path: '/calc/calculations/' + item.run.id } : { path: '/calc/calculations', query: { wb: item.code } }
+    case 'running': return { path: '/calc/calculations/' + item.run.id }
+    case 'stale': return { path: '/calc/calculations', query: { wb: item.code, stale: '1' } }
     case 'ready': return { path: '/monitoring/waterbody/' + item.code }
     default: return { path: '/input/datasets', query: { wb: item.code } }
   }

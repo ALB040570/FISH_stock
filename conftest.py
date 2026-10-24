@@ -100,3 +100,24 @@ def algo_stack(tmp_path, monkeypatch):
     for k, c in (("algo_admin", aa), ("data_admin", da), ("data_model", dm)):
         am_mod.SVC[k] = am_mod.Svc(k, http=c)
     return dm, da, aa, TestClient(am_mod.app), am_mod
+
+
+STOCK_CHAIN = ["net_catchability", "seine_catchability", "seine_likelihood", "net_likelihood", "seine_stock", "net_stock",
+               "combined_stock", "pdu_by_age"]
+
+
+def run_chain(aa, aa_mod, water_body="zhaysan", codes=STOCK_CHAIN):
+    """Расчёты алгоритмов a–h водоёма (бывшие этапы 1–3) с параметрами по умолчанию; первый результат каждого —
+    основной (решение № 66). Возвращает {алгоритм: id расчёта}."""
+    from importlib import import_module
+    w = import_module("app.worker")
+    ids = {}
+    for code in codes:
+        r = aa.post("/calcs", headers=H("ichthyologist"), json={"algorithm": code, "water_body": water_body, "run": True})
+        assert r.status_code == 201, (code, r.text)
+        ids[code] = r.json()["id"]
+        while w.process_one(aa_mod.E, aa_mod.CLIENTS, log=lambda *a: None):
+            pass
+        c = aa.get(f"/calcs/{ids[code]}", headers=H()).json()
+        assert c["state"] == "done", (code, c.get("message"))
+    return ids

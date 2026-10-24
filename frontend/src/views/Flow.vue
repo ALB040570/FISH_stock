@@ -65,7 +65,7 @@
           <div class="pchips">
             <template v-if="flow?.byStage.wait_calc.length">
               <a v-for="w in shown('wait_calc')" :key="w.code" class="chip" :href="href(w)" :title="w.name + ' — ' + $t(w.failed ? 'flow.hint_failed' : 'flow.hint_calc')">
-                <span class="dot" :style="{ background: w.failed ? RUN_STEP.failed : MAP_STATE.stale }" /><span class="cn">{{ short(w.name) }}</span>
+                <span class="dot" :style="{ background: w.failed ? RUN_STEP.failed : MAP_STATE.has_data }" /><span class="cn">{{ short(w.name) }}</span>
                 <el-icon v-if="w.failed" class="ci"><WarningFilled /></el-icon>
               </a>
               <button v-if="rest('wait_calc')" class="chip more" @click="toggle('wait_calc')">{{ open.wait_calc ? $t('flow.less') : $t('flow.more', { n: rest('wait_calc') }) }}</button>
@@ -94,16 +94,16 @@
           <span class="act">{{ $t('flow.act_calc') }} →</span>
         </div>
 
-        <!-- труба: ждут отметки основного -->
-        <div class="pipe" data-pipe="wait_main">
+        <!-- труба: основные расчёты устарели (новые данные или пересчитан вход, решение № 66) -->
+        <div class="pipe" data-pipe="stale">
           <div class="pbody">
-          <div class="plabel">{{ $t('flow.pipe_main') }}</div>
+          <div class="plabel">{{ $t('flow.pipe_stale') }}</div>
           <div class="pchips">
-            <template v-if="flow?.byStage.wait_main.length">
-              <a v-for="w in shown('wait_main')" :key="w.code" class="chip" :href="href(w)" :title="w.name + ' — ' + $t('flow.hint_main')">
-                <span class="dot" :style="{ background: MAP_STATE.has_data }" /><span class="cn">{{ short(w.name) }}</span>
+            <template v-if="flow?.byStage.stale.length">
+              <a v-for="w in shown('stale')" :key="w.code" class="chip" :href="href(w)" :title="w.name + ' — ' + $t('flow.hint_stale', { n: w.n })">
+                <span class="dot" :style="{ background: MAP_STATE.stale }" /><span class="cn">{{ short(w.name) }}</span>
               </a>
-              <button v-if="rest('wait_main')" class="chip more" @click="toggle('wait_main')">{{ open.wait_main ? $t('flow.less') : $t('flow.more', { n: rest('wait_main') }) }}</button>
+              <button v-if="rest('stale')" class="chip more" @click="toggle('stale')">{{ open.stale ? $t('flow.less') : $t('flow.more', { n: rest('stale') }) }}</button>
             </template>
             <span v-else-if="flow" class="free">{{ $t('flow.free') }}</span>
           </div>
@@ -129,9 +129,9 @@
       </div>
 
       <div class="legend">
-        <span><i class="dot" :style="{ background: MAP_STATE.stale }" />{{ $t('flow.legend_wait') }}</span>
+        <span><i class="dot" :style="{ background: MAP_STATE.has_data }" />{{ $t('flow.legend_wait') }}</span>
         <span><i class="dot" :style="{ background: RUN_STEP.running }" />{{ $t('flow.legend_run') }}</span>
-        <span><i class="dot" :style="{ background: MAP_STATE.has_data }" />{{ $t('flow.legend_main') }}</span>
+        <span><i class="dot" :style="{ background: MAP_STATE.stale }" />{{ $t('flow.legend_stale') }}</span>
         <span><i class="dot" :style="{ background: MAP_STATE.has_run }" />{{ $t('flow.legend_ready') }}</span>
       </div>
 
@@ -178,7 +178,7 @@ import { useAuth } from '../store/auth'
 import { setLang, tr } from '../i18n'
 import { api } from '../api'
 import { MAP_STATE, RUN_STEP } from '../theme'
-import { FLOW_BASE, FLOW_PATH, cabinet, cabinetsFor, canEnter, hardGo, hasFlow, helpPath, mainPage } from '../cabinets'
+import { FLOW_BASE, FLOW_PATH, cabinet, cabinetsFor, hardGo, hasFlow, helpPath, mainPage } from '../cabinets'
 import { buildFlow, resultLink, runProgress, stageLink } from '../flow'
 import { loadLast } from '../lastPlace'
 import ThemeToggle from '../components/ThemeToggle.vue'
@@ -237,7 +237,7 @@ function baseLine(key) {
   const t = (k, n) => (n === undefined || n === null ? null : i18n.t(k, { n }))
   if (key === 'design') return [t('flow.dicts', extra.dicts), t('flow.types', extra.types), t('flow.algos', extra.algos)].filter(Boolean).join(' · ')
   if (key === 'admin') {
-    return [t('flow.users', extra.users), extra.blocked ? t('flow.blocked', extra.blocked) : null, t('flow.catalog', extra.catalog),
+    return [t('flow.users', extra.users), extra.blocked ? t('flow.blocked', extra.blocked) : null,
       auth.can('audit.view') ? i18n.t('flow.journal') : null].filter(Boolean).join(' · ')
   }
   return ''
@@ -259,14 +259,13 @@ async function load() {
 }
 async function loadExtra() {
   const len = (x) => (Array.isArray(x) ? x.length : null)
-  const [ents, types, algos, users, cat] = await Promise.all([
+  const [ents, types, algos, users] = await Promise.all([
     safe(api.get('data-model', '/entities')), safe(api.get('data-model', '/dataset-types')),
     auth.can('algo.develop') ? safe(api.get('algo-model', '/algorithms')) : null,
     auth.can('users.manage') ? safe(api.get('users', '/users')) : null,
-    canEnter(cabinet('admin'), auth.role) ? safe(api.get('algo-admin', '/catalog')) : null,
   ])
   Object.assign(extra, { dicts: len(ents), types: len(types), algos: len(algos), users: len(users),
-    blocked: Array.isArray(users) ? users.filter((u) => u.blocked).length : null, catalog: len(cat) })
+    blocked: Array.isArray(users) ? users.filter((u) => u.blocked).length : null })
 }
 
 // обратная связь: очередь и состояния обновляются сами

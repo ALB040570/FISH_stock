@@ -286,23 +286,25 @@ def context(route: str, lang: str = "ru", user: User = Depends(require("help.vie
 
 # ------------------------------------------------------------------ вставки из работающего приложения
 # {{params:<код алгоритма>}} — таблица параметров последней включённой версии алгоритма (каталог);
-# {{example}} — пример распределения ПДУ НПЦ по возрастам из запуска для мониторинга выбранного водоёма.
+# {{example}} — пример распределения ПДУ НПЦ по возрастам из основного расчёта h выбранного водоёма (решение № 66).
 DIRECTIVE = re.compile(r"^\{\{(params|example)(?::([\w-]+))?\}\}[ \t]*$", re.M)
 L = {
     "ru": {"param": "Параметр", "default": "По умолчанию", "cat": "Категория", "desc": "Описание",
            "fixed": "неизменяемый", "waterbody": "водоём (профиль)", "run": "запуск", "version": "Версия алгоритма",
-           "no_algo": "Алгоритм не найден в каталоге.", "none": "—", "no_run": "Для водоёма ещё нет выполненного "
-           "расчёта с этапом 3 — пример появится после расчёта.", "unavail": "Сервис расчётов недоступен — "
-           "пример не построен.", "wb": "Водоём", "run_main": "основной запуск", "run_last": "последний успешный запуск",
+           "param": "набор «Параметры алгоритма»", "calc": "в расчёте",
+           "no_algo": "Алгоритм не найден в каталоге.", "none": "—", "no_run": "Для водоёма ещё нет основного "
+           "расчёта «h. ПДУ в экземплярах особей» — пример появится после него.", "unavail": "Сервис расчётов недоступен — "
+           "пример не построен.", "wb": "Водоём", "run_main": "основной расчёт", "run_last": "расчёт",
            "sp": "Вид", "year": "Год", "age": "Возраст", "stock": "Запас, шт", "w": "Ср. вес, г",
            "bio": "Биомасса, т", "load": "Нагрузка j/m1", "pcs": "ПДУ, шт", "t": "ПДУ, т", "expl": "Изъятие, %",
            "immature": "не вылавливается", "P": "ПДУ НПЦ", "dist": "распределено", "left": "не распределено",
            "fish_bio": "промысловая биомасса", "iters": "итераций", "stop": "остановка", "cap": "ограничение 75 %"},
     "kk": {"param": "Параметр", "default": "Әдепкі мәні", "cat": "Санаты", "desc": "Сипаттамасы",
            "fixed": "өзгермейтін", "waterbody": "су айдыны (профиль)", "run": "іске қосу", "version": "Алгоритм нұсқасы",
-           "no_algo": "Алгоритм каталогта табылмады.", "none": "—", "no_run": "Су айдыны үшін 3-кезеңі бар орындалған "
-           "есептеу әлі жоқ — мысал есептеуден кейін пайда болады.", "unavail": "Есептеулер қызметі қолжетімсіз — "
-           "мысал құрылмады.", "wb": "Су айдыны", "run_main": "негізгі іске қосу", "run_last": "соңғы сәтті іске қосу",
+           "param": "«Алгоритм параметрлері» жиыны", "calc": "есептеуде",
+           "no_algo": "Алгоритм каталогта табылмады.", "none": "—", "no_run": "Су айдыны үшін «h. Дарақ данасымен ШРА» "
+           "негізгі есептеуі әлі жоқ — мысал одан кейін пайда болады.", "unavail": "Есептеулер қызметі қолжетімсіз — "
+           "мысал құрылмады.", "wb": "Су айдыны", "run_main": "негізгі есептеу", "run_last": "есептеу",
            "sp": "Түр", "year": "Жыл", "age": "Жасы", "stock": "Қор, дана", "w": "Орт. салмақ, г",
            "bio": "Биомасса, т", "load": "Жүктеме j/m1", "pcs": "ШРА, дана", "t": "ШРА, т", "expl": "Алу үлесі, %",
            "immature": "ауланбайды", "P": "ҒӨО ШРА", "dist": "бөлінді", "left": "бөлінбеді",
@@ -346,26 +348,21 @@ def _params_table(code: str, lang: str) -> str:
 
 
 def example_data(wb: str, species: str | None, year: int | None) -> dict:
-    """Данные примера: payload этапа 3 из запуска для мониторинга."""
-    m = _svc("algo_admin", f"/water-bodies/{wb}/monitoring-run", algorithm="pdu_by_age")
+    """Данные примера: результат основного расчёта h (ПДУ в экземплярах) водоёма."""
+    m = _svc("algo_admin", f"/water-bodies/{wb}/main-result", algorithm="pdu_by_age")
     if m == "unavailable":
         return {"error": "unavail"}
-    run = (m or {}).get("run")
-    if not run:
+    calc = (m or {}).get("calc")
+    res = (m or {}).get("result")
+    if not calc or not isinstance(res, dict) or not res.get("payload"):
         return {"error": "no_run"}
-    idx = next((i for i, st in enumerate(run["steps"]) if st["algorithm"] == "pdu_by_age"
-                and st.get("status") in ("done", "reused")), None)
-    if idx is None:
-        return {"error": "no_run"}
-    res = _svc("algo_admin", f"/runs/{run['id']}/steps/{idx}/result")
-    if not isinstance(res, dict) or not res.get("payload"):
-        return {"error": "no_run"}
+    run = {"id": calc["id"], "created_at": calc.get("finished_at")}
     p = res["payload"]
     sp_list = p.get("species_list") or list(p.get("species", {}))
     species = species if species in p.get("species", {}) else (sp_list[0] if sp_list else None)
     years = p.get("years", [])
     year = year if year in years else (years[-1] if years else None)
-    return {"run": {"id": run["id"], "created_at": run.get("created_at"), "is_main": m.get("is_main")},
+    return {"run": {"id": run["id"], "created_at": run.get("created_at"), "is_main": True},
             "payload": p, "species": species, "year": year, "species_list": sp_list, "years": years}
 
 

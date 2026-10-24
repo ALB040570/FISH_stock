@@ -121,23 +121,66 @@ class Data:
     def place(self, v):
         return self.places.get(place_key(v), str(v).strip()) if v not in (None, "") else None
 
-    def run_result(self, algorithm):
-        """Результат шага из запуска для мониторинга (основной, иначе последний успешный): (результат, сведения о запуске).
-        (None, None) — запуска нет; (None, сведения) — в запуске нет выполненного шага."""
-        key = f"_runres:{algorithm}"
+    def main_result(self, algorithm):
+        """Результат основного расчёта алгоритма водоёма (решение № 66): (результат, сведения о расчёте).
+        (None, None) — основного расчёта нет; (None, сведения) — у расчёта нет результата."""
+        key = f"_main:{algorithm}"
         if key not in self._d:
-            info = self.svc["algo_admin"].get(f"/water-bodies/{self.wb}/monitoring-run?algorithm={algorithm}") or {}
-            run = info.get("run")
+            info = self.svc["algo_admin"].get(f"/water-bodies/{self.wb}/main-result?algorithm={algorithm}") or {}
+            c = info.get("calc")
             out = (None, None)
-            if run:
-                meta = {"run_id": run["id"], "is_main": info.get("is_main"), "calculation_title": run.get("calculation_title"),
-                        "run_finished_at": run.get("finished_at")}
-                i = next((k for k, st_ in enumerate(run["steps"]) if st_["algorithm"] == algorithm
-                          and st_.get("status") in ("done", "reused")), None)
-                res = (self.svc["algo_admin"].get(f"/runs/{run['id']}/steps/{i}/result") or {}) if i is not None else None
-                out = (res, meta)
+            if c:
+                meta = {"calc_id": c["id"], "is_main": True, "calculation_title": c.get("title"), "letter": c.get("letter"),
+                        "run_finished_at": c.get("finished_at"), "stale": c.get("stale") or [],
+                        "period_text": c.get("period_text"), "param_set_name": c.get("param_set_name"),
+                        "inputs": c.get("inputs") or {}, "result_id": c.get("result_id")}
+                out = (info.get("result"), meta)
             self._d[key] = out
         return self._d[key]
+
+    def run_result(self, algorithm):
+        """Результат для мониторинга по коду алгоритма. «stock_by_catch» (прежний шаг «Уловистость сети и запас по
+        уловам») собирается из основных расчётов a, c, d, g — так продолжают работать сохранённые дашборды."""
+        if algorithm != "stock_by_catch":
+            return self.main_result(algorithm)
+        key = "_main:stock_by_catch"
+        if key not in self._d:
+            parts = {c: self.main_result(c) for c in ("net_catchability", "seine_likelihood", "net_likelihood", "combined_stock")}
+            metas = [m for _, m in parts.values() if m]
+            if not metas:
+                self._d[key] = (None, None)
+                return self._d[key]
+            res = {k: (r or {}) for k, (r, _) in parts.items()}
+            tables = {}
+            if (res["combined_stock"].get("tables") or {}):
+                for t in ("yearly_stock", "stock_by_age", "npc_stock", "tonnes"):
+                    if t in res["combined_stock"]["tables"]:
+                        tables[t] = res["combined_stock"]["tables"][t]
+            if "coefficients" in (res["net_catchability"].get("tables") or {}):
+                tables["net_coefficients"] = res["net_catchability"]["tables"]["coefficients"]
+            for t in ("catch_by_age", "age_shares"):
+                src = [res[c]["tables"][t] for c in ("net_likelihood", "seine_likelihood") if t in (res[c].get("tables") or {})]
+                if src:
+                    tables[t] = {**src[0], "rows": [r for x in (src if t == "catch_by_age" else src[:1]) for r in x["rows"]]}
+            payload = {"net": self.net_payload(), "stock": (res["combined_stock"].get("payload") or {}).get("stock")}
+            meta = parts["combined_stock"][1] or metas[0]
+            self._d[key] = ({"payload": payload, "tables": tables}, meta)
+        return self._d[key]
+
+    def net_payload(self):
+        """Параметры парабол сети (расчёт a) с долей σ балансовой модели из основного расчёта d, если он посчитан по
+        этому же расчёту a."""
+        a, am = self.main_result("net_catchability")
+        pl = (a or {}).get("payload")
+        if not pl:
+            return None
+        d, dm = self.main_result("net_likelihood")
+        dn = ((d or {}).get("payload") or {}).get("net") or {}
+        used = ((dm or {}).get("inputs") or {}).get("net_catchability") or {}
+        if dn and am and used.get("calc_id") == am["calc_id"] and used.get("result_id") == am.get("result_id"):
+            pl = {**pl, "fits": {sp: {y: {**f, "sigma": ((dn.get("fits") or {}).get(sp) or {}).get(y, {}).get("sigma")}
+                                      for y, f in ys.items()} for sp, ys in (pl.get("fits") or {}).items()}}
+        return pl
 
     def run_table(self, algorithm, table):
         """Таблица результата шага из запуска для мониторинга (основной, иначе последний успешный)."""
@@ -1283,8 +1326,8 @@ def _cba(D, opt):
     rows, meta = D.run_table("stock_by_catch", "catch_by_age")
     if rows is None:
         if meta is None:
-            raise NoData("Для водоёма ещё нет расчёта запаса по уловам (этап 2) — улов по возрастам появится после него")
-        raise NoData("В запуске нет таблицы «Улов по ловам и возрастам» — перезапустите расчёт (алгоритм этапа 2 версии 1.0.2 и новее)")
+            raise NoData("Для водоёма нет основных расчётов правдоподобия (c — невод, d — сеть) — улов по возрастам появится после них")
+        raise NoData("В результатах основных расчётов c и d нет таблицы «Улов по ловам и возрастам» — пересчитайте их")
     gear = {"net": "сеть", "seine": "невод"}.get(opt.get("gear_kind", "net"))
     ct = opt.get("catch_type", "scientific")
     ctn = {"scientific": ("научный", "scientific"), "commercial": ("промысловый", "commercial")}.get(ct)

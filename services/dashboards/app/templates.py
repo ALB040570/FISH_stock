@@ -3,8 +3,8 @@
     kpi | line | bar | table | band (полоса интервала) | text | special (особые представления: см. kind)
 Источник данных виджета (source):
     {"kind": "dataset", "dataset_type": <тип>}                       — текущая версия набора водоёма
-    {"kind": "run", "algorithm": <код>, "table": <таблица>}         — запуск для мониторинга (основной/последний)
-    {"kind": "payload", "algorithm": <код>}                         — полное представление шага (особые виджеты)
+    {"kind": "run", "algorithm": <код>, "table": <таблица>}         — основной расчёт алгоритма водоёма (решение № 66)
+    {"kind": "payload", "algorithm": <код>}                         — полное представление результата (особые виджеты)
 Подстановки фильтров: water_body, species, year (значения дашборда), "$last_year".
 """
 
@@ -435,12 +435,12 @@ COMPARE = {
         W("cmp_pdu", "main", "line", "ПДУ НПЦ по водоёмам, т", {"kind": "dataset", "dataset_type": "npc_pdu", "multi": True},
           12, 5, x="year", y="$species", series="water_body", agg="sum"),
         W("cmp_stock", "main", "line", "Окончательный запас по уловам, шт",
-          {"kind": "run", "algorithm": "stock_by_catch", "table": "yearly_stock", "multi": True}, 12, 5,
-          x="year", y="stock", series="water_body", filter={"variant": "with_ages", "method": "on_stock", "gear": "сеть+невод"}),
+          {"kind": "run", "algorithm": "combined_stock", "table": "yearly_stock", "multi": True}, 12, 5,
+          x="year", y="stock", series="water_body", filter={"gear": "сеть+невод"}),
     ],
 }
 
 # Ревизия системных шаблонов: при обновлении приложения неизменённые пользователями шаблоны обновляются
-TEMPLATE_REV = 17
+TEMPLATE_REV = 18
 
 SYSTEM = [MONITORING, COMPARE]

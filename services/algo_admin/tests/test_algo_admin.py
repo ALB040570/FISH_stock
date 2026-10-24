@@ -308,3 +308,18 @@ def test_classification(calc_stack):
     assert aa.put("/catalog/pdu_by_age/classification", headers=H("mathematician"), json=body).status_code == 200
     assert aa.get("/catalog/pdu_by_age", headers=H()).json()["classification"] == body
     assert json.dumps(cat)
+
+
+def test_queue_chain_before_inputs_exist(calc_stack):
+    """Новый водоём: расчёты a–e можно поставить в очередь сразу — зависимые ждут свои входы, первый результат
+    каждого становится основным и берётся входом следующего."""
+    dm, da, aa, mod = calc_stack
+    ids = [make(aa, code)["id"] for code in CHAIN[:5]]
+    q = aa.get("/queue", headers=H("viewer")).json()
+    assert [c["id"] for c in q["queued"]] == ids
+    c = aa.get(f"/calcs/{ids[2]}", headers=H()).json()
+    assert any("выполняется — расчёт начнётся после него" in w for w in c["check"]["warnings"])
+    assert work(mod) == 5
+    for cid in ids:
+        c = aa.get(f"/calcs/{cid}", headers=H()).json()
+        assert c["state"] == "done" and c["is_main"] and not c["stale"], (c["algorithm"], c.get("message"))

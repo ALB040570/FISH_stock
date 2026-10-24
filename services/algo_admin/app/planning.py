@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 from . import params as P
-from .engine import ACTIVE, CATALOG_BY_CODE, letter
+from .engine import ACTIVE, CATALOG_BY_CODE, algo_info, letter
 
 OPTIONAL_DATASETS = {"npc_stock"}      # без оценки НПЦ запас считается, сравнение с НПЦ не показывается
 
 
-def algo_title(code: str) -> str:
-    a = CATALOG_BY_CODE.get(code) or {}
-    return f"{a.get('letter', '')}. {a.get('title_ru', code)}" if a else code
+def algo_title(code: str, E=None) -> str:
+    a = CATALOG_BY_CODE.get(code) or (algo_info(E, code) if E is not None else None) or {}
+    if not a:
+        return code
+    return f"{a['letter']}. {a.get('title_ru', code)}" if a.get("letter") else a.get("title_ru", code)
 
 
 def period_text(period) -> str:
@@ -29,7 +31,7 @@ def plan(E, clients, c: dict, names: dict | None = None, current: dict | None = 
     """(план, ошибки, предупреждения)."""
     errors, warnings = [], []
     code = c["algorithm"]
-    a = CATALOG_BY_CODE.get(code)
+    a = algo_info(E, code)
     if not a:
         return {}, [f"Алгоритм «{code}» не найден в каталоге"], warnings
     if a.get("planned"):
@@ -86,6 +88,12 @@ def plan(E, clients, c: dict, names: dict | None = None, current: dict | None = 
         ref = (c.get("inputs") or {}).get(dep) or "main"
         rid = E.resolve_input(c, dep)
         if not rid:
+            pend = E.pending_input(c, dep)
+            if pend:
+                warnings.append(f"Расчёт-вход {letter(dep)} выполняется — расчёт начнётся после него")
+                inputs[dep] = {"calc_id": pend["id"], "result_id": None, "title": pend.get("title"), "main": True,
+                               "years": None, "pending": True}
+                continue
             errors.append(f"Нет основного расчёта «{algo_title(dep)}» для водоёма — выполните его или выберите расчёт")
             continue
         ic = E.calc(rid)

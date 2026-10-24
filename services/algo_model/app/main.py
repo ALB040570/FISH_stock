@@ -54,7 +54,9 @@ drafts = Collection(ROOT, "drafts")
 TESTS = ROOT / "tests"
 TESTS.mkdir(exist_ok=True)
 TEXT_EXT = (".py", ".json", ".md", ".txt", ".csv", ".yaml", ".yml")
-CATEGORIES = ("fixed", "waterbody", "run")
+# param — значение из набора «Параметры алгоритма», calc — задаётся в расчёте (решение № 66);
+# fixed, waterbody, run — категории прежних версий (до 3.0.0), допустимы в черновиках на их основе
+CATEGORIES = ("param", "calc", "fixed", "waterbody", "run")
 PARAM_TYPES = ("integer", "number", "enum", "boolean", "string", "species_list", "year_map", "species_map",
                "species_year_map", "profile")
 _test_lock = threading.Lock()
@@ -156,8 +158,9 @@ def list_projects(user: User = Depends(require("algo.develop"))):
 
 TEMPLATE_ALGO = '''"""{title}
 
-Контракт: run(ctx) — ctx.tables (наборы данных водоёма), ctx.params (параметры: неизменяемые, водоёма, запуска),
-ctx.load_state("<шаг>") (результаты предыдущего шага цепочки), ctx.add_table / ctx.add_frame / ctx.add_file /
+Контракт: run(ctx) — ctx.tables (наборы данных водоёма за период расчёта — fishcore.stepkit.bundle), ctx.params
+(параметры: набор «Параметры алгоритма» и параметры расчёта), ctx.load_state("<алгоритм>") (результат расчёта-входа
+из requires.steps манифеста), ctx.add_table / ctx.add_frame / ctx.add_file /
 ctx.set_payload / ctx.metric / ctx.note — результаты; ctx.log, ctx.progress — журнал и ход выполнения.
 """
 
@@ -185,7 +188,7 @@ def create_project(body: ProjectIn, user: User = Depends(require("algo.develop")
                 "runtime": {"python": ">=3.11", "timeout_minutes": 30},
                 "requires": {"datasets": ["npc_pdu"], "steps": []},
                 "parameters": [{"code": "k", "title_ru": "Коэффициент", "type": "number", "default": 1.0,
-                                "category": "run", "min": 0}],
+                                "category": "param", "min": 0}],
                 "outputs": [{"code": "result", "title_ru": "Результат", "format": "table"}]}
     files = {"manifest.json": json.dumps(manifest, ensure_ascii=False, indent=1).encode(),
              "algorithm.py": TEMPLATE_ALGO.format(title=body.title_ru).encode()}
@@ -361,19 +364,20 @@ def validate_files(code: str, files: dict[str, bytes], published: list[dict]) ->
             errors.append(f"Параметр «{c}» повторяется")
         seen.add(c)
         if p.get("category") not in CATEGORIES:
-            errors.append(f"Параметр «{c}»: категория fixed (неизменяемый), waterbody (водоём) или run (запуск)")
+            errors.append(f"Параметр «{c}»: категория param (набор «Параметры алгоритма») или calc (задаётся в расчёте)")
         if p.get("type") not in PARAM_TYPES:
             errors.append(f"Параметр «{c}»: тип из {', '.join(PARAM_TYPES)}")
         if p.get("type") == "enum" and p.get("default") is not None and p["default"] not in [e.get("value") for e in p.get("enum", [])]:
             errors.append(f"Параметр «{c}»: значение по умолчанию не из списка")
-        if p.get("category") == "fixed" and p.get("default") is None:
-            errors.append(f"Параметр «{c}»: у неизменяемого параметра должно быть значение")
+        if p.get("category") in ("fixed", "waterbody", "run"):
+            warnings.append(f"Параметр «{c}»: категория «{p.get('category')}» прежних версий — с 3.0.0 параметры "
+                            "алгоритма — param (значение в наборе «Параметры алгоритма»), calc — в расчёте")
         if not p.get("title_ru"):
             warnings.append(f"Параметр «{c}»: нет названия")
     req = m.get("requires", {})
     for s in req.get("steps", []):
         if s not in build.ORDER and s != code:
-            warnings.append(f"Шаг-предшественник «{s}» не входит в эталонную цепочку")
+            warnings.append(f"Алгоритм-вход «{s}» не входит в каталог")
     ep = str(m.get("entrypoint", "algorithm:run"))
     mod = ep.split(":")[0].replace(".", "/") + ".py"
     if mod not in files:
@@ -424,10 +428,12 @@ def _defaults(m):
     return {p["code"]: p.get("default") for p in m.get("parameters", []) if p.get("default") is not None}
 
 
-def _profile(code, wb):
+def _default_set(code):
+    """Значения набора «По умолчанию» алгоритма (сервис расчётов); пусто — значения по умолчанию манифеста."""
     try:
-        r = SVC["algo_admin"].get(f"/profiles/{code}/{wb}").json()
-        return ((r.get("profile") or {}).get("values")) or {}
+        sets = SVC["algo_admin"].get("/param-sets", algorithm=code).json()
+        s = next((x for x in sets if x.get("is_default")), None)
+        return SVC["algo_admin"].get(f"/param-sets/{s['id']}").json().get("values") or {} if s else {}
     except AppError:
         return {}
 
@@ -476,14 +482,18 @@ def _run_test(tid: str, did: str, d: dict, files: dict, body: TestIn, user_name:
             m = json.loads(files["manifest.json"])
             bundle = SVC["data_admin"].get(f"/bundle/{body.water_body}").json()
             need = set(m.get("requires", {}).get("datasets", []))
-            chain = [s for s in build.ORDER if s in _upstream(m)]
             pkgs = {}
-            for s in chain:
+
+            def fetch(s):
                 vs = _published(s)
                 ver = next((v["version"] for v in vs if v.get("enabled", True)), None)
                 if not ver:
-                    raise RuntimeError(f"Нет опубликованной версии шага «{s}»")
+                    raise RuntimeError(f"Нет опубликованной версии алгоритма-входа «{s}»")
                 pkgs[s] = (_unzip(SVC["algo_admin"].get(f"/catalog/{s}/versions/{ver}/package.zip").content), ver)
+                return json.loads(pkgs[s][0]["manifest.json"])
+
+            chain = _upstream(m, fetch)
+            for s in chain:
                 need |= set(json.loads(pkgs[s][0]["manifest.json"]).get("requires", {}).get("datasets", []))
             tables = {}
             for t in sorted(need):
@@ -495,14 +505,16 @@ def _run_test(tid: str, did: str, d: dict, files: dict, body: TestIn, user_name:
             gk = {r["values"]["code"]: r["values"]["kind"] for r in SVC["data_model"].get("/entities/gears/records").json()}
             done = {}
 
-            def step(code, pfiles, params, name):
+            def step(code, pfiles, params, name, own=False):
                 pm = json.loads(pfiles["manifest.json"])
-                prm = {**_defaults(pm), **{p["code"]: v for p in pm["parameters"] if p.get("category") == "waterbody"
-                                          for k, v in _profile(code, body.water_body).items() if k == p["code"]},
-                       **params}
+                # входы — расчёты-предшественники из requires.steps; параметры алгоритма-входа — набор «По умолчанию»,
+                # проверяемого черновика — значения по умолчанию его манифеста
+                base = _defaults(pm) if own else {**_defaults(pm), **{k: v for k, v in _default_set(code).items() if v is not None}}
+                prm = {**base, **params}
                 sd = tdir / name
                 ctx = {"run_id": tid, "step": code, "water_body": body.water_body, "params": prm, "species_names": sp,
-                       "gear_kinds": gk, "inputs": {k: str(v / "out") for k, v in done.items()},
+                       "gear_kinds": gk, "inputs": {k: str(done[k] / "out") for k in pm.get("requires", {}).get("steps", [])
+                                                   if k in done},
                        "tables_path": str(tdir / "tables.json")}
                 executor.prepare_step(sd, pfiles, ctx)
                 st = executor.run_step(sd, timeout_s=float(pm.get("runtime", {}).get("timeout_minutes", 30)) * 60)
@@ -516,7 +528,7 @@ def _run_test(tid: str, did: str, d: dict, files: dict, body: TestIn, user_name:
                 # байесовская модель как предшественник — короткая выборка (проверяется работоспособность шага)
                 quick = {"draws": 100, "tune": 100, "chains": 2} if s == "bayes_cohort" else {}
                 done[s] = step(s, pkgs[s][0], {**quick, **(upstream.get(s) or {})}, f"up_{s}")
-            sd = step(d["algorithm"], files, own, "draft")
+            sd = step(d["algorithm"], files, own, "draft", own=True)
             result = executor.read_result(sd)
             meta.update(status="passed", message="Тестовый прогон выполнен", summary={
                 "tables": {k: {"title": v["title"], "rows": len(v["rows"])} for k, v in (result.get("tables") or {}).items()},
@@ -525,7 +537,7 @@ def _run_test(tid: str, did: str, d: dict, files: dict, body: TestIn, user_name:
             if body.compare_with:
                 ref_files = _unzip(SVC["algo_admin"].get(
                     f"/catalog/{d['algorithm']}/versions/{body.compare_with}/package.zip").content)
-                rd = step(d["algorithm"], ref_files, own, "reference")
+                rd = step(d["algorithm"], ref_files, own, "reference", own=True)
                 cmp_ = _compare(result, executor.read_result(rd))
                 meta.update(comparison=cmp_, comparison_ok=cmp_["ok"])
     except Exception as e:  # noqa: BLE001
@@ -536,20 +548,17 @@ def _run_test(tid: str, did: str, d: dict, files: dict, body: TestIn, user_name:
                                                                  "comparison_ok")}}, actor="system")
 
 
-def _upstream(m: dict) -> set[str]:
-    """Все предшественники по эталонной цепочке (transitive)."""
-    req = set(m.get("requires", {}).get("steps", []))
-    out = set()
-    stack = list(req)
-    deps = {"stock_by_catch": ["seine_catchability"], "pdu_by_age": ["stock_by_catch"],
-            "bayes_cohort": ["stock_by_catch", "pdu_by_age"], "forecast_pdu": ["bayes_cohort"]}
+def _upstream(m: dict, fetch) -> list[str]:
+    """Все алгоритмы-входы (с их входами) по манифестам опубликованных версий — в порядке каталога."""
+    out, stack = set(), list(m.get("requires", {}).get("steps", []))
     while stack:
         s = stack.pop()
         if s in out or s == m.get("code"):
             continue
         out.add(s)
-        stack += deps.get(s, [])
-    return out
+        stack += fetch(s).get("requires", {}).get("steps", [])
+    order = {c: i for i, c in enumerate(build.ORDER)}
+    return sorted(out, key=lambda c: order.get(c, 99))
 
 
 @app.post("/drafts/{did}/test", tags=["проверка"], status_code=202)

@@ -63,11 +63,12 @@
             <span v-if="data.filter_label">{{ data.filter_label }}<template v-if="srcLine.length"> · </template></span>
             <template v-for="(s, i) in srcLine" :key="i"><router-link v-if="canGo('/input/')" :to="'/input/datasets/' + s.dataset_id">{{ s.title }} v{{ s.version }}</router-link><span v-else>{{ s.title }} v{{ s.version }}</span><span v-if="i < srcLine.length - 1">, </span></template>
           </div>
-          <div v-if="data.meta?.run_id || data.help" class="src">
-            <template v-if="data.meta?.run_id">
-              {{ $t('wv.by_run') }} <router-link v-if="canGo('/calc/')" :to="'/calc/runs/' + data.meta.run_id">«{{ data.meta.calculation_title }}»</router-link><span v-else>«{{ data.meta.calculation_title }}»</span>
+          <div v-if="data.meta?.calc_id || data.help" class="src">
+            <template v-if="data.meta?.calc_id">
+              {{ $t('wv.by_run') }} <router-link v-if="canGo('/calc/')" :to="'/calc/calculations/' + data.meta.calc_id">«{{ data.meta.calculation_title }}»</router-link><span v-else>«{{ data.meta.calculation_title }}»</span>
               <span v-if="data.meta.run_finished_at">&nbsp;{{ $t('wv.from') }} {{ new Date(data.meta.run_finished_at).toLocaleDateString('ru-RU') }}</span>
-              <span v-if="data.meta.is_main === false"> · {{ $t('monitoring.run_last') }}</span>
+              <span v-if="data.meta.is_main === false"> · {{ $t('calcs.alternative') }}</span>
+              <span v-if="data.meta.stale?.length" class="stale" :title="data.meta.stale.join('; ')"> · {{ $t('wv.stale') }}</span>
             </template>
             <template v-if="data.help"> · <router-link :to="helpPath(data.help)">{{ $t('wv.how') }}</router-link></template>
           </div>
@@ -319,4 +320,5 @@ onBeforeUnmount(() => unreg && unreg())
 .formula { background: var(--fs-code); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; font-size: 13px; line-height: 1.5; }
 .selbar { display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: var(--fs-selected); border-radius: 6px; color: var(--fs-text); }
 :deep(.on) { font-weight: 600; color: var(--fs-primary); }
+.src .stale { color: var(--fs-warning); }
 </style>
