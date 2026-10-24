@@ -1,4 +1,4 @@
-"""h. ПДУ в экземплярах особей: ПДУ НПЦ по возрастам (формулы fish_stock_forecast без изменений; решение № 70)."""
+"""h. Лимиты в экземплярах особей: ПДУ НПЦ по возрастам (формулы fish_stock_forecast без изменений; решение № 70)."""
 from fishcore import stepkit, views
 from fishcore.data_source import load_fish_props
 from fishcore.export_nc import save_pdu

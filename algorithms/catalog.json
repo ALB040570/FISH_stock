@@ -69,8 +69,8 @@
  {
   "code": "pdu_by_age",
   "letter": "h",
-  "title_ru": "ПДУ в экземплярах особей",
-  "title_kk": "Дарақ данасымен ШРА",
+  "title_ru": "Лимиты в экземплярах особей",
+  "title_kk": "Дарақ данасымен лимиттер",
   "planned": false,
   "inputs": [
    "combined_stock"

@@ -17,7 +17,7 @@ FONT_DIR = Path(__file__).parent / "fonts"
 STEP_TITLES = {"net_catchability": "a. Уловистость сети", "seine_catchability": "b. Уловистость невода",
                "seine_likelihood": "c. Правдоподобие методом площадей", "net_likelihood": "d. Правдоподобие балансовым методом",
                "seine_stock": "e. Запас методом площадей", "net_stock": "f. Запас балансовым методом",
-               "combined_stock": "g. Запас, усреднённый по неводу и сети", "pdu_by_age": "h. ПДУ в экземплярах",
+               "combined_stock": "g. Запас, усреднённый по неводу и сети", "pdu_by_age": "h. Лимиты в экземплярах",
                "bayes_cohort": "i. Запас по математической модели", "forecast_pdu": "j. Прогноз и ПДУ по модели"}
 
 
