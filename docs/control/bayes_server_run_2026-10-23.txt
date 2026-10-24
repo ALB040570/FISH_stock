@@ -1,0 +1,10 @@
+# Сверка основного запуска на сервере (run_01M5MZ40GH580AN1SXKRBZ1T39, 23.10.2026, алгоритмы 2.0.0, профиль Жайсана v2)
+# с результатами автора (legacy/fish_stock_forecast/results); python tools/control_bayes.py --zip run.zip
+{"species": "karas", "total_max_rel": 0.0026381711091187938, "by_age_max_rel_main": 0.018856523987934307, "by_age_median_rel": 0.001954750817435545, "rhat_max": 1.0033898590254962, "pass": true}
+{"species": "lesh", "total_max_rel": 0.0052745004293252625, "by_age_max_rel_main": 0.021520071600695675, "by_age_median_rel": 0.0009372980603760996, "rhat_max": 1.0056101470945862, "pass": true}
+{"species": "okun", "total_max_rel": 0.0010159636316708406, "by_age_max_rel_main": 0.005299576698016109, "by_age_median_rel": 0.0004199507168465013, "rhat_max": 1.0038190504935856, "pass": true}
+{"species": "plotva", "total_max_rel": 0.007243735360742627, "by_age_max_rel_main": 0.30520765857967597, "by_age_median_rel": 0.0032591542880490796, "rhat_max": 1.003789432929025, "pass": true}
+{"species": "sazan", "total_max_rel": 0.01304939357085389, "by_age_max_rel_main": 0.034277410331443256, "by_age_median_rel": 0.005661588266500244, "rhat_max": 1.0019000127226128, "pass": true}
+{"species": "shuka", "total_max_rel": 0.001664235730467841, "by_age_max_rel_main": 0.007820764062031726, "by_age_median_rel": 0.0007407868760311242, "rhat_max": 1.0029139338503656, "pass": true}
+{"species": "sudak", "total_max_rel": 0.004158542427050574, "by_age_max_rel_main": 0.009296224849938507, "by_age_median_rel": 0.0009771662134246922, "rhat_max": 1.019056790151564, "pass": true}
+{"species": "yaz", "total_max_rel": 0.01101672898759266, "by_age_max_rel_main": 0.06337452128515526, "by_age_median_rel": 0.002397495507407328, "rhat_max": 1.019370144803374, "pass": true}
