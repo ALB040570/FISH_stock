@@ -273,7 +273,7 @@ export default {
     age_years: "возраст, лет",
     catch_pcs: "улов, шт",
     catch_by_age: "улов по возрастам",
-    catch_curve: "кривая улова (подгонка)",
+    catch_curve: "МНК-модель",
     catchability: "уловистость c",
     peak: "вершина",
     model: "модель",

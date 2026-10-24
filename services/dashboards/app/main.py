@@ -87,23 +87,28 @@ def _renamed(x, names: dict):
     return x, False
 
 
-def _rename_titles_68():
-    """Решение № 68: в дашбордах пользователей (копиях шаблона мониторинга) прежние подписи «возрастных проб»
-    заменяются новыми. Меняются только подписи, совпадающие с прежним шаблоном; свои подписи пользователя не трогаются."""
+def _rename_titles(names: dict, comment: str):
+    """В дашбордах пользователей (копиях шаблона мониторинга) прежние подписи шаблона заменяются новыми. Меняются
+    только подписи, совпадающие с прежним шаблоном; свои подписи пользователя не трогаются."""
     for b in boards.list():
         if b.get("owner") == "system":
             continue
-        d, changed = _renamed(b, templates.RENAMED_68)
+        d, changed = _renamed(b, names)
         if not changed:
             continue
         boards.update(b["id"], {k: v for k, v in d.items() if v != b.get(k)}, actor="system")
-        boards.add_version(b["id"], {"dashboard.json": dumps(d).encode()},
-                           {"comment": "обновление поставки: «Возрастные пробы» → «Рыбы, подвергнутые биологической обработке»"},
-                           "system")
+        boards.add_version(b["id"], {"dashboard.json": dumps(d).encode()}, {"comment": comment}, "system")
+
+
+def _rename_titles_68():
+    """Решение № 68: «Возрастные пробы» → «Рыбы, подвергнутые биологической обработке»."""
+    _rename_titles(templates.RENAMED_68,
+                   "обновление поставки: «Возрастные пробы» → «Рыбы, подвергнутые биологической обработке»")
 
 
 _seed()
 _rename_titles_68()
+_rename_titles(templates.RENAMED_MNK, "обновление поставки: расчётный улов невода называется «МНК-модель»")
 
 
 def _can_view(d, user):

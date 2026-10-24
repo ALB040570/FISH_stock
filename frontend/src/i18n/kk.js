@@ -275,7 +275,7 @@ export default {
     age_years: "жасы, жыл",
     catch_pcs: "ауланым, дана",
     catch_by_age: "жас бойынша ауланым",
-    catch_curve: "ауланым қисығы (сәйкестендіру)",
+    catch_curve: "ЕКӘ-модель",
     catchability: "аулағыштық c",
     peak: "шыңы",
     model: "модель",

@@ -257,9 +257,9 @@ def v_ca_catch(D, opt, gear):
             for a, o, fi in zip(ages, f.get("observed") or [], f.get("fitted") or [None] * len(ages))]
     cols = [col("age", L(lang, "Возраст, лет", "Жасы, жыл")), col("observed", obs, "number")]
     if gear == "seine":
-        cols.append(col("fitted", L(lang, "Модель", "Модель"), "number"))
-    sub = (L(lang, "Модель: c·N0·exp(−Z·j); в логарифмической шкале кривая улова почти прямая справа от перегиба.",
-             "Модель: c·N0·exp(−Z·j); логарифмдік шкалада ауланым қисығы иілуден оңға қарай түзу дерлік.")
+        cols.append(col("fitted", L(lang, "МНК-модель", "ЕКӘ-модель"), "number"))
+    sub = (L(lang, "МНК-модель: c·N0·exp(−Z·j); в логарифмической шкале она почти прямая справа от перегиба.",
+             "ЕКӘ-модель: c·N0·exp(−Z·j); логарифмдік шкалада ол иілуден оңға қарай түзу дерлік.")
            if gear == "seine" else L(lang, "Вертикальная линия — вершина параболы c¹.", "Тік сызық — парабола төбесі c¹."))
     return {"chart": {"kind": "fit", "x": [age_label(a) for a in ages], "series": series, "vrefs": vrefs,
                       "x_title": L(lang, "Возраст, лет", "Жасы, жыл"), "y_title": L(lang, "штук", "дана") if is_catch else L(lang, "доля", "үлес"),
@@ -322,7 +322,7 @@ def v_ca_ages(D, opt, gear):
     obs = (L(lang, "Улов факт, шт", "Нақты ауланым, дана") if is_catch else L(lang, "Доля среди рыб, подвергнутых биол. обработке", "Биол. өңдеуден өткен балықтар арасындағы үлес"))
     cols = [col("age", L(lang, "Возраст, лет", "Жасы, жыл")), col("observed", obs, "number")]
     if gear == "seine":
-        cols += [col("fitted", L(lang, "Улов модель", "Модель ауланымы"), "number"), col("weight", L(lang, "Вес МНК", "ЕКӘ салмағы"), "number"),
+        cols += [col("fitted", L(lang, "МНК-модель", "ЕКӘ-модель"), "number"), col("weight", L(lang, "Вес МНК", "ЕКӘ салмағы"), "number"),
                  col("c", "c " + L(lang, "МНК", "ЕКӘ"), "number")]
     else:
         cols += [col("c", L(lang, "c парабола", "c парабола"), "number"), col("sigma", L(lang, "σ (доля в сети)", "σ (аудағы үлес)"), "number")]
