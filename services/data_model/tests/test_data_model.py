@@ -185,3 +185,26 @@ def test_tofi_upgrade_old_install(tmp_path, monkeypatch):
     # повторный запуск ничего не меняет
     mod._seed()
     assert mod.entities.get("water_bodies")["current_version"] == n0 + 1
+
+
+def test_organizations(tmp_path, monkeypatch):
+    """Справочник «Организации» (24.10.2026): пустой, появляется и в работающей установке, читают все."""
+    import shutil
+    from conftest import load_service
+    mod = load_service("data_model", tmp_path, monkeypatch)
+    assert mod.entities.exists("organizations") and mod.records("organizations").list() == []
+    # установка до 24.10: справочника нет → создаётся при запуске, остальное не трогается
+    shutil.rmtree(mod.entities.obj_dir("organizations"))
+    assert not mod.entities.exists("organizations")
+    n0 = mod.entities.get("water_bodies")["current_version"]
+    mod._seed()
+    assert mod.entities.exists("organizations")
+    assert mod.entities.get("water_bodies")["current_version"] == n0
+    from fastapi.testclient import TestClient
+    from conftest import H
+    c = TestClient(mod.app)
+    org = {"code": "test_org", "name_ru": "Тестовая организация (для теста)"}   # синтетические данные
+    assert c.post("/entities/organizations/records", headers=H("viewer"), json={"values": org}).status_code == 403
+    assert c.post("/entities/organizations/records", headers=H("admin"), json={"values": org}).status_code == 201
+    rows = c.get("/entities/organizations/records", headers=H("operator")).json()
+    assert [r["values"]["code"] for r in (rows["items"] if isinstance(rows, dict) else rows)] == ["test_org"]

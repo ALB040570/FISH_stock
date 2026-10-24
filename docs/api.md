@@ -14,6 +14,10 @@
 | POST | `/auth/refresh` | Обновление токена доступа |
 | GET | `/auth/me` | Текущий пользователь |
 | POST | `/auth/password` | Смена своего пароля |
+| PATCH | `/auth/me` | update_me |
+| PUT | `/auth/me/avatar` | put_my_avatar |
+| DELETE | `/auth/me/avatar` | delete_my_avatar |
+| GET | `/users/{uid}/avatar` | get_avatar |
 | GET | `/roles` | Список ролей |
 | GET | `/users` | Пользователи |
 | POST | `/users` | Создать пользователя |
@@ -21,8 +25,10 @@
 | POST | `/users/{uid}/block` | Заблокировать |
 | POST | `/users/{uid}/unblock` | Разблокировать |
 | POST | `/users/{uid}/reset-password` | Сбросить пароль |
+| DELETE | `/users/{uid}/avatar` | delete_user_avatar |
 | DELETE | `/users/{uid}` | Удалить (логически) |
 | GET | `/users/directory` | Имена пользователей для подписей |
+| GET | `/users/people` | people |
 | GET | `/audit` | Журнал действий (фильтры, страницы) |
 | GET | `/audit/export.xlsx` | Выгрузка журнала в Excel |
 
@@ -43,6 +49,7 @@
 | POST | `/datasets/{ds_id}/upload` | Загрузка Excel (merge/replace, dry_run — только проверка) |
 | POST | `/upload` | Загрузка Excel с созданием набора, если его нет |
 | PUT | `/datasets/{ds_id}/data` | Правка в браузере → новая версия |
+| POST | `/fishing-places/collect` | collect_places |
 | POST | `/datasets/{ds_id}/restore/{n}` | Восстановить версию статьи |
 | GET | `/datasets/{ds_id}/diff` | Сравнение двух версий |
 | GET | `/water-bodies/status` | Сводка данных по водоёмам |
@@ -55,6 +62,8 @@
 | GET | `/health` | Состояние сервиса |
 | GET | `/catalog` | Каталог алгоритмов и версий |
 | GET | `/catalog/{code}` | Алгоритм и его версии |
+| GET | `/classifiers` | get_classifiers |
+| PUT | `/catalog/{code}/classification` | set_classification |
 | GET | `/catalog/{code}/versions/{version}/package.zip` | Пакет версии (zip) |
 | GET | `/catalog/{code}/versions/{version}/files` | Файлы пакета версии / текст файла |
 | POST | `/catalog/{code}/versions/{version}/enable` | Включить версию |
@@ -98,6 +107,17 @@
 | DELETE | `/dashboards/{did}` | Удалить дашборд |
 | GET | `/dashboards/{did}/versions` | Версии |
 | POST | `/widgets/data` | Данные виджета (источник, фильтры, агрегирование) |
+| POST | `/widgets/drill` | widget_drill |
+| POST | `/widgets/export.xlsx` | export_xlsx |
+| POST | `/widgets/export.pdf` | Руководство / раздел / статья в PDF |
+| POST | `/reports/section.pdf` | section_pdf |
+| GET | `/signal-rules` | get_signal_rules |
+| PUT | `/signal-rules` | put_signal_rules |
+| GET | `/signal-rules/versions` | signal_rules_versions |
+| GET | `/comments/counts` | comment_counts |
+| GET | `/comments` | list_comments |
+| POST | `/comments` | add_comment |
+| DELETE | `/comments/{cid}` | delete_comment |
 
 ## 5. Моделирование данных (справочник) — `/api/data-model`
 

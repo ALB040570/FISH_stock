@@ -279,3 +279,75 @@ def test_monitoring_stock(browser):
     assert page.locator(".wctl .el-radio-button.is-active").filter(has_text="средняя по виду").count() == 1
     assert not errors, errors
 
+
+
+def test_users_edit_delete_profile(browser, tmp_path):
+    """Пользователи и профиль (решение № 58): правка имени админом, удаление, свой профиль и фото."""
+    import httpx
+    api = httpx.Client(base_url=URL + "/api", timeout=30)
+    tok = api.post("/users/auth/login", json={"login": "admin", "password": PWD}).json()["access_token"]
+    H = {"Authorization": f"Bearer {tok}"}
+    org = "e2e_" + uuid.uuid4().hex[:6]   # синтетическая организация для теста
+    assert api.post("/data-model/entities/organizations/records", headers=H,
+                    json={"values": {"code": org, "name_ru": "Тестовая организация " + org}}).status_code == 201
+    name = _user("ichthyologist")
+    page = browser.new_page(viewport={"width": 1280, "height": 800})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    login(page)
+    page.goto(URL + "/admin/users")
+    row = page.locator(".el-table__row", has_text=name).first
+    row.wait_for()
+    # кнопки действий видны без прокрутки (закреплённая колонка)
+    btn = page.locator(".el-table__fixed-right, .el-table-fixed-column--right").locator("button", has_text="Изменить").first
+    assert btn.is_visible()
+    page.locator(".el-table__row", has_text=name).locator("button", has_text="Изменить").last.click()
+    dlg = page.locator(".user-dlg")
+    dlg.wait_for()
+    assert dlg.locator("input").first.is_disabled()               # логин не меняется
+    name_input = dlg.locator(".el-form-item", has_text="ФИО").locator("input")
+    name_input.fill("Исправленное Имя")
+    dlg.locator(".el-form-item", has_text="Должность").locator("input").fill("ведущий научный сотрудник")
+    dlg.locator(".el-form-item", has_text="Организация").locator(".el-select").click()
+    page.locator(".el-select-dropdown__item", has_text=org).click()
+    dlg.locator("button", has_text="Сохранить").click()
+    page.wait_for_selector("text=Исправленное Имя")
+    page.wait_for_selector("text=ведущий научный сотрудник")
+    # вход под пользователем: имя в шапке, свой профиль, фото
+    p2 = browser.new_page(viewport={"width": 1280, "height": 800})
+    p2.on("pageerror", lambda e: errors.append(str(e)))
+    login(p2, name, "user-pass-1")
+    _change_password(p2, "user-pass-1", "user-pass-2")
+    p2.wait_for_selector(".uname >> text=Исправленное Имя")
+    p2.locator(".user").first.click()
+    p2.get_by_text("Мой профиль").click()
+    pd = p2.locator(".profile-dlg")
+    pd.wait_for()
+    pd.locator(".el-form-item", has_text="Организация").get_by_text("Тестовая организация " + org).wait_for()
+    pd.locator(".el-form-item", has_text="ФИО").locator("input").fill("Имя Из Профиля")
+    # синтетическое изображение для теста (PNG, сгенерировано в браузере)
+    png = p2.evaluate("""() => { const c = document.createElement('canvas'); c.width = 300; c.height = 200;
+        const x = c.getContext('2d'); x.fillStyle = '#2a7'; x.fillRect(0, 0, 300, 200); return c.toDataURL('image/png') }""")
+    import base64
+    f = tmp_path / "photo.png"
+    f.write_bytes(base64.b64decode(png.split(",", 1)[1]))
+    pd.locator("input[type=file]").set_input_files(str(f))
+    p2.wait_for_selector("text=Фото сохранено")
+    pd.locator("button", has_text="Сохранить").click()
+    p2.wait_for_selector(".uname >> text=Имя Из Профиля")
+    p2.wait_for_selector(".user .el-avatar img")
+    p2.reload()
+    p2.wait_for_selector(".user .el-avatar img")
+    p2.wait_for_selector(".uname >> text=Имя Из Профиля")
+    # администратор удаляет пользователя через меню «⋯»
+    page.reload()
+    row = page.locator(".el-table__row", has_text="Имя Из Профиля").last
+    row.wait_for()
+    row.locator("button[aria-label='Ещё действия']").click()
+    page.locator(".el-dropdown-menu__item:visible", has_text="Удалить").click()
+    page.wait_for_selector("text=Удаление окончательное")
+    page.locator(".el-message-box button.el-button--danger").click()
+    page.wait_for_selector(f"text=Пользователь {name} удалён")
+    page.locator(".el-table__row", has_text=name).first.wait_for(state="detached")
+    assert api.post("/users/auth/login", json={"login": name, "password": "user-pass-2"}).status_code == 401
+    assert not errors, errors

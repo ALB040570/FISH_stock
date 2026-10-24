@@ -12,9 +12,9 @@
     </div>
     <div v-if="!items.length && !loading" class="muted small" style="padding:8px 0">{{ $t('mon.no_comments') }}</div>
     <div v-for="c in items" :key="c.id" class="cm-i">
-      <div class="av">{{ (c.author_name || '?').slice(0, 1).toUpperCase() }}</div>
+      <UserAvatar :user="personOf(c.author_id, c.author_name)" :size="30" />
       <div class="cm-b">
-        <div class="cm-m"><b>{{ c.author_name }}</b><span class="muted"> · {{ when(c.created_at) }}</span>
+        <div class="cm-m"><b :title="about(personOf(c.author_id, c.author_name))">{{ personOf(c.author_id, c.author_name).name }}</b><span class="muted">&nbsp;· {{ when(c.created_at) }}</span>
           <el-tag v-if="c.year" size="small" effect="plain" style="margin-left:6px">{{ c.year }}</el-tag>
           <el-button v-if="c.can_delete" size="small" text class="del" @click="del(c)"><el-icon><Delete /></el-icon></el-button>
         </div>
@@ -28,6 +28,8 @@ import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '../api'
 import { useAuth } from '../store/auth'
+import { loadPeople, personOf } from '../avatar'
+import UserAvatar from '../components/UserAvatar.vue'
 const p = defineProps({ boardId: String, widgetId: String, waterBody: String, species: String, years: { type: Array, default: () => [] } })
 const emit = defineEmits(['changed'])
 const auth = useAuth()
@@ -43,6 +45,8 @@ async function load() {
   try { items.value = await api.get('dashboards', '/comments', key()) } catch (e) { items.value = [] } finally { loading.value = false }
 }
 watch(() => [p.boardId, p.widgetId, p.waterBody, p.species], load, { immediate: true })
+loadPeople()  // актуальные имена и фото авторов (решение № 58)
+const about = (u) => [u.position].filter(Boolean).join(', ')
 async function send() {
   busy.value = true
   try {
@@ -68,8 +72,6 @@ function when(s) {
   background: var(--fs-hover); color: var(--fs-primary-2); font-size: 15px; cursor: help; }
 .cm-new { margin-bottom: 10px; }
 .cm-i { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--fs-line-soft); }
-.av { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--fs-primary-2); color: var(--fs-on-primary);
-  display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; }
 .cm-b { min-width: 0; flex: 1; }
 .cm-m { font-size: 12.5px; display: flex; align-items: center; flex-wrap: wrap; }
 .cm-t { white-space: pre-wrap; line-height: 1.45; margin-top: 2px; }
