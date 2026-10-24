@@ -36,7 +36,7 @@
         <div class="sm" :class="{ w: r.cohorts.hit }">{{ r.cohorts.n ? $t('trust.of', { k: r.cohorts.k, n: r.cohorts.n }) : '—' }}</div>
         <div v-if="r.cohorts.best" class="sm" :title="$t('trust.best_full', { x: fmt(r.cohorts.best.x, 1), a: r.cohorts.best.from, b: r.cohorts.best.to_age, y0: r.cohorts.best.y0, y1: r.cohorts.best.y1 })">×{{ fmt(r.cohorts.best.x, 1) }} → {{ r.cohorts.best.to_age }}</div>
       </div>
-      <!-- проба -->
+      <!-- рыбы, подвергнутые биологической обработке -->
       <div class="cell" @click.stop="$emit('open', r._code, r.sample.to)">
         <span :class="{ w: r.sample.small || r.sample.pooled }">{{ r.sample.n == null ? '—' : fmt(r.sample.n, 0) + ' ' + $t('trust.fish') }}</span>
         <div class="sm" :class="{ w: r.sample.pooled || r.sample.r2low }">{{ r.sample.pooled ? $t('trust.pooled') : r.sample.r2 != null ? 'R² ' + fmt(r.sample.r2, 2) : '' }}</div>

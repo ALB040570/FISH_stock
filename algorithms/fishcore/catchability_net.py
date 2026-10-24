@@ -74,8 +74,8 @@ def fit_parabola(ages, observed, m0: int, c_mean: float,
 
 
 SOURCE_CATCH = "годовой улов сетью"
-SOURCE_SAMPLE = "возрастная проба (улова сетью нет)"
-SOURCE_POOLED = "проба за все годы (мало рыб в пробе)"
+SOURCE_SAMPLE = "доли рыб, подвергнутых биологической обработке (улова сетью нет)"
+SOURCE_POOLED = "данные биологической обработки за все годы (мало рыб)"
 
 
 @dataclass
@@ -148,7 +148,7 @@ class NetCatchability:
                 "c⁰ (в вершине)": p.c0,
                 "a1 (левая ветвь)": p.a1, "a2 (правая ветвь)": p.a2,
                 f"c({age_label(r.ages[0])})": c[0], "c(m1)": c[-1], "среднее c": c.mean(), "c̄ задано": r.c_mean,
-                "рыб в пробе": r.n_sample, "улов сетью, шт": r.total_catch, "уловов сетью": r.n_hauls,
+                "рыб, подвергнутых биол. обработке": r.n_sample, "улов сетью, шт": r.total_catch, "уловов сетью": r.n_hauls,
                 "m0": r.m0, "m1": r.m1, "статус": r.status,
             })
         return pd.DataFrame(rows)

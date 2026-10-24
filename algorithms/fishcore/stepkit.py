@@ -46,7 +46,7 @@ def bundle(ctx, *required: str) -> Bundle:
     missing = [c for c in required if c not in ctx.tables]
     if missing:
         from fishrunner import UserError
-        titles = {"catches": "Уловы по ловам", "age_samples": "Возрастные пробы", "mean_weights": "Средний вес",
+        titles = {"catches": "Уловы по ловам", "age_samples": "Рыбы, подвергнутые биологической обработке", "mean_weights": "Средний вес",
                   "species_props": "Биологические параметры видов", "yearly_conditions": "Условия по годам",
                   "npc_stock": "Оценка запаса НПЦ", "npc_pdu": "ПДУ НПЦ"}
         raise UserError("Для водоёма не загружены наборы данных: " + ", ".join(titles.get(m, m) for m in missing))
