@@ -188,7 +188,39 @@ def get_profile(code: str, water_body: str, user: User = Depends(require("profil
     pid = E.profile_id(code, water_body)
     return {"algorithm": code, "water_body": water_body, "profile": prof, "schema": schema, "parameters": wparams,
             "versions": list(reversed(E.profiles.list_versions(pid))) if prof else [],
-            "available_sources": sorted({p["water_body"] for p in E.profiles.list() if p["algorithm"] == code})}
+            "available_sources": sorted({p["water_body"] for p in E.profiles.list() if p["algorithm"] == code}),
+            "water_body_species": _water_body_species(water_body)}
+
+
+def _water_body_species(water_body: str) -> list[str]:
+    """Коды видов, которые есть в текущих данных водоёма (уловы и возрастные пробы), — для «Добавить вид»."""
+    try:
+        cur = CLIENTS.current_datasets(water_body)
+    except Exception:                                   # сервис данных недоступен — список не нужен для чтения профиля
+        return []
+    out = []
+    for t in ("catches", "age_samples"):
+        for sp in ((cur.get(t) or {}).get("summary") or {}).get("species") or []:
+            if sp not in out:
+                out.append(sp)
+    return out
+
+
+@app.get("/profiles/{code}/species-defaults/{species}", tags=["профили водоёмов"])
+def species_defaults(code: str, species: str, user: User = Depends(require("profile.view"))):
+    """Значения профиля по умолчанию для вида, добавляемого в профиль водоёма: для видов эталона —
+    значения эталона (оз. Жайсан), для остальных — общие значения модели. Научную пригодность подтверждает математик."""
+    if code != "bayes_cohort":
+        raise AppError("profile.species", "Добавление вида поддерживается для байесовской когортной модели", 400)
+    from dataclasses import asdict
+    from fishcore.bayes import config as bc
+    names = CLIENTS.species_names()
+    if species not in names:
+        raise not_found("Вид")
+    ru = names[species]
+    d = asdict(bc.base_config(ru))
+    return {"species": species, "name": ru, "source": "reference" if ru in bc.DEFAULTS else "general",
+            "values": {k: d[k] for k in sorted(bc.EDITABLE)}}
 
 
 @app.get("/profiles/{code}/{water_body}/versions/{n}", tags=["профили водоёмов"])
@@ -394,7 +426,14 @@ def _plan(c: dict, overrides: dict | None = None) -> tuple[dict, list[str], list
         if _waterbody_params(m) and not prof:
             if s["algorithm"] == "bayes_cohort":
                 errors.append("Нет профиля параметров байесовской модели для этого водоёма: "
-                              "Каталог → Профили водоёмов (можно скопировать профиль Жайсана и проверить)")
+                              "Расчёты → Параметры водоёмов (можно скопировать профиль другого водоёма и проверить)")
+        if s["algorithm"] == "bayes_cohort" and prof and not run_vals.get("species"):
+            in_prof = set(((prof.get("values") or {}).get("species_profiles") or {}))
+            data_sp = (((current.get("catches") or {}).get("summary") or {}).get("species")) or []
+            miss = [names.get(x, x) for x in data_sp if x not in in_prof]
+            if miss:
+                warnings.append("Байесовская модель: видов нет в профиле водоёма, они не будут рассчитаны — "
+                                + ", ".join(miss) + " (Расчёты → Параметры водоёмов → Добавить вид)")
         merged, errs = P.merge(m, (prof or {}).get("values"), run_vals, set(names))
         errors += [f"{m['title_ru']}: {e}" for e in errs]
         steps.append({"algorithm": s["algorithm"], "version": v, "title": m["title_ru"], "params": merged,
@@ -451,12 +490,18 @@ def start_run(cid: str, body: RunIn, user: User = Depends(require("run.execute")
             raise AppError("run.base", "Шаг не входит в расчёт", 400)
         k = codes.index(body.from_step)
         for i in range(k):
-            bs = next((x for x in base["steps"] if x["algorithm"] == plan["steps"][i]["algorithm"]), None)
-            if not bs or bs.get("checksum") != plan["steps"][i]["checksum"] or base["datasets"] != plan["datasets"]:
+            ps = plan["steps"][i]
+            bs = next((x for x in base["steps"] if x["algorithm"] == ps["algorithm"]), None)
+            bv = E.find_version(ps["algorithm"], bs["version"]) if bs and bs.get("version") else None
+            if (bs and bv and bs.get("checksum") != ps["checksum"] and bv["checksum"] == bs.get("checksum")
+                    and not c["steps"][i].get("version")):
+                # шаг не пересчитывается — его версия та, с которой он выполнен в базовом запуске
+                ps.update(version=bs["version"], checksum=bs["checksum"], params=bs.get("params", ps["params"]))
+                warnings.append(f"«{ps['title']}» — из базового запуска, версия {bs['version']}")
+            if not bs or bs.get("checksum") != ps["checksum"] or base["datasets"] != plan["datasets"]:
                 raise AppError("run.base", f"Шаг «{plan['steps'][i]['title']}» базового запуска выполнен с другой версией "
                                            "алгоритма или данных — запустите расчёт целиком", 400)
-            plan["steps"][i].update(skip=True, reuse_from=str(E.run_dir(base["id"]) / bs["dir"]),
-                                    reused_run=base["id"])
+            ps.update(skip=True, reuse_from=str(E.run_dir(base["id"]) / bs["dir"]), reused_run=base["id"])
     cv = c.get("current_version")
     r = E.runs.create({"calculation_id": cid, "calculation_version": cv, "calculation_title": c["title"],
                        "water_body": c["water_body"], "status": "queued", "author": user.id, "author_name": user.name,

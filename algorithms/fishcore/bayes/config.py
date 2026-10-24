@@ -197,6 +197,22 @@ LEGACY: dict[str, dict] = {
 TOKENS = {"лещ": "lesh", "судак": "sudak", "окунь": "okun", "плотва": "plotva",
           "щука": "shuka", "сазан": "sazan", "карась": "karas", "язь": "yaz"}
 
+# FishStock: коды видов других водоёмов (жерех, сом, …) — из справочника «Виды рыб» (register_tokens)
+_EXTRA_TOKENS: dict[str, str] = {}
+
+
+def register_tokens(names: dict[str, str]) -> None:
+    """{название вида: код справочника} — для видов, которых нет в TOKENS (имена файлов и каталогов результатов)."""
+    for ru, code in (names or {}).items():
+        if ru not in TOKENS and code:
+            _EXTRA_TOKENS[ru] = str(code)
+
+
+def token(species: str) -> str:
+    """Код вида для имён файлов: TOKENS, затем коды справочника, иначе само название."""
+    return TOKENS.get(species) or _EXTRA_TOKENS.get(species) or species
+
+
 # Описание полей для формы на странице: (ключ, подпись, группа, тип, варианты/подсказка)
 SCHEMA = [
     ("s_base_mu", "База смертности: μ ln", "Естественная смертность", "float", None),
