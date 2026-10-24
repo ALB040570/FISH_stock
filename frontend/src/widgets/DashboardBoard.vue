@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div ref="rootEl">
     <el-tabs v-if="tabs.length > 1 || editing" v-model="tab" class="dtabs">
       <el-tab-pane v-for="t in tabs" :key="t.code" :name="t.code" :label="tr(t, 'title')" />
     </el-tabs>
@@ -36,7 +36,7 @@
 
     <!-- слайды: один виджет крупно + пояснение и комментарии справа -->
     <template v-if="slidesOn && visible.length">
-      <div class="slide">
+      <div ref="slideEl" class="slide" :style="{ height: slideBox + 'px' }">
         <button class="nav prev" :disabled="idx === 0" :title="$t('mon.prev')" @click="go(-1)"><el-icon><ArrowLeft /></el-icon></button>
         <div class="slide-main">
           <Widget :key="cur.id + JSON.stringify(cur.source) + JSON.stringify(cur.options) + (filters?.species || '')" :widget="cur"
@@ -50,7 +50,7 @@
         </aside>
         <button class="nav next" :disabled="idx >= visible.length - 1" :title="$t('mon.next')" @click="go(1)"><el-icon><ArrowRight /></el-icon></button>
       </div>
-      <div class="dots">
+      <div ref="dotsEl" class="dots">
         <button v-for="(w, i) in visible" :key="w.id" class="dot" :class="{ on: i === idx }" @click="idx = i">
           <span class="dn">{{ i + 1 }}</span>{{ tr(w, 'title') }}<span v-if="counts[w.id]" class="dc">💬 {{ counts[w.id] }}</span>
         </button>
@@ -164,7 +164,40 @@ watch([tab, section, cur, slidesOn, () => p.filters?.species, calcYear], () => {
   emit('state', { section: tr(sections.value.find((s) => s.code === section.value) || {}, 'title'), index: idx.value + 1,
     count: visible.value.length, slides: slidesOn.value })
 }, { immediate: true })
-const slideHeight = computed(() => Math.max(360, window.innerHeight - 380) + 'px')
+// Слайд помещается в экран без прокрутки (замечание заказчика 24.10.2026): высота = место от верха слайда до низа
+// области прокрутки за вычетом строки номеров и нижнего отступа страницы; пересчёт при смене размера окна, вкладки,
+// раздела, слайда. Меньше SLIDE_MIN не делаем — на очень низком экране страница прокручивается.
+const SLIDE_MIN = 340
+const rootEl = ref(null)
+const slideEl = ref(null)
+const dotsEl = ref(null)
+const slideBox = ref(Math.max(SLIDE_MIN, window.innerHeight - 330))
+function measureSlide() {
+  const el = slideEl.value
+  if (!el) return
+  const sc = el.closest('.main') || document.scrollingElement || document.documentElement
+  const scTop = sc === document.scrollingElement || sc === document.documentElement ? 0 : sc.getBoundingClientRect().top
+  const top = el.getBoundingClientRect().top - scTop + sc.scrollTop
+  const dots = dotsEl.value ? dotsEl.value.offsetHeight + parseFloat(getComputedStyle(dotsEl.value).marginTop || 0) : 0
+  const page = rootEl.value?.closest('.page')
+  const padB = page ? parseFloat(getComputedStyle(page).paddingBottom || 0) : 0
+  const h = Math.floor(sc.clientHeight - top - dots - padB - 2)
+  slideBox.value = Math.max(SLIDE_MIN, h)
+}
+let slideRO = null
+onMounted(() => {
+  window.addEventListener('resize', measureSlide)
+  if (window.ResizeObserver) {
+    slideRO = new ResizeObserver(() => measureSlide())
+    const sc = rootEl.value?.closest('.main')
+    if (sc) slideRO.observe(sc)
+    if (rootEl.value?.parentElement) slideRO.observe(rootEl.value.parentElement)
+  }
+  nextTick(measureSlide)
+})
+onBeforeUnmount(() => { window.removeEventListener('resize', measureSlide); slideRO?.disconnect() })
+watch([tab, section, idx, slidesOn, () => p.filters?.species, () => visible.value.length], () => nextTick(measureSlide))
+const slideHeight = computed(() => slideBox.value + 'px')
 
 // ---- связь виджетов: подсветка года, сравнение двух лет, данные виджетов, комментарии
 const highlight = ref(null)
@@ -296,30 +329,34 @@ async function report() {
 }
 </script>
 <style scoped>
-.dtabs { margin-bottom: 4px; }
-.secline { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; flex-wrap: wrap; }
+.dtabs { margin-bottom: 2px; }
+.dtabs :deep(.el-tabs__header) { margin-bottom: 8px; }
+.dtabs :deep(.el-tabs__item) { height: 34px; }
+.secline { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; flex-wrap: wrap; }
 .secs { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; }
 .grow { flex: 1; }
 .ystep { display: inline-flex; align-items: center; gap: 4px; }
 .ystep .el-button + .el-select, .ystep .el-select + .el-button { margin-left: 0; }
-.slide { display: grid; grid-template-columns: 36px minmax(0, 1fr) 380px 36px; gap: 10px; align-items: start; }
+.slide { display: grid; grid-template-columns: 36px minmax(0, 1fr) 380px 36px; gap: 10px; align-items: stretch; }
+.slide-main { min-height: 0; }
 .slide-main :deep(.widget) { margin: 0; }
-.slide-side { max-height: calc(100vh - 230px); overflow-y: auto; padding: 14px 16px; position: sticky; top: 140px; }
+.slide-side { height: 100%; box-sizing: border-box; overflow-y: auto; padding: 14px 16px; }
 .nav { align-self: center; height: 64px; border: 1px solid var(--fs-line); border-radius: 8px; background: var(--fs-card); color: var(--fs-text);
   cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .nav:hover:not(:disabled) { background: var(--fs-hover); border-color: var(--fs-primary-2); }
 .nav:disabled { opacity: .35; cursor: default; }
-.dots { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 12px 46px 0; }
+/* номера слайдов — одной строкой (листается по горизонтали), чтобы высота не зависела от числа слайдов */
+.dots { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; align-items: center; margin: 8px 46px 0; padding-bottom: 2px; scrollbar-width: thin; }
 .dot { border: 1px solid var(--fs-line); background: var(--fs-card); color: var(--fs-text); border-radius: 16px; padding: 3px 10px;
-  font-size: 12.5px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; font-family: inherit; }
+  font-size: 12.5px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; font-family: inherit; flex: none; white-space: nowrap; }
 .dot:hover { border-color: var(--fs-primary-2); }
 .dot.on { background: var(--fs-primary); color: var(--fs-on-primary); border-color: var(--fs-primary); }
 .dn { font-weight: 600; opacity: .7; }
 .dc { font-size: 11px; }
-.counter { margin-left: auto; }
+.counter { margin-left: auto; flex: none; white-space: nowrap; padding-left: 8px; }
 @media (max-width: 1200px) {
-  .slide { grid-template-columns: 30px minmax(0, 1fr) 30px; }
-  .slide-side { grid-column: 2; grid-row: 2; position: static; max-height: none; }
+  .slide { grid-template-columns: 30px minmax(0, 1fr) 30px; height: auto !important; }
+  .slide-side { grid-column: 2; grid-row: 2; height: auto; max-height: none; }
 }
 /* телефон: стрелки листания не занимают колонки (листать — номерами слайдов), карточка на всю ширину */
 @media (max-width: 640px) {

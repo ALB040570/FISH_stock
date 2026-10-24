@@ -97,6 +97,12 @@ def test_cabinets_flow(browser):
     page.locator(".cab-switch button").click()
     page.locator(".el-dropdown-menu__item").filter(has_text="Моделирование").click()
     page.wait_for_url(URL + "/design/dictionaries")
+    # логотип ведёт на «Главную»; слайд мониторинга помещается в экран без прокрутки (замечания 24.10)
+    assert page.locator("[data-test=brand]").get_attribute("href") == "/"
+    page.goto(URL + "/monitoring/waterbody/zhaysan")
+    page.wait_for_selector(".slide .widget")
+    page.wait_for_timeout(1500)
+    assert page.evaluate("(() => { const m = document.querySelector('.main'); return m.scrollHeight <= m.clientHeight })()")
     # старые адреса единого интерфейса
     for old, new in (("/data?wb=zhaysan", "/input/datasets?wb=zhaysan"), ("/runs", "/calc/runs"),
                      ("/monitoring/zhaysan?tab=pdu", "/monitoring/waterbody/zhaysan?tab=pdu"), ("/users", "/admin/users"),
