@@ -410,8 +410,8 @@ def catch_by_age_tables(res) -> list[tuple[str, str, list[dict], list[dict], str
            {"code": "place", "title": "Место лова"}, {"code": "catch_type", "title": "Тип лова"},
            {"code": "species", "title": "Вид"}, {"code": "total", "title": "Улов вида в лове", "unit": "шт", "type": "number"},
            *age_cols], rows,
-          "Y_ijd = Y_id · q_ij(t_d): улов вида в лове, разложенный по возрастным группам по долям возрастной пробы "
-          "года лова.")
+          "Y_ijd = Y_id · q_ij(t_d): улов вида в лове, разложенный по возрастным группам по долям возрастов среди рыб, "
+          "подвергнутых биологической обработке в год лова.")
     hc = res.catches[GEARS[0]]
     srows = []
     for yi, y in enumerate(hc.years):
@@ -423,12 +423,12 @@ def catch_by_age_tables(res) -> list[tuple[str, str, list[dict], list[dict], str
                 r[f"q{a}"] = round(float(hc.shares[yi, si, ai]), 6)
                 r[f"n{a}"] = num(hc.sample_raw[yi, si, ai])
             srows.append(r)
-    t2 = ("age_shares", "Доли возрастной пробы q_ij(t)",
+    t2 = ("age_shares", "Доли возрастов среди рыб, подвергнутых биологической обработке, q_ij(t)",
           [{"code": "year", "title": "Год", "type": "integer"}, {"code": "species", "title": "Вид"},
-           {"code": "n_sample", "title": "Рыб в пробе", "unit": "шт", "type": "number"},
+           {"code": "n_sample", "title": "Рыб, подвергнутых биол. обработке", "unit": "шт", "type": "number"},
            *[{"code": f"q{a}", "title": f"q, j = {a}", "type": "number"} for a in ages],
-           *[{"code": f"n{a}", "title": f"проба, j = {a}", "unit": "шт", "type": "number"} for a in ages]], srows,
-          f"q_ij(t) — доля возрастной группы j в сглаженной пробе года t: к группам j ≤ m1 прибавляется в сумме "
-          f"{config.AGE_PSEUDOCOUNT_TOTAL:g} условн. рыба (поровну); если в пробе меньше {config.AGE_POOL_MIN_SAMPLE} рыб, "
-          f"к ней прибавляются пробы соседних лет (± {config.AGE_POOL_NEIGHBOURS}).")
+           *[{"code": f"n{a}", "title": f"обработано, j = {a}", "unit": "шт", "type": "number"} for a in ages]], srows,
+          f"q_ij(t) — доля возрастной группы j среди рыб, подвергнутых биологической обработке в году t, со сглаживанием: к группам j ≤ m1 прибавляется в сумме "
+          f"{config.AGE_PSEUDOCOUNT_TOTAL:g} условн. рыба (поровну); если таких рыб меньше {config.AGE_POOL_MIN_SAMPLE}, "
+          f"прибавляются данные соседних лет (± {config.AGE_POOL_NEIGHBOURS}).")
     return [t1, t2]

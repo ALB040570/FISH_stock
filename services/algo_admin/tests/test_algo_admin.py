@@ -23,15 +23,15 @@ def test_catalog_and_profiles(calc_stack):
     assert [a["code"] for a in cat] == ["seine_catchability", "stock_by_catch", "pdu_by_age", "bayes_cohort", "forecast_pdu"]
     assert E_has_checks(aa)
     latest = {a["code"]: a["latest"] for a in cat}
-    assert latest == {"seine_catchability": "2.0.0", "stock_by_catch": "2.0.0", "pdu_by_age": "2.0.0",
-                      "bayes_cohort": "2.0.2", "forecast_pdu": "2.0.0"}
-    files = aa.get("/catalog/bayes_cohort/versions/2.0.2/files", headers=H("viewer")).json()
+    assert latest == {"seine_catchability": "2.0.1", "stock_by_catch": "2.0.1", "pdu_by_age": "2.0.1",
+                      "bayes_cohort": "2.0.3", "forecast_pdu": "2.0.1"}
+    files = aa.get("/catalog/bayes_cohort/versions/2.0.3/files", headers=H("viewer")).json()
     assert any(f["path"] == "fishcore/bayes/dynamics.py" for f in files)
     p = aa.get("/profiles/bayes_cohort/zhaysan", headers=H("viewer")).json()
     assert set(p["profile"]["values"]["species_profiles"]) == {"lesh", "sudak", "okun", "plotva", "shuka", "sazan", "karas", "yaz"}
     # «Презентация» (№ 62): каталог — названия, версии, описания; без кода, пакета и параметров водоёмов
     assert len(aa.get("/catalog", headers=H("presenter")).json()) == 5
-    for url in ("/catalog/bayes_cohort/versions/2.0.2/files", "/catalog/bayes_cohort/versions/2.0.2/package.zip",
+    for url in ("/catalog/bayes_cohort/versions/2.0.3/files", "/catalog/bayes_cohort/versions/2.0.3/package.zip",
                 "/profiles/bayes_cohort/zhaysan"):
         assert aa.get(url, headers=H("presenter")).status_code == 403, url
     # копия профиля для другого водоёма, проверка значений
@@ -41,11 +41,11 @@ def test_catalog_and_profiles(calc_stack):
     r = aa.put("/profiles/bayes_cohort/balkhash", headers=H("mathematician"), json={"values": vals})
     assert r.status_code == 422 and "β" in str(r.json())
     # отключение версии — только математик/админ
-    assert aa.post("/catalog/forecast_pdu/versions/2.0.0/disable", headers=H("ichthyologist")).status_code == 403
-    assert aa.post("/catalog/forecast_pdu/versions/2.0.0/disable", headers=H("mathematician")).status_code == 200
+    assert aa.post("/catalog/forecast_pdu/versions/2.0.1/disable", headers=H("ichthyologist")).status_code == 403
+    assert aa.post("/catalog/forecast_pdu/versions/2.0.1/disable", headers=H("mathematician")).status_code == 200
     c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan"})
     assert c.status_code == 422 and "нет включённых версий" in str(c.json())
-    aa.post("/catalog/forecast_pdu/versions/2.0.0/enable", headers=H("admin"))
+    aa.post("/catalog/forecast_pdu/versions/2.0.1/enable", headers=H("admin"))
 
 
 def test_run_stock_chain(calc_stack):
@@ -146,7 +146,7 @@ def test_reference_change_migration(tmp_path, monkeypatch):
     E = mod.E
     prev = json.loads((mod.build.PACKAGES / "bayes_cohort" / "previous_defaults_1.0.json").read_text(encoding="utf-8"))
     # как на сервере до обновления: эталонная версия 1.0.3 и профиль со значениями прежнего эталона
-    man = json.loads(json.dumps(E.manifest("seine_catchability", "2.0.0")))
+    man = json.loads(json.dumps(E.manifest("seine_catchability", "2.0.1")))
     man["version"] = "1.0.3"
     E.publish(man, {"manifest.json": json.dumps(man).encode()}, actor="system", source="builtin")
     old_vals = json.loads(json.dumps(prev))
@@ -154,7 +154,7 @@ def test_reference_change_migration(tmp_path, monkeypatch):
     E.save_profile("bayes_cohort", "balkhash", {"species_profiles": old_vals}, "u1", "до обновления")
     E.profiles.update(E.profile_id("bayes_cohort", "balkhash"), {"migrated_to": None}, actor="system")  # профиль версии 1.x
     E.seed_builtin()
-    assert [v["version"] for v in E.versions("seine_catchability")] == ["2.0.0"]
+    assert [v["version"] for v in E.versions("seine_catchability")] == ["2.0.1"]
     lesh = E.get_profile("bayes_cohort", "balkhash")["values"]["species_profiles"]["lesh"]
     assert lesh["draws"] == 3000 and lesh["catch_mode"] == "cap" and lesh["likelihood"] == "delta"
     assert "press_mu" not in lesh and lesh["target_accept"] == 0.95
@@ -197,7 +197,7 @@ def test_fix_version_keeps_previous_and_profiles(tmp_path, monkeypatch):
     from conftest import load_service
     mod = load_service("algo_admin", tmp_path, monkeypatch)
     E = mod.E
-    files = E.package_files("bayes_cohort", "2.0.2")
+    files = E.package_files("bayes_cohort", "2.0.3")
     man = json.loads(files["manifest.json"])
     man["version"] = "2.0.0"
     old = dict(files, **{"manifest.json": json.dumps(man).encode(), "algorithm.py": files["algorithm.py"] + b"\n# 2.0.0\n"})
@@ -209,13 +209,13 @@ def test_fix_version_keeps_previous_and_profiles(tmp_path, monkeypatch):
     E.save_profile("bayes_cohort", "zhaysan", vals, "u1", "правка математика")
     n = len(E.profiles.list_versions(pid))
     E.seed_builtin()
-    assert [v["version"] for v in E.versions("bayes_cohort")] == ["2.0.2", "2.0.0"]
-    assert E.latest_enabled("bayes_cohort")["version"] == "2.0.2"
+    assert [v["version"] for v in E.versions("bayes_cohort")] == ["2.0.3", "2.0.0"]
+    assert E.latest_enabled("bayes_cohort")["version"] == "2.0.3"
     assert len(E.profiles.list_versions(pid)) == n
     assert E.get_profile("bayes_cohort", "zhaysan")["values"]["species_profiles"]["lesh"]["draws"] == 1234
     # профиль, созданный пользователем на версии 2.x, переносом не затрагивается
     E.save_profile("bayes_cohort", "kapshagay", vals, "u1", "новый")
-    assert E.profiles.get(E.profile_id("bayes_cohort", "kapshagay"))["migrated_to"] == "defaults 2.0.2"
+    assert E.profiles.get(E.profile_id("bayes_cohort", "kapshagay"))["migrated_to"] == "defaults 2.0.3"
 
 
 def test_profile_species_add_remove(calc_stack):
@@ -256,13 +256,13 @@ def test_from_step_takes_base_versions(calc_stack):
     c = aa.post("/calculations/from-template", headers=H("ichthyologist"), json={"water_body": "zhaysan", "template": "stock"}).json()
     r = aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"), json={}).json()
     assert mod_process(mod)
-    files = E.package_files("seine_catchability", "2.0.0")
+    files = E.package_files("seine_catchability", "2.0.1")
     man = json.loads(files["manifest.json"]); man["version"] = "2.0.9"
     E.publish(man, dict(files, **{"manifest.json": json.dumps(man).encode()}), actor="system", source="builtin")
     r2 = aa.post(f"/calculations/{c['id']}/run", headers=H("ichthyologist"),
                  json={"from_step": "pdu_by_age", "base_run": r["id"]})
     assert r2.status_code == 201, r2.json()
     r2 = r2.json()
-    assert r2["steps"][0]["version"] == "2.0.0" and any("из базового запуска" in w for w in r2["warnings"])
+    assert r2["steps"][0]["version"] == "2.0.1" and any("из базового запуска" in w for w in r2["warnings"])
     assert mod_process(mod)
     assert [s["status"] for s in aa.get(f"/runs/{r2['id']}", headers=H()).json()["steps"]] == ["reused", "reused", "done"]
