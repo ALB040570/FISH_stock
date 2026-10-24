@@ -60,7 +60,7 @@ def test_stock_insights(calc_stack, tmp_path, monkeypatch, bayes_pl):
     ins = importlib.import_module(mod.__package__ + ".insights")
 
     def view(name, sp=None, **flt):
-        r = db.post("/widgets/data", headers=H("viewer"), json={"source": {"kind": "insight", "view": name},
+        r = db.post("/widgets/data", headers=H("ichthyologist"), json={"source": {"kind": "insight", "view": name},
                                                                  "filters": {"water_body": "zhaysan", "species": sp, **flt}, "options": {}})
         assert r.status_code == 200, r.text
         return r.json()
@@ -156,7 +156,7 @@ def test_stock_insights(calc_stack, tmp_path, monkeypatch, bayes_pl):
 
     # ---- уловистость, идея 8: c по методике рядом с q модели — те же числа, без пересчёта
     cq = view("ca_q", "lesh")
-    seine = db.post("/widgets/data", headers=H("viewer"), json={"source": {"kind": "payload", "algorithm": "seine_catchability"},
+    seine = db.post("/widgets/data", headers=H("ichthyologist"), json={"source": {"kind": "payload", "algorithm": "seine_catchability"},
                                                                 "filters": {"water_body": "zhaysan"}, "options": {}}).json()["payload"]
     f = seine["fits"]["лещ"]["2024"]
     byage = {r["age"]: r for r in cq["rows"]}

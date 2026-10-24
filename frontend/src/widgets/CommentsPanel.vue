@@ -10,7 +10,7 @@
         <el-button size="small" type="primary" :disabled="!text.trim()" :loading="busy" @click="send">{{ $t('mon.send') }}</el-button>
       </div>
     </div>
-    <div v-if="!items.length && !loading" class="muted small" style="padding:8px 0">{{ $t('mon.no_comments') }}</div>
+    <div v-if="!items.length && !loading" class="muted small" style="padding:8px 0">{{ $t(auth.can('dashboard.edit') ? 'mon.no_comments' : 'mon.no_comments_ro') }}</div>
     <div v-for="c in items" :key="c.id" class="cm-i">
       <UserAvatar :user="personOf(c.author_id, c.author_name)" :size="30" />
       <div class="cm-b">

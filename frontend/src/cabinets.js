@@ -5,10 +5,10 @@
 const STAFF = ['admin', 'ichthyologist', 'mathematician']
 
 export const CABINETS = [
-  { key: 'monitoring', base: '/monitoring/', icon: 'TrendCharts', roles: [...STAFF, 'operator', 'viewer'] },
-  { key: 'input', base: '/input/', icon: 'Upload', roles: [...STAFF, 'operator'] },
-  { key: 'calc', base: '/calc/', icon: 'Odometer', roles: STAFF },
-  { key: 'design', base: '/design/', icon: 'EditPen', roles: STAFF },
+  { key: 'monitoring', base: '/monitoring/', icon: 'TrendCharts', roles: [...STAFF, 'operator', 'viewer', 'presenter'] },
+  { key: 'input', base: '/input/', icon: 'Upload', roles: [...STAFF, 'operator', 'presenter'] },
+  { key: 'calc', base: '/calc/', icon: 'Odometer', roles: [...STAFF, 'presenter'] },
+  { key: 'design', base: '/design/', icon: 'EditPen', roles: [...STAFF, 'presenter'] },
   { key: 'admin', base: '/admin/', icon: 'Setting', roles: ['admin', 'mathematician'] },
 ]
 
@@ -95,7 +95,8 @@ export function helpRoute(path) {
 
 // Стартовая страница «Поток» (/) — для тех, кто ведёт данные через весь путь (№ 53); остальные сразу попадают
 // в свой главный кабинет. Порядок «Потока»: путь данных, затем основа; номер — клавиша на странице.
-export const FLOW_ROLES = ['admin', 'mathematician', 'ichthyologist']
+// «Презентация» (№ 62) — тоже с «Потока»: показ всего пути данных без права что-либо менять
+export const FLOW_ROLES = ['admin', 'mathematician', 'ichthyologist', 'presenter']
 export const FLOW_PATH = ['input', 'calc', 'monitoring']
 export const FLOW_BASE = ['design', 'admin']
 const MAIN = { viewer: 'monitoring', operator: 'input' }

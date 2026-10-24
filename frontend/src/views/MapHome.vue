@@ -77,10 +77,10 @@
             <span class="muted"> · {{ shortDate(shownRun(sel).finished_at) }}</span>
           </div>
           <div v-if="sel.pdu?.rows?.length" style="margin-top:8px">
-            <div class="small muted">{{ $t('map.pdu') }}, т ({{ sel.pdu.rows[0].year }})</div>
+            <div class="small muted">{{ pduLabel(sel.pdu) }}, т ({{ sel.pdu.rows[0].year }})</div>
             <el-table :data="sel.pdu.rows" size="small" max-height="190">
               <el-table-column prop="species" :label="$t('common.species')" />
-              <el-table-column :label="$t('map.pdu')" align="right"><template #default="{ row }">{{ fmt(row.pdu_t, 1) }}</template></el-table-column>
+              <el-table-column :label="pduLabel(sel.pdu)" align="right"><template #default="{ row }">{{ fmt(row.pdu_t, 1) }}</template></el-table-column>
             </el-table>
           </div>
           <div class="row" style="margin-top:12px">
@@ -109,7 +109,11 @@ import { mapState } from '../flow'
 import { canGo } from '../cabinets'
 
 const auth = useAuth()
-const hideInternal = auth.role === 'viewer'
+// внутренние состояния работы не показываются наблюдателю и «Презентации» (№ 55, 62)
+const hideInternal = ['viewer', 'presenter'].includes(auth.role)
+// без права на результаты модели на карте — только ПДУ НПЦ (официальный), не ПДУ приложения (№ 62)
+const hideModel = !auth.can('results.view')
+const pduLabel = (p) => (p?.source === 'npc' ? t('map.pdu_npc') : t('map.pdu'))
 const STATES = ['no_data', 'has_data', 'has_run', 'stale'].filter((s) => !(hideInternal && s === 'stale'))
 const COLORS = MAP_STATE
 const { t } = useI18n()
@@ -186,7 +190,7 @@ async function load() {
       // общее определение состояния с «Потоком» (src/flow.js); наблюдателю внутренние состояния не показываются (№ 55)
       const state = mapState(d, r, { hideInternal })
       return { ...p, feature: f, state, years: d?.years || [], ndatasets: d ? Object.keys(d.datasets).length : 0,
-        speciesCodes: [], speciesList: [], run: r, pdu: r?.pdu, updated_at: d?.updated_at }
+        speciesCodes: [], speciesList: [], run: r, pdu: hideModel ? r?.pdu_npc : r?.pdu, updated_at: d?.updated_at }
     })
     // виды в данных водоёмов (по набору уловов)
     const sets = await api.get('data-admin', '/datasets', { dataset_type: 'catches' })
@@ -216,7 +220,7 @@ function draw() {
       lay = L.circleMarker([w.point[0], w.point[1]], { radius: 7, ...style(w), fillOpacity: 0.8 })
     } else continue
     lay.bindTooltip(`<b>${tr(w, 'name')}</b><br>${w.years.length ? w.years[0] + '–' + w.years[w.years.length - 1] : ''}${
-      w.pdu?.rows?.length ? '<br>' + t('map.pdu') + ': ' + fmt(w.pdu.rows.reduce((a, r) => a + (r.pdu_t || 0), 0), 0) + ' т' : ''}`, { sticky: true })
+      w.pdu?.rows?.length ? '<br>' + pduLabel(w.pdu) + ': ' + fmt(w.pdu.rows.reduce((a, r) => a + (r.pdu_t || 0), 0), 0) + ' т' : ''}`, { sticky: true })
     lay.on('click', () => select(w, false))
     lay.addTo(layer)
     layers[w.id] = lay

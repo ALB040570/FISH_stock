@@ -28,7 +28,7 @@
           <el-tag v-if="a.latest" type="success">{{ $t('common.version') }} {{ a.latest }}</el-tag>
         </div>
         <el-collapse style="margin-top:8px">
-          <el-collapse-item :title="$t('catalog.params') + ` (${a.manifest?.parameters?.length || 0})`">
+          <el-collapse-item v-if="auth.can('catalog.files')" :title="$t('catalog.params') + ` (${a.manifest?.parameters?.length || 0})`">
             <el-table :data="a.manifest?.parameters || []" size="small">
               <el-table-column prop="code" :label="$t('common.code')" width="200"><template #default="{ row }"><span class="mono">{{ row.code }}</span></template></el-table-column>
               <el-table-column prop="title_ru" :label="$t('common.name')" min-width="260" />
@@ -48,8 +48,10 @@
               <el-table-column min-width="190"><template #default="{ row }"><span class="small muted">{{ row.report?.note || row.report?.comment || '' }}</span></template></el-table-column>
               <el-table-column width="270" align="right">
                 <template #default="{ row }">
-                  <el-button size="small" @click="showCode(a, row)">{{ $t('catalog.code_view') }}</el-button>
-                  <el-button size="small" @click="download('algo-admin', `/catalog/${a.code}/versions/${row.version}/package.zip`)">zip</el-button>
+                  <template v-if="auth.can('catalog.files')">
+                    <el-button size="small" @click="showCode(a, row)">{{ $t('catalog.code_view') }}</el-button>
+                    <el-button size="small" @click="download('algo-admin', `/catalog/${a.code}/versions/${row.version}/package.zip`)">zip</el-button>
+                  </template>
                   <template v-if="auth.can('catalog.manage')">
                     <el-button v-if="row.enabled" size="small" @click="toggle(a, row, false)">{{ $t('catalog.disable') }}</el-button>
                     <el-button v-else size="small" type="primary" @click="toggle(a, row, true)">{{ $t('catalog.enable') }}</el-button>

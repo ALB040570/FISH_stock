@@ -21,6 +21,12 @@ describe('кабинеты', () => {
     expect(canGo('/monitoring/help/x', 'viewer')).toBe(true)
     expect(CABINETS.every((c) => c.base.startsWith('/') && c.base.endsWith('/'))).toBe(true)
   })
+  it('«Презентация»: просмотр без администрирования, с «Потоком» (№ 62)', () => {
+    expect(cabinetsFor('presenter').map((c) => c.key)).toEqual(['monitoring', 'input', 'calc', 'design'])
+    expect(canGo('/admin/users', 'presenter')).toBe(false)
+    expect(mainPage('presenter')).toBe('/')
+    expect(homeFor('presenter', '/admin/catalog')).toBe('/')
+  })
   it('старые адреса', () => {
     expect(legacyToNew('/data?wb=zhaysan')).toBe('/input/datasets?wb=zhaysan')
     expect(legacyToNew('/data/01AB')).toBe('/input/datasets/01AB')

@@ -16,9 +16,11 @@
             <el-button v-if="['queued', 'running'].includes(run.status) && auth.can('run.execute')" type="danger" plain @click="cancel">{{ $t('runs.cancel') }}</el-button>
             <template v-if="run.status === 'done'">
               <el-button v-if="!run.is_main && auth.can('run.execute')" type="success" plain @click="setMain">★ {{ $t('runs.set_main') }}</el-button>
-              <el-button @click="download('algo-admin', `/runs/${run.id}/export.zip`)">{{ $t('runs.export_zip') }}</el-button>
-              <el-button @click="download('algo-admin', `/runs/${run.id}/report.docx`)">{{ $t('runs.report_docx') }}</el-button>
-              <el-button @click="download('algo-admin', `/runs/${run.id}/report.pdf`)">{{ $t('runs.report_pdf') }}</el-button>
+              <template v-if="full">
+                <el-button @click="download('algo-admin', `/runs/${run.id}/export.zip`)">{{ $t('runs.export_zip') }}</el-button>
+                <el-button @click="download('algo-admin', `/runs/${run.id}/report.docx`)">{{ $t('runs.report_docx') }}</el-button>
+                <el-button @click="download('algo-admin', `/runs/${run.id}/report.pdf`)">{{ $t('runs.report_pdf') }}</el-button>
+              </template>
               <el-button type="primary" @click="$router.push('/monitoring/waterbody/' + run.water_body)">{{ $t('nav.monitoring') }}</el-button>
             </template>
           </div>
@@ -27,7 +29,7 @@
         <el-alert v-for="w in run.warnings" :key="w" type="warning" :closable="false" :title="w" style="margin-bottom:6px" />
         <div class="card">
           <div class="steps">
-            <div v-for="(s, i) in run.steps" :key="i" class="st" :class="[s.status, { sel: i === cur }]" @click="pick(i)">
+            <div v-for="(s, i) in run.steps" :key="i" class="st" :class="[s.status, { sel: full && i === cur, ro: !full }]" @click="full && pick(i)">
               <div class="row" style="gap:6px"><span class="num-badge">{{ i + 1 }}</span><b>{{ s.title }}</b></div>
               <div class="small muted">{{ s.version }} · <RunStatus :status="s.status" /><template v-if="s.seconds"> · {{ dur(s.seconds) }}</template></div>
               <el-progress v-if="s.status === 'running' && run.progress" :percentage="Math.round((run.progress.fraction || 0) * 100)" :stroke-width="6" style="margin-top:4px" />
@@ -36,7 +38,7 @@
             </div>
           </div>
         </div>
-        <div v-if="cur !== null" class="card">
+        <div v-if="full && cur !== null" class="card">
           <div v-if="METHOD[run.steps[cur].algorithm]" class="method-link">
             <router-link :to="helpPath(METHOD[run.steps[cur].algorithm])"><el-icon><QuestionFilled /></el-icon> {{ $t('help.method_step') }}</router-link>
           </div>
@@ -100,6 +102,8 @@ import ResultTable from '../components/ResultTable.vue'
 import specials from '../widgets/specials'
 const VIEWS = { seine_catchability: 'seine_curves', stock_by_catch: 'net_curves', pdu_by_age: 'pdu_breakdown', bayes_cohort: 'bayes_band', forecast_pdu: 'forecast_scenarios' }
 const auth = useAuth()
+// без права на результаты («Презентация», № 62) — шаги, статусы и даты, без таблиц, файлов, журнала и отчётов
+const full = auth.can('results.view')
 const route = useRoute()
 const run = ref(null)
 const loading = ref(true)
@@ -119,7 +123,7 @@ async function load() {
   try {
     run.value = await api.get('algo-admin', `/runs/${route.params.id}`)
     error.value = null
-    if (cur.value === null) {
+    if (full && cur.value === null) {
       const done = run.value.steps.map((s, i) => [s, i]).filter(([s]) => ['done', 'reused'].includes(s.status))
       const running = run.value.steps.findIndex((s) => s.status === 'running')
       if (running >= 0) pick(running)
@@ -148,12 +152,13 @@ async function loadStep() {
 watch(tab, async (t) => { if (t === 'log' && cur.value !== null) log.value = await api.get('algo-admin', `/runs/${run.value.id}/steps/${cur.value}/log`).catch(() => null) })
 async function cancel() { run.value = await api.post('algo-admin', `/runs/${run.value.id}/cancel`) }
 async function setMain() { run.value = await api.post('algo-admin', `/runs/${run.value.id}/main`); ElMessage.success('Запуск отмечен основным для мониторинга') }
-onMounted(() => { load(); timer = setInterval(async () => { const before = run.value?.steps.map((s) => s.status).join(); await load(); if (cur.value !== null && before !== run.value.steps.map((s) => s.status).join()) loadStep() }, 2500) })
+onMounted(() => { load(); timer = setInterval(async () => { const before = run.value?.steps.map((s) => s.status).join(); await load(); if (full && cur.value !== null && before !== run.value.steps.map((s) => s.status).join()) loadStep() }, 2500) })
 onBeforeUnmount(() => clearInterval(timer))
 </script>
 <style scoped>
 .steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
 .st { border: 1px solid var(--fs-line); border-radius: 8px; padding: 10px; cursor: pointer; background: var(--fs-card-soft); }
+.st.ro { cursor: default; }
 .st.sel { border-color: var(--fs-primary); box-shadow: 0 0 0 1px var(--fs-primary) inset; }
 .st.done, .st.reused { background: var(--fs-success-bg); }
 .st.failed { background: var(--fs-danger-bg); }

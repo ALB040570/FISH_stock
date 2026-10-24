@@ -151,6 +151,81 @@ def test_viewer_and_language(browser):
     page.wait_for_selector("text=Су айдындарының картасы")
 
 
+def _tabs(page):
+    page.wait_for_selector(".slide .widget", timeout=20000)
+    return [t.strip() for t in page.locator(".mon-tabs .el-tabs__item, .el-tabs__header .el-tabs__item").all_inner_texts()]
+
+
+@pytest.mark.parametrize("role", ["viewer", "operator", "presenter"])
+def test_roles_monitoring_limited(browser, role):
+    """Наблюдатель, оператор, «Презентация» (№ 62): в мониторинге — «Исходные данные» и «ПДУ НПЦ»; прямой адрес
+    скрытой вкладки не открывает её; на карте — ПДУ НПЦ."""
+    name = _user(role)
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    login(page, name, "user-pass-1")
+    _change_password(page, "user-pass-1", "user-pass-2")
+    page.goto(URL + "/monitoring/waterbody/zhaysan?tab=pdu")
+    tabs = _tabs(page)
+    assert "Исходные данные" in tabs and "ПДУ" in tabs and "Уловистость" not in tabs and "Запасы" not in tabs, tabs
+    assert page.locator("text=ПДУ, рассчитанный в приложении").count() == 0
+    page.goto(URL + "/monitoring/waterbody/zhaysan?tab=stock&s=summary&w=st_trust")
+    page.wait_for_timeout(2500)
+    assert page.locator("text=Сходятся ли оценки запаса").count() == 0
+    page.goto(URL + "/monitoring/")
+    page.wait_for_selector("text=Зайсан (Жайсан)")
+    page.get_by_text("Зайсан (Жайсан)").first.click()
+    page.wait_for_timeout(1500)
+    if page.locator("text=ПДУ НПЦ, т").count() == 0:
+        assert page.locator("text=ПДУ, т").count() == 0                  # ПДУ приложения на карте не показывается
+    assert not errors, errors
+
+
+def test_presenter(browser):
+    """«Презентация» (№ 62): «Поток», просмотр данных, расчётов и конструктора без правки; справка — обзор."""
+    name = _user("presenter")
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    login(page, name, "user-pass-1")
+    _change_password(page, "user-pass-1", "user-pass-2")
+    assert page.url.rstrip("/") == URL                                  # стартовая — «Поток»
+    page.wait_for_selector(".flow .tile")
+    assert page.locator("[data-cabinet=admin]").count() == 0
+    page.goto(URL + "/input/datasets?wb=zhaysan")
+    page.wait_for_selector("text=Уловы по ловам")
+    assert page.locator("text=Загрузить Excel").count() == 0
+    page.goto(URL + "/calc/calculations")
+    page.wait_for_timeout(2000)
+    assert page.locator("text=Параметры водоёмов").count() == 0
+    page.goto(URL + "/calc/runs")
+    page.wait_for_selector(".el-table__row")
+    page.locator(".el-table__row").first.click()
+    page.wait_for_selector(".steps .st")
+    page.wait_for_timeout(1500)
+    for txt in ("Таблицы", "Файлы", "Отчёт Word", "Отчёт PDF", "Все результаты (zip)"):
+        assert page.get_by_text(txt, exact=True).count() == 0, txt
+    page.goto(URL + "/calc/profiles")
+    page.wait_for_url(lambda u: not u.startswith(URL + "/calc/profiles"))
+    page.goto(URL + "/design/catalog")
+    page.wait_for_selector("text=Байесовская когортная модель")
+    assert page.get_by_text("Код версии", exact=True).count() == 0
+    page.goto(URL + "/design/algorithms")
+    page.wait_for_url(lambda u: not u.startswith(URL + "/design/algorithms"))
+    page.goto(URL + "/admin/users")
+    page.wait_for_url(lambda u: not u.startswith(URL + "/admin/"))
+    page.goto(URL + "/monitoring/help")
+    page.wait_for_selector("text=О приложении FishStock")
+    assert page.locator("text=Установка и сопровождение").count() == 0 and page.locator("text=Математику: алгоритмы").count() == 0
+    page.goto(URL + "/monitoring/help/method-scheme")
+    page.wait_for_selector("h1:has-text('Схема расчёта ПДУ'), h2:has-text('Схема расчёта ПДУ')")
+    page.goto(URL + "/monitoring/waterbody/zhaysan")
+    page.wait_for_selector(".slide .widget")
+    assert page.locator(".slide-side textarea").count() == 0            # комментарии — нет
+    assert not errors, errors
+
+
 def test_monitoring_slides(browser):
     """Мониторинг: слайды по умолчанию, стрелки, режим вида, журнал ловов, комментарии, лента."""
     page = browser.new_page(viewport={"width": 1440, "height": 900})

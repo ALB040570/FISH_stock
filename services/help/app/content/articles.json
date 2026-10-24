@@ -5,7 +5,8 @@
   "order": 1,
   "routes": [
    "/help"
-  ]
+  ],
+  "presenter": true
  },
  {
   "id": "interface",
@@ -13,13 +14,15 @@
   "order": 2,
   "routes": [
    "/login"
-  ]
+  ],
+  "presenter": true
  },
  {
   "id": "roles",
   "section": "general",
   "order": 3,
-  "routes": []
+  "routes": [],
+  "presenter": true
  },
  {
   "id": "map",
@@ -27,13 +30,15 @@
   "order": 4,
   "routes": [
    "/"
-  ]
+  ],
+  "presenter": true
  },
  {
   "id": "workflow",
   "section": "general",
   "order": 5,
-  "routes": []
+  "routes": [],
+  "presenter": true
  },
  {
   "id": "dictionaries",
@@ -309,6 +314,13 @@
   "section": "glossary",
   "order": 1,
   "routes": []
+ },
+ {
+  "id": "method-scheme",
+  "section": "methodology",
+  "order": 0,
+  "routes": [],
+  "presenter": true
  },
  {
   "id": "method-overview",

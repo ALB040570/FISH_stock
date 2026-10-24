@@ -184,3 +184,16 @@ def test_people(client):
     c.delete(f"/users/{uid}", headers=h(adm))
     assert c.get("/users/people", headers=h(adm)).json()[uid] == {"name": "Пётр Иванов", "deleted": True}
     assert c.get("/users/people").status_code == 401
+
+
+def test_presenter_role(client):
+    """Роль «Презентация» (№ 62): администратор создаёт учётную запись, пользователь входит с этой ролью."""
+    c = client
+    adm = login(c, "admin", "admin-pass-1").json()["access_token"]
+    roles = {r["code"]: r["title"] for r in c.get("/roles", headers=h(adm)).json()}
+    assert roles["presenter"] == "Презентация"
+    r = c.post("/users", headers=h(adm), json={"login": "show", "name": "Показ", "role": "presenter", "password": "secret-123"})
+    assert r.status_code == 201, r.text
+    j = login(c, "show", "secret-123").json()
+    assert j["user"]["role"] == "presenter"
+    assert c.get("/users", headers=h(j["access_token"])).status_code == 403

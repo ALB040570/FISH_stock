@@ -75,7 +75,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuth } from '../store/auth'
 import { setLang, tr } from '../i18n'
-import { cabinetsFor, currentCabinet, hardGo, hasFlow, helpPath, helpRoute } from '../cabinets'
+import { cabinet, cabinetsFor, canEnter, currentCabinet, hardGo, hasFlow, helpPath, helpRoute } from '../cabinets'
 import { saveLast } from '../lastPlace'
 import ThemeToggle from './ThemeToggle.vue'
 import PasswordDialog from './PasswordDialog.vue'
@@ -120,11 +120,14 @@ const items = computed(() => {
       { index: '/monitoring/dashboards', label: t('nav.all_dashboards'), icon: 'Grid', more: true }]
     case 'input': return it('/input/datasets', 'nav.data', 'Files')
     case 'calc': return [...it('/calc/calculations', 'nav.calculations', 'Odometer'), ...it('/calc/runs', 'nav.runs', 'List'),
-      ...it('/calc/profiles', 'nav.profiles', 'Operation')]
+      ...it('/calc/profiles', 'nav.profiles', 'Operation', 'profile.view')]
     case 'design': return [...it('/design/dictionaries', 'nav.dictionaries', 'Collection'),
       ...it('/design/algorithms', 'nav.algorithms', 'Cpu', 'algo.develop'), ...it('/design/calculations', 'nav.calc_order', 'Share', 'run.execute'),
       ...it('/design/dashboards', 'nav.dash_design', 'Histogram', 'dashboard.edit'),
-      ...it('/design/signal-rules', 'cab.signal_rules', 'Bell', 'dashboard.edit')]
+      ...it('/design/signal-rules', 'cab.signal_rules', 'Bell', 'dashboard.edit'),
+      // кто не входит в «Администрирование» — каталог алгоритмов для просмотра; без права правки — список дашбордов (№ 62)
+      ...(canEnter(cabinet('admin'), auth.role) ? [] : it('/design/catalog', 'nav.catalog', 'Box', 'catalog.view')),
+      ...(auth.can('dashboard.edit') ? [] : it('/monitoring/dashboards', 'nav.dashboards', 'Histogram'))]
     case 'admin': return [...it('/admin/users', 'nav.users', 'User', 'users.manage'), ...it('/admin/audit', 'nav.audit', 'Tickets', 'audit.view'),
       ...it('/admin/catalog', 'nav.catalog', 'Box')]
   }

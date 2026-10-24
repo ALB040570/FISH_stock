@@ -23,7 +23,7 @@ def test_dashboards(calc_stack, tmp_path, monkeypatch):
     assert mon["can_edit"] and len(mon["widgets"]) > 10
     f = {"water_body": "zhaysan", "species": "lesh"}
     for w in mon["widgets"]:
-        r = db.post("/widgets/data", headers=H("viewer"), json={"source": w["source"], "filters": f,
+        r = db.post("/widgets/data", headers=H("ichthyologist"), json={"source": w["source"], "filters": f,
                                                                  "options": {**w["options"], "raw": w["type"] == "table"}})
         assert r.status_code == 200, (w["id"], r.text)
         j = r.json()
@@ -117,14 +117,14 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     db = TestClient(mod.app)
 
     def view(name, sp=None, **flt):
-        r = db.post("/widgets/data", headers=H("viewer"), json={"source": {"kind": "insight", "view": name},
+        r = db.post("/widgets/data", headers=H("ichthyologist"), json={"source": {"kind": "insight", "view": name},
                                                                  "filters": {"water_body": "zhaysan", "species": sp, **flt}, "options": {}})
         assert r.status_code == 200, r.text
         return r.json()
 
-    seine = db.post("/widgets/data", headers=H("viewer"), json={"source": {"kind": "payload", "algorithm": "seine_catchability"},
+    seine = db.post("/widgets/data", headers=H("ichthyologist"), json={"source": {"kind": "payload", "algorithm": "seine_catchability"},
                                                                 "filters": {"water_body": "zhaysan"}, "options": {}}).json()["payload"]
-    net = db.post("/widgets/data", headers=H("viewer"), json={"source": {"kind": "payload", "algorithm": "stock_by_catch"},
+    net = db.post("/widgets/data", headers=H("ichthyologist"), json={"source": {"kind": "payload", "algorithm": "stock_by_catch"},
                                                               "filters": {"water_body": "zhaysan"}, "options": {}}).json()["payload"]["net"]
     f = seine["fits"]["лещ"]["2024"]
     # контрольные числа эталона 22.10.2026 (лещ, 2024): j50 ≈ 3,1; a = 3,91; c = 0,01…0,67; Z = 0,45; R² = 0,78; 574 рыбы
@@ -160,7 +160,7 @@ def test_catchability_views(calc_stack, tmp_path, monkeypatch):
     assert k["tiles"][0]["label"] == "Иілу нүктесі j50" and "жылы" not in k["explain"]["how"][0]
     assert view("ca_seine_tiles", "nalim").get("empty")
     # ---- запас по уловам: те же числа, что в результате; виды не складываются; возрасты по порядку
-    st = db.post("/widgets/data", headers=H("viewer"), json={"source": {"kind": "payload", "algorithm": "stock_by_catch"},
+    st = db.post("/widgets/data", headers=H("ichthyologist"), json={"source": {"kind": "payload", "algorithm": "stock_by_catch"},
                                                              "filters": {"water_body": "zhaysan"}, "options": {}}).json()["payload"]["stock"]
     tot = st["species"]["лещ"]["variants"]["with_ages"]["on_stock"]["totals"]
     yt = view("st_table", "lesh")

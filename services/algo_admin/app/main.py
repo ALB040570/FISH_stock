@@ -97,7 +97,7 @@ def set_classification(code: str, body: ClassificationIn, user: User = Depends(r
 
 
 @app.get("/catalog/{code}/versions/{version}/package.zip", tags=["каталог"])
-def package(code: str, version: str, user: User = Depends(require("catalog.view"))):
+def package(code: str, version: str, user: User = Depends(require("catalog.files"))):
     if not E.find_version(code, version):
         raise not_found("Версия алгоритма")
     return Response(E.package_zip(code, version), media_type="application/zip",
@@ -105,7 +105,7 @@ def package(code: str, version: str, user: User = Depends(require("catalog.view"
 
 
 @app.get("/catalog/{code}/versions/{version}/files", tags=["каталог"])
-def package_files(code: str, version: str, path: str | None = None, user: User = Depends(require("catalog.view"))):
+def package_files(code: str, version: str, path: str | None = None, user: User = Depends(require("catalog.files"))):
     if not E.find_version(code, version):
         raise not_found("Версия алгоритма")
     files = E.package_files(code, version)
@@ -564,7 +564,7 @@ def _step(r, i):
 
 
 @app.get("/runs/{rid}/steps/{i}/result", tags=["запуски"])
-def step_result(rid: str, i: int, user: User = Depends(require("run.view"))):
+def step_result(rid: str, i: int, user: User = Depends(require("results.view"))):
     st, d = _step(_run(rid), i)
     res = read_json(d / "out" / "result.json")
     if res is None:
@@ -573,7 +573,7 @@ def step_result(rid: str, i: int, user: User = Depends(require("run.view"))):
 
 
 @app.get("/runs/{rid}/steps/{i}/log", tags=["запуски"])
-def step_log(rid: str, i: int, user: User = Depends(require("run.view"))):
+def step_log(rid: str, i: int, user: User = Depends(require("results.view"))):
     st, d = _step(_run(rid), i)
     log = (d / "log.txt").read_text(encoding="utf-8") if (d / "log.txt").exists() else ""
     status = read_json(d / "status.json", {})
@@ -582,7 +582,7 @@ def step_log(rid: str, i: int, user: User = Depends(require("run.view"))):
 
 
 @app.get("/runs/{rid}/steps/{i}/files/{name}", tags=["запуски"])
-def step_file(rid: str, i: int, name: str, user: User = Depends(require("run.view"))):
+def step_file(rid: str, i: int, name: str, user: User = Depends(require("results.view"))):
     st, d = _step(_run(rid), i)
     f = d / "out" / name
     if "/" in name or "\\" in name or name.startswith(".") or not f.is_file() or name == "state.pkl":
@@ -616,7 +616,7 @@ def set_main(rid: str, user: User = Depends(require("run.execute"))):
 
 
 @app.get("/runs/{rid}/export.zip", tags=["запуски"])
-def export_zip(rid: str, user: User = Depends(require("run.view"))):
+def export_zip(rid: str, user: User = Depends(require("results.view"))):
     r = _run(rid)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
@@ -636,7 +636,7 @@ def export_zip(rid: str, user: User = Depends(require("run.view"))):
 
 
 @app.get("/runs/{rid}/report.{fmt}", tags=["запуски"])
-def report(rid: str, fmt: str, lang: str = "ru", user: User = Depends(require("run.view"))):
+def report(rid: str, fmt: str, lang: str = "ru", user: User = Depends(require("results.view"))):
     from . import report as rep
     r = _run(rid)
     if r["status"] != "done":
@@ -678,6 +678,21 @@ def _pdu_summary(r):
     return None
 
 
+def _pdu_npc_summary(r):
+    """ПДУ НПЦ (официальный) последнего года из шага «ПДУ НПЦ по возрастам» — для ролей без права на результаты модели."""
+    for i, st in enumerate(r["steps"]):
+        if st["algorithm"] == "pdu_by_age" and st.get("status") in ("done", "reused"):
+            _, d = _step(r, i)
+            pl = (read_json(d / "out" / "result.json") or {}).get("payload") or {}
+            years = pl.get("years") or []
+            if not years:
+                return None
+            rows = [{"species": k, "pdu_t": (v.get("pdu_t") or [None])[-1], "year": years[-1]}
+                    for k, v in (pl.get("species") or {}).items()]
+            return {"source": "npc", "rows": sorted(rows, key=lambda x: -(x["pdu_t"] or 0))}
+    return None
+
+
 @app.get("/water-bodies/status", tags=["сводка"])
 def wb_status(user: User = Depends(require("run.view"))):
     mains = read_json(MAIN_RUNS, {})
@@ -698,7 +713,10 @@ def wb_status(user: User = Depends(require("run.view"))):
     for wb, s in out.items():
         ref = s.get("main_run") or s.get("last_done")
         if ref:
-            s["pdu"] = _pdu_summary(E.runs.get(ref["id"]))
+            r = E.runs.get(ref["id"])
+            s["pdu_npc"] = _pdu_npc_summary(r)
+            # ПДУ приложения (F = k·M) — результат модели; без права — ПДУ НПЦ (№ 62)
+            s["pdu"] = _pdu_summary(r) if user.can("results.summary") else s["pdu_npc"]
     return out
 
 

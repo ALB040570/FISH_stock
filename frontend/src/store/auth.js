@@ -9,6 +9,12 @@ const PERMS = {
   'profile.edit': ['admin', 'ichthyologist', 'mathematician'], 'algo.develop': ['admin', 'mathematician'],
   'catalog.manage': ['admin', 'mathematician'], 'run.execute': ['admin', 'ichthyologist', 'mathematician'],
   'dashboard.edit': ['admin', 'ichthyologist', 'mathematician'], 'dashboard.template': ['admin', 'mathematician'],
+  // результаты модели и закрытое от «Презентации» (fishcommon/auth.py, № 62)
+  'results.view': ['admin', 'ichthyologist', 'mathematician'],
+  'results.summary': ['admin', 'ichthyologist', 'mathematician', 'presenter'],
+  'profile.view': ['admin', 'ichthyologist', 'mathematician', 'operator', 'viewer'],
+  'catalog.files': ['admin', 'ichthyologist', 'mathematician', 'operator', 'viewer'],
+  'help.full': ['admin', 'ichthyologist', 'mathematician', 'operator', 'viewer'],
 }
 
 export const useAuth = defineStore('auth', {
