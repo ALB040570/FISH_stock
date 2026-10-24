@@ -47,7 +47,7 @@ def test_admin_flow(browser):
         page.wait_for_timeout(1500)
     page.goto(URL + "/input/datasets?wb=zhaysan")
     page.wait_for_selector("text=Уловы по ловам")
-    for path in ("/design/dictionaries", "/calc/calculations?wb=zhaysan", "/calc/runs", "/admin/catalog", "/calc/profiles",
+    for path in ("/design/dictionaries", "/calc/calculations?wb=zhaysan", "/calc/catalog", "/calc/params",
                  "/design/algorithms", "/monitoring/dashboards", "/admin/users", "/admin/audit", "/design/signal-rules"):
         page.goto(URL + path)
         page.wait_for_timeout(1200)
@@ -89,21 +89,22 @@ def test_cabinets_flow(browser):
     assert page.locator("[data-pipe]").count() == 2
     page.keyboard.press("2")
     page.wait_for_url(URL + "/calc/calculations")
-    assert page.locator(".cab-title").inner_text().strip() == "Расчёты"
+    assert page.locator(".cab-title").inner_text().strip() == "Расчёты запасов рыб"
     # переключатель кабинетов в шапке
     page.locator(".cab-switch button").click()
     page.locator(".el-dropdown-menu__item").filter(has_text="Конструктор").click()
     page.wait_for_url(URL + "/design/dictionaries")
     # старые адреса единого интерфейса
-    for old, new in (("/data?wb=zhaysan", "/input/datasets?wb=zhaysan"), ("/runs", "/calc/runs"),
+    for old, new in (("/data?wb=zhaysan", "/input/datasets?wb=zhaysan"), ("/runs", "/calc/calculations"),
                      ("/monitoring/zhaysan?tab=pdu", "/monitoring/waterbody/zhaysan?tab=pdu"), ("/users", "/admin/users"),
-                     ("/dictionaries", "/design/dictionaries"), ("/profiles", "/calc/profiles")):
+                     ("/dictionaries", "/design/dictionaries"), ("/admin/catalog", "/calc/catalog"),
+                     ("/calc/runs/01ABC", "/calc/calculations"), ("/profiles", "/calc/params")):
         page.goto(URL + old)
         page.wait_for_url(lambda u, n=new: u.startswith(URL + n), timeout=10000)
     # «Продолжить» ведёт на последний экран
     page.goto(URL + "/")
     page.wait_for_selector("[data-test=continue]")
-    assert page.locator("[data-test=continue]").get_attribute("href") == "/calc/profiles"
+    assert page.locator("[data-test=continue]").get_attribute("href").startswith("/calc/params")
     assert not errors, errors
     # ихтиолог: четыре кабинета, без администрирования
     p2 = browser.new_page(viewport={"width": 1440, "height": 900})
@@ -126,7 +127,7 @@ def test_operator(browser):
     page.goto(URL + "/input/datasets?wb=zhaysan")
     page.wait_for_selector("text=Уловы по ловам")
     assert page.locator("text=Загрузить Excel").count() >= 1
-    page.goto(URL + "/calc/runs")
+    page.goto(URL + "/calc/calculations")
     page.wait_for_url(lambda u: u.startswith(URL + "/input/"))
     page.goto(URL + "/monitoring/waterbody/zhaysan")
     page.wait_for_selector(".slide .widget")
@@ -143,7 +144,7 @@ def test_viewer_and_language(browser):
     page.wait_for_selector("text=Зайсан (Жайсан)")
     assert page.locator("text=данные новее расчёта").count() == 0
     assert page.locator(".cab-switch").count() == 0                    # один кабинет — переключателя нет
-    for path in ("/input/datasets?wb=zhaysan", "/calc/runs", "/admin/users", "/"):
+    for path in ("/input/datasets?wb=zhaysan", "/calc/calculations", "/admin/users", "/"):
         page.goto(URL + path)
         page.wait_for_url(lambda u: u.startswith(URL + "/monitoring/"), timeout=10000)
     assert page.locator("text=Пользователи").count() == 0
@@ -196,21 +197,20 @@ def test_presenter(browser):
     page.goto(URL + "/input/datasets?wb=zhaysan")
     page.wait_for_selector("text=Уловы по ловам")
     assert page.locator("text=Загрузить Excel").count() == 0
-    page.goto(URL + "/calc/calculations")
-    page.wait_for_timeout(2000)
-    assert page.locator("text=Параметры водоёмов").count() == 0
-    page.goto(URL + "/calc/runs")
-    page.wait_for_selector(".el-table__row")
-    page.locator(".el-table__row").first.click()
-    page.wait_for_selector(".steps .st")
-    page.wait_for_timeout(1500)
-    for txt in ("Таблицы", "Файлы", "Отчёт Word", "Отчёт PDF", "Все результаты (zip)"):
+    page.goto(URL + "/calc/calculations?wb=zhaysan")
+    page.wait_for_selector("[data-test=calcs-table] .el-table__row")
+    assert page.locator("text=Параметры алгоритмов").count() == 0 and page.locator("[data-test=calc-new]").count() == 0
+    page.locator("[data-test=calcs-table] .el-table__row").first.click()
+    page.wait_for_selector("[data-test=calc-journal]")
+    page.wait_for_timeout(1000)
+    for txt in ("Таблицы", "Файлы", "Скачать", "Пересчитать", "Протокол выполнения"):
         assert page.get_by_text(txt, exact=True).count() == 0, txt
-    page.goto(URL + "/calc/profiles")
-    page.wait_for_url(lambda u: not u.startswith(URL + "/calc/profiles"))
-    page.goto(URL + "/design/catalog")
-    page.wait_for_selector("text=Байесовская когортная модель")
-    assert page.get_by_text("Код версии", exact=True).count() == 0
+    page.goto(URL + "/calc/params")
+    page.wait_for_url(lambda u: not u.startswith(URL + "/calc/params"))
+    page.goto(URL + "/design/catalog")                                  # перенесён в «Расчёты запасов рыб» (№ 66)
+    page.wait_for_url(URL + "/calc/catalog")
+    page.wait_for_selector("text=Запас по математической модели")
+    assert page.get_by_text("Код версии", exact=True).count() == 0 and page.locator("[data-test=run-bayes_cohort]").count() == 0
     page.goto(URL + "/design/algorithms")
     page.wait_for_url(lambda u: not u.startswith(URL + "/design/algorithms"))
     page.goto(URL + "/admin/users")
@@ -336,7 +336,7 @@ def test_monitoring_checks(browser):
 
 
 def test_monitoring_stock(browser):
-    """Запас по уловам: виды за год → вид, переключатели расчёта общие для слайдов."""
+    """Запас по уловам: виды за год → вид; уловистость всегда по возрастам — переключателя нет (№ 66)."""
     page = browser.new_page(viewport={"width": 1440, "height": 900})
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -347,11 +347,10 @@ def test_monitoring_stock(browser):
     page.locator(".slide .el-table__row").first.click()
     page.wait_for_function("location.search.includes('w=st_tiles')")
     page.wait_for_selector(".slide .tile")
-    page.locator(".wctl .el-radio-button").filter(has_text="средняя по виду").click()
-    page.wait_for_selector(".wctl .el-radio-button.is-active:has-text('средняя по виду')")
+    assert page.locator(".wctl .el-radio-button").filter(has_text="средняя по виду").count() == 0
+    assert "по запасам" in page.locator(".slide").first.inner_text()
     page.locator(".nav.next").click()
     page.wait_for_selector(".slide canvas")
-    assert page.locator(".wctl .el-radio-button.is-active").filter(has_text="средняя по виду").count() == 1
     assert not errors, errors
 
 
@@ -365,7 +364,7 @@ def test_monitoring_stock_summary(browser):
     page.add_init_script("try{localStorage.removeItem('fishstock.monitoring.view')}catch(e){}")
     login(page)
     page.goto(URL + "/monitoring/waterbody/zhaysan?tab=stock")
-    page.wait_for_selector(".slide .tr.row, .slide :text('полный расчёт')")
+    page.wait_for_selector(".slide .tr.row, .slide :text('нет основного расчёта')")
     assert "s=summary" in page.url
     if page.locator(".slide .tr.row").count():
         page.locator(".slide .tr.row").first.click()
@@ -444,4 +443,59 @@ def test_users_edit_delete_profile(browser, tmp_path):
     page.wait_for_selector(f"text=Пользователь {name} удалён")
     page.locator(".el-table__row", has_text=name).first.wait_for(state="detached")
     assert api.post("/users/auth/login", json={"login": name, "password": "user-pass-2"}).status_code == 401
+    assert not errors, errors
+
+
+
+def test_calcs_catalog_params(browser):
+    """Расчёты запасов рыб (решение № 66): расчёты a–h водоёма, каталог a–k (k — «Планируется»), запуск алгоритма из
+    каталога с параметрами по умолчанию, альтернативный → основной, устаревшие и «Пересчитать устаревшие», набор
+    параметров на основе «По умолчанию» с новой версией."""
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    login(page)
+    page.goto(URL + "/calc/calculations?wb=zhaysan")
+    page.wait_for_selector("[data-test=calcs-table] .el-table__row")
+    assert page.locator("[data-test=calcs-table] .el-table__row").count() >= 8
+    # каталог: 11 алгоритмов, k планируется
+    page.goto(URL + "/calc/catalog")
+    page.wait_for_selector("[data-test=algo-removal_pdu] [data-test=planned]")
+    assert page.locator("[data-test^=algo-]").count() >= 11
+    # запуск b из каталога: новый расчёт — альтернативный (основной уже есть)
+    page.locator("[data-test=run-seine_catchability]").click()
+    page.locator("[data-test=run-wb]").click()
+    page.locator(".el-select-dropdown__item:visible", has_text="Зайсан (Жайсан)").first.click()
+    page.locator("[data-test=run-go]").click()
+    page.wait_for_url(lambda u: "/calc/calculations/" in u)
+    page.wait_for_selector("[data-test=calc-set-main]", timeout=120000)
+    page.locator("[data-test=calc-set-main]").click()
+    page.wait_for_selector("[data-test=calc-main]")
+    # расчёт c, взявший прежний основной b, устарел
+    page.goto(URL + "/calc/calculations?wb=zhaysan&stale=1")
+    page.wait_for_selector("[data-test=calcs-table] [data-test=stale]")
+    page.locator("[data-test=recalc-stale]").click()
+    import time
+    t0 = time.time()
+    while time.time() - t0 < 300:                                  # очередь: c → e → g → h по порядку
+        page.goto(URL + "/calc/calculations?wb=zhaysan")
+        page.wait_for_selector("[data-test=calcs-table] .el-table__row")
+        busy = page.locator("[data-test=calcs-table] .el-tag", has_text="в очереди").count() + \
+            page.locator("[data-test=calcs-table] .el-tag", has_text="выполняется").count()
+        if not busy and page.locator("[data-test=calcs-table] [data-test=stale]").count() == 0:
+            break
+        page.wait_for_timeout(3000)
+    assert page.locator("[data-test=calcs-table] [data-test=stale]").count() == 0
+    # параметры: набор на основе «По умолчанию» для b, правка — новая версия
+    page.goto(URL + "/calc/params?algorithm=seine_catchability")
+    page.wait_for_selector("[data-test=set-base-on]")
+    page.locator("[data-test=set-base-on]").click()
+    name = "e2e " + uuid.uuid4().hex[:6]
+    page.locator(".el-message-box input").fill(name)
+    page.locator(".el-message-box button.el-button--primary").click()
+    page.wait_for_selector("[data-test=set-save]")
+    page.locator(".prow", has_text="SEINE_MIN_SAMPLE").locator("input").fill("25")
+    page.locator("[data-test=set-save]").click()
+    page.wait_for_selector("text=Сохранена новая версия набора")
+    assert "v2" in page.locator(".list .item.sel").inner_text()
     assert not errors, errors

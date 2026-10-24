@@ -16,7 +16,7 @@
             <template v-if="mains.length">
               <div class="muted" style="margin-bottom:4px">{{ $t('monitoring.mains') }}</div>
               <div v-for="m in mains" :key="m.id" class="mrow">
-                <b>{{ m.letter }}.</b>
+                <b v-if="!(m.title || '').startsWith(m.letter + '.')">{{ m.letter }}. </b>
                 <router-link v-if="canGo('/calc/', auth.role)" :to="'/calc/calculations/' + m.id">{{ m.title }}</router-link><span v-else>{{ m.title }}</span>
                 <span class="muted"> · {{ m.finished_at ? new Date(m.finished_at).toLocaleDateString('ru-RU') : '—' }}</span>
                 <el-tag v-if="m.stale?.length && !hideInternal" size="small" type="warning" effect="plain" :title="m.stale.join('; ')">{{ $t('calcs.stale') }}</el-tag>

@@ -21,13 +21,13 @@
     <StateBlock :loading="loading" :error="error" :empty="!shown.length" :empty-text="items.length ? $t('calcs.empty_filtered') : $t('calcs.empty')">
       <div class="card">
         <el-table :data="shown" row-key="id" style="cursor:pointer" data-test="calcs-table" @row-click="(r) => $router.push('/calc/calculations/' + r.id)">
-          <el-table-column :label="$t('calcs.algorithm')" width="70" align="center">
+          <el-table-column width="56" align="center">
             <template #default="{ row }"><span class="letter" :title="row.algorithm_title">{{ row.letter || '·' }}</span></template>
           </el-table-column>
           <el-table-column :label="$t('calcs.calc')" min-width="320">
             <template #default="{ row }">
               <b>{{ row.title }}</b>
-              <div class="muted small">{{ row.algorithm_title }} · {{ row.period_text }} · {{ row.param_set_name }}<template v-if="row.param_version"> v{{ row.param_version }}</template></div>
+              <div class="muted small">{{ $t('calcs.period') }}: {{ row.period_text }} · {{ row.param_set_name }}<template v-if="row.param_version"> v{{ row.param_version }}</template></div>
             </template>
           </el-table-column>
           <el-table-column v-if="!wb" :label="$t('common.water_body')" width="160" prop="water_body_name" />

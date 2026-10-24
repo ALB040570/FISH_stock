@@ -12,7 +12,9 @@
                 <el-tag v-if="c.is_main" type="success" size="small" data-test="calc-main">★ {{ $t('calcs.main') }}</el-tag>
                 <el-tag v-else-if="c.has_result" type="info" size="small" effect="plain">{{ $t('calcs.alternative') }}</el-tag>
               </el-tooltip>
-              · {{ c.algorithm_title }} · {{ c.water_body_name }} · {{ c.period_text }}
+              <template v-if="!c.title.startsWith(c.algorithm_title)"> · {{ c.algorithm_title }}</template>
+              <template v-if="!c.title.includes(c.water_body_name)"> · {{ c.water_body_name }} · {{ c.period_text }}</template>
+              · {{ c.param_set_name }} v{{ c.param_version }}
               <template v-if="c.queue_position"> · {{ $t('runs.position') }}: {{ c.queue_position }}</template>
             </div>
           </div>
@@ -63,7 +65,7 @@
               <div class="k">{{ $t('calcs.inputs') }}</div>
               <div>
                 <div v-for="(i, dep) in c.inputs_resolved" :key="dep" class="inp">
-                  <b>{{ i.letter }}.</b>
+                  <b v-if="!(i.title || '').startsWith(i.letter + '.')">{{ i.letter }}.</b>
                   <router-link v-if="i.calc_id" :to="'/calc/calculations/' + i.calc_id">{{ i.title }}</router-link><span v-else class="muted">{{ $t('calcs.input_main_none') }}</span>
                   <span class="muted small"> · {{ i.ref === 'main' ? $t('calcs.input_main').toLowerCase() : $t('calcs.explicit') }}</span>
                   <el-tag v-if="i.calc_id && !i.has_result" size="small" type="info" effect="plain" style="margin-left:4px">{{ $t('calcs.no_result') }}</el-tag>
@@ -78,7 +80,7 @@
             </template>
             <template v-if="c.dependents?.length">
               <div class="k">{{ $t('calcs.dependents') }}</div>
-              <div><span v-for="d in c.dependents" :key="d.id" class="ds"><b>{{ d.letter }}.</b> <router-link :to="'/calc/calculations/' + d.id">{{ d.title }}</router-link></span></div>
+              <div><span v-for="d in c.dependents" :key="d.id" class="ds"><b v-if="!(d.title || '').startsWith(d.letter + '.')">{{ d.letter }}. </b><router-link :to="'/calc/calculations/' + d.id">{{ d.title }}</router-link></span></div>
             </template>
             <template v-if="c.comment">
               <div class="k">{{ $t('common.comment') }}</div><div>{{ c.comment }}</div>

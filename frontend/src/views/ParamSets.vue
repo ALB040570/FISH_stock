@@ -223,7 +223,9 @@ onMounted(async () => {
 .list .item.sel { background: var(--fs-selected); border-color: var(--fs-line); }
 .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 8px 18px; }
 .prow { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 1px dashed var(--fs-line-soft); padding: 4px 0; }
-.prow > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.prow > div:first-child { min-width: 150px; flex: 1; overflow-wrap: anywhere; }
+.prow :deep(.pf .el-select) { width: 230px !important; }
+.prow :deep(.pf .el-input-number) { width: 150px !important; }
 .prow.changed > div:first-child { font-weight: 600; }
 .chg { color: var(--fs-warning); }
 .vk { margin-left: 8px; font-family: inherit; color: var(--fs-muted); }

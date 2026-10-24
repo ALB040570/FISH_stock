@@ -50,7 +50,7 @@
       <div class="two">
         <el-form-item :label="$t('calcs.code_version')">
           <el-select v-model="f.version" style="width:100%">
-            <el-option :value="null" :label="$t('calcs.latest') + (algo?.latest ? ' (' + algo.latest + ')' : '')" />
+            <el-option value="" :label="$t('calcs.latest') + (algo?.latest ? ' (' + algo.latest + ')' : '')" />
             <el-option v-for="v in (algo?.versions || []).filter((x) => x.enabled)" :key="v.version" :value="v.version" :label="v.version + ' · ' + $t('calcs.version_pinned')" />
           </el-select>
         </el-form-item>
@@ -89,7 +89,7 @@ const species = ref([])
 const busy = ref(false)
 const err = ref(null)
 const f = reactive({ algorithm: null, water_body: null, from: null, to: null, inputs: {}, param_set: null, param_version: null,
-  calc_params: {}, version: null, title: '', comment: '' })
+  calc_params: {}, version: '', title: '', comment: '' })
 const algo = computed(() => byCode.value[f.algorithm])
 const inputs = computed(() => inputsOf(algo.value))
 const calcParams = computed(() => calcParamsOf(algo.value))
@@ -115,7 +115,7 @@ async function init() {
     algorithm: c?.algorithm || pr.algorithm || null, water_body: c?.water_body || pr.water_body || null,
     from: c?.period?.from ?? null, to: c?.period?.to ?? null, inputs: { ...(c?.inputs || {}) },
     param_set: c?.param_set || null, param_version: c?.param_version || null, calc_params: { ...(c?.calc_params || {}) },
-    version: c?.version || null, title: c?.title || '', comment: '' })
+    version: c?.version || '', title: c?.title || '', comment: '' })
   await onAlgo(true)
 }
 async function onAlgo(keep) {
@@ -147,7 +147,7 @@ async function loadInputs() {
 }
 async function save(run) {
   busy.value = true; err.value = null
-  const body = { algorithm: f.algorithm, water_body: f.water_body, title: f.title, version: f.version,
+  const body = { algorithm: f.algorithm, water_body: f.water_body, title: f.title, version: f.version || null,
     period: f.from || f.to ? { from: f.from, to: f.to } : null, inputs: f.inputs, param_set: f.param_set,
     param_version: f.param_version, calc_params: Object.fromEntries(Object.entries(f.calc_params).filter(([, v]) => v !== null && v !== undefined && !(Array.isArray(v) && !v.length))),
     comment: f.comment, run }

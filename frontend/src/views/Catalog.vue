@@ -11,14 +11,14 @@
         </el-select>
       </div>
       <div v-for="a in shown" :id="a.code" :key="a.code" class="card algo" :class="{ planned: a.planned }" :data-test="'algo-' + a.code">
-        <div class="row" style="justify-content:space-between; align-items:flex-start; gap:12px">
-          <div class="row" style="align-items:flex-start; gap:12px; flex:1; min-width:0">
+        <div class="top">
+          <div class="head">
             <span class="letter">{{ a.letter || '·' }}</span>
-            <div style="min-width:0">
+            <div style="min-width:0; flex:1">
               <h2 style="margin:0">{{ tr(a, 'title') }} <span class="muted small mono">{{ a.code }}</span></h2>
               <div class="muted small desc">{{ a.description }}</div>
               <div class="small" style="margin-top:6px">
-                <span class="muted">{{ $t('catalog.inputs') }}:</span>
+                <span class="muted">{{ $t('catalog.inputs') }}:</span>&nbsp;
                 <template v-if="inputsOf(a).length">
                   <a v-for="dep in inputsOf(a)" :key="dep" class="inp" :href="'#' + dep">{{ algoLabel(byCode[dep], tr) }}</a>
                 </template>
@@ -217,9 +217,11 @@ onMounted(async () => {
 .algo.planned { border-style: dashed; }
 .desc { margin-top: 2px; max-width: 980px; }
 .inp { margin-right: 10px; color: var(--fs-link); text-decoration: none; }
+.top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.head { display: flex; align-items: flex-start; gap: 12px; flex: 1; min-width: 0; }
 .side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: 0 0 auto; }
 .fl { padding: 3px 8px; cursor: pointer; font-family: monospace; font-size: 12px; border-radius: 4px; }
 .fl:hover { background: var(--fs-hover); }
 .fl.sel { background: var(--fs-selected); font-weight: 600; }
-@media (max-width: 640px) { .side { align-items: flex-start; } .algo > .row { flex-direction: column; } }
+@media (max-width: 640px) { .side { align-items: flex-start; } .top { flex-direction: column; } }
 </style>
