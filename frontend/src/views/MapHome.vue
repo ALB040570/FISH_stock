@@ -277,7 +277,7 @@ onBeforeUnmount(() => map && map.remove())
 watch(filtered, () => {})
 </script>
 <style scoped>
-.map-page { display: grid; grid-template-columns: 330px 1fr; height: calc(100vh - 52px); }
+.map-page { display: grid; grid-template-columns: 330px 1fr; height: calc(100vh - 52px - 26px); } /* шапка и строка разработчиков (AppLayout) */
 .panel { border-right: 1px solid var(--fs-line); background: var(--fs-card); display: flex; flex-direction: column; min-height: 0; }
 .ph { padding: 16px; border-bottom: 1px solid var(--fs-line); }
 .ph h1 { margin-bottom: 10px; }
