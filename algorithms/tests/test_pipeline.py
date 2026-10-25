@@ -247,3 +247,38 @@ def test_species_outside_reference(data_stack, tmp_path):
     assert set(r4["payload"]["species"]) == {"жерех", "сом"}
     names = {f["name"] for f in r4["files"]}
     assert {"balkhash_bayes_zherekh_prior.npz", "balkhash_bayes_som_prior.npz"} <= names, names
+
+
+def test_species_m1_above_age_groups(data_stack, tmp_path):
+    """Капчагай: у сома m1 = 26 больше старшей возрастной группы данных — вид не считается (заметка), остальные
+    виды считаются; раньше весь расчёт модели завершался IndexError (25.10.2026). Априорная проверка — секунды."""
+    from dataclasses import asdict
+    from fishcore.bayes import config as bc
+    dm, da, _ = data_stack
+    tables = upload_samples(da, "kapshagay", REPO / "samples" / "kapshagay")
+    (tmp_path / "tables.json").write_text(json.dumps(tables, ensure_ascii=False))
+    sp, gk = dict_maps(dm)
+
+    def step_wb(code, inputs=None, params=None):
+        d = tmp_path / code
+        ctx = {"run_id": "test", "step": code, "water_body": "kapshagay",
+               "params": {**manifest_defaults(code), **(params or {})}, "species_names": sp, "gear_kinds": gk,
+               "inputs": {k: str(v / "out") for k, v in (inputs or {}).items()}, "tables_path": str(tmp_path / "tables.json")}
+        executor.prepare_step(d, PKG[code], ctx)
+        st = executor.run_step(d, timeout_s=900)
+        assert st["status"] == "done", (st.get("message"), (d / "log.txt").read_text()[-2000:])
+        return d, executor.read_result(d)
+
+    general = {k: v for k, v in asdict(bc.SpeciesConfig()).items() if k in bc.EDITABLE}
+    da_, _ = step_wb("net_catchability")
+    db, _ = step_wb("seine_catchability")
+    dc, _ = step_wb("seine_likelihood", {"seine_catchability": db})
+    dd, _ = step_wb("net_likelihood", {"net_catchability": da_})
+    de, _ = step_wb("seine_stock", {"seine_likelihood": dc})
+    df, _ = step_wb("net_stock", {"net_likelihood": dd})
+    dg, _ = step_wb("combined_stock", {"seine_stock": de, "net_stock": df})
+    d3, _ = step_wb("pdu_by_age", {"combined_stock": dg})
+    _, r4 = step_wb("bayes_cohort", {"seine_likelihood": dc, "net_likelihood": dd, "combined_stock": dg, "pdu_by_age": d3},
+                    {"mode": "prior", "species_profiles": {"zherekh": general, "som": general}})
+    assert set(r4["payload"]["species"]) == {"жерех"}
+    assert any("«сом» не рассчитан" in n and "m1 = 26" in n for n in r4["notes"]), r4["notes"]

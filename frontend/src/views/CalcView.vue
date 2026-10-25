@@ -22,7 +22,9 @@
             <template v-if="auth.can('run.execute')">
               <el-button v-if="active" type="danger" plain @click="act('cancel')">{{ $t('calcs.cancel') }}</el-button>
               <el-button v-else type="primary" data-test="calc-run" :disabled="!!c.check?.errors?.length" @click="act('run')">{{ c.has_result ? $t('calcs.rerun') : $t('calcs.run') }}</el-button>
-              <el-button v-if="c.has_result && !c.is_main" type="success" plain data-test="calc-set-main" @click="act('main')">★ {{ $t('calcs.set_main') }}</el-button>
+              <el-tooltip v-if="c.has_result && !c.is_main" :content="$t('calcs.set_main_hint')" placement="bottom">
+                <el-button type="success" plain data-test="calc-set-main" @click="act('main')">★ {{ $t('calcs.set_main') }}</el-button>
+              </el-tooltip>
               <el-button v-if="!active" @click="formOpen = true"><el-icon><Edit /></el-icon>&nbsp;{{ $t('common.edit') }}</el-button>
             </template>
             <el-dropdown v-if="full && c.has_result" trigger="click" @command="onCmd">

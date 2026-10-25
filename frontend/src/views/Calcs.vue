@@ -43,7 +43,9 @@
           <el-table-column v-if="auth.can('run.execute')" width="170" align="right" fixed="right">
             <template #default="{ row }">
               <el-button v-if="!isActive(row)" size="small" @click.stop="run(row)">{{ row.has_result ? $t('calcs.rerun') : $t('calcs.run') }}</el-button>
-              <el-button v-if="row.has_result && !row.is_main" size="small" type="success" plain @click.stop="setMain(row)">★</el-button>
+              <el-tooltip v-if="row.has_result && !row.is_main" :content="$t('calcs.set_main_hint')" placement="top">
+                <el-button size="small" type="success" plain data-test="row-set-main" @click.stop="setMain(row)">★</el-button>
+              </el-tooltip>
             </template>
           </el-table-column>
         </el-table>
