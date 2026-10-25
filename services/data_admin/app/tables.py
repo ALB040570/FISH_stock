@@ -175,7 +175,7 @@ def read_excel(content: bytes, dtype: dict, species: list[dict]) -> tuple[list[s
     cols = dtype["columns"]
     by_name: dict[str, str] = {}
     for c in cols:
-        for cand in (c["code"], c.get("title_ru"), c.get("title_kk")):
+        for cand in (c["code"], c.get("title_ru"), c.get("title_kk"), *(c.get("aliases") or [])):
             if cand:
                 by_name[_norm(cand)] = c["code"]
     sc = dtype.get("species_columns") or {}

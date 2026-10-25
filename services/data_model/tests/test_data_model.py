@@ -187,6 +187,31 @@ def test_tofi_upgrade_old_install(tmp_path, monkeypatch):
     assert mod.entities.get("water_bodies")["current_version"] == n0 + 1
 
 
+def test_v_cr_rename_old_install(tmp_path, monkeypatch):
+    """Установка до 25.10: столбец v_cr назывался «Крейсерская скорость» → «Скорость блуждания» (решение № 72),
+    прежние названия остаются другими написаниями; название, изменённое пользователем, не трогается."""
+    from conftest import load_service
+    mod = load_service("data_model", tmp_path, monkeypatch)
+    t = mod.dtypes.get("species_props")
+    old = [{k: x for k, x in dict(c, title_ru="Крейсерская скорость, м/с", title_kk="Круиздік жылдамдық, м/с").items()
+            if k not in ("aliases", "hint")} if c["code"] == "v_cr" else c for c in t["columns"]]
+    mod.dtypes.update("species_props", {"columns": old}, actor="test")
+    n0 = mod.dtypes.get("species_props")["current_version"]
+    mod._seed()
+    c = next(c for c in mod.dtypes.get("species_props")["columns"] if c["code"] == "v_cr")
+    assert c["title_ru"] == "Скорость блуждания, м/с" and c["title_kk"] == "Кезбе жылдамдығы, м/с"
+    assert set(c["aliases"]) == {"Крейсерская скорость, м/с", "Круиздік жылдамдық, м/с"} and c["hint"]
+    assert mod.dtypes.get("species_props")["current_version"] == n0 + 1
+    mod._seed()
+    assert mod.dtypes.get("species_props")["current_version"] == n0 + 1
+    # название пользователя сохраняется, прежние названия поставки всё равно принимаются
+    mod.dtypes.update("species_props", {"columns": [dict(c, title_ru="Моя скорость", aliases=[]) if c["code"] == "v_cr"
+                                                    else c for c in mod.dtypes.get("species_props")["columns"]]}, actor="t")
+    mod._rename_v_cr()
+    c = next(c for c in mod.dtypes.get("species_props")["columns"] if c["code"] == "v_cr")
+    assert c["title_ru"] == "Моя скорость" and "Крейсерская скорость, м/с" in c["aliases"]
+
+
 def test_organizations(tmp_path, monkeypatch):
     """Справочник «Организации» (24.10.2026): пустой, появляется и в работающей установке, читают все."""
     import shutil

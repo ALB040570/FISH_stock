@@ -78,6 +78,7 @@ def _seed() -> None:
     _migrate_regions()
     _upgrade_schemas()
     _rename_age_samples()
+    _rename_v_cr()
 
     sp = have("species")
     for code, ru, kk, latin, pred in seed_defs.SPECIES:
@@ -130,6 +131,40 @@ def _rename_age_samples() -> None:
     dtypes.add_version("age_samples", {"schema.json": dumps(d).encode()},
                        {"comment": "обновление поставки: «Возрастные пробы» → «Рыбы, подвергнутые биологической обработке»"},
                        "system")
+
+
+def _rename_v_cr() -> None:
+    """Установки до 25.10.2026: столбец v_cr «Крейсерская скорость» → «Скорость блуждания» (решение № 72).
+    Меняются только названия, совпадающие с прежней поставкой; прежние названия остаются другими написаниями
+    заголовка (файлы с ними загружаются как раньше)."""
+    t = dtypes.get("species_props")
+    if not t:
+        return
+    cols, changed = [], False
+    for c in t["columns"]:
+        if c.get("code") == "v_cr":
+            c = dict(c)
+            for k, old, new in (("title_ru", seed_defs.V_CR_OLD[0], seed_defs.V_CR_TITLE[0]),
+                                ("title_kk", seed_defs.V_CR_OLD[1], seed_defs.V_CR_TITLE[1])):
+                if c.get(k) == old:
+                    c[k] = new
+                    changed = True
+            al = list(c.get("aliases") or [])
+            for a in seed_defs.V_CR_OLD:
+                if a not in al and a not in (c.get("title_ru"), c.get("title_kk")):
+                    al.append(a)
+                    changed = True
+            c["aliases"] = al
+            if not c.get("hint"):
+                c["hint"] = seed_defs.V_CR_HINT
+                changed = True
+        cols.append(c)
+    if not changed:
+        return
+    dtypes.update("species_props", {"columns": cols}, actor="system")
+    d = {**t, "columns": cols}
+    dtypes.add_version("species_props", {"schema.json": dumps(d).encode()},
+                       {"comment": "обновление поставки: «Крейсерская скорость» → «Скорость блуждания»"}, "system")
 
 
 def _migrate_regions() -> None:

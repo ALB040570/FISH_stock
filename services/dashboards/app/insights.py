@@ -798,7 +798,7 @@ def v_lifecycle(D, opt):
 
 PROP_COLS = [("is_predator", "Хищник", "boolean", None), ("fecundity_min", "Плодовитость мин.", "number", "икр."),
              ("fecundity_max", "Плодовитость макс.", "number", "икр."), ("k_net", "Уловистость сети", "number", None),
-             ("k_seine", "Уловистость невода", "number", None), ("v_cr", "Крейсерская скорость", "number", "м/с"),
+             ("k_seine", "Уловистость невода", "number", None), ("v_cr", "Скорость блуждания", "number", "м/с"),
              ("fry_density", "Предельная плотность мальков", "number", "шт/м²")]
 
 
