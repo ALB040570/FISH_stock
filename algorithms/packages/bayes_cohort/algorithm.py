@@ -67,6 +67,13 @@ def run(ctx):
         errs = bc.validate(ru, values)
         if errs:
             raise UserError(f"Профиль вида «{ru}»: " + "; ".join(errs))
+        lg = values.get("likelihood_gears") or "both"
+        if lg != "both":
+            gear = config.GEAR_NET if lg == "net" else config.GEAR_SEINE
+            ph = res.per_haul.get((gear, "with_ages"))
+            if ph is None or not len(ph):
+                raise UserError(f"Профиль вида «{ru}»: в правдоподобии выбрано «только "
+                                f"{'сеть' if lg == 'net' else 'невод'}», но ловов этим орудием в данных водоёма нет")
         runtime[ru] = values
     # модели нужны возрастные группы 2…m1 в данных: если m1 из «Биологических параметров видов» больше старшей
     # группы таблиц (например, сом m1 = 26 при группах до 16), вид не считается — с понятной заметкой, а не ошибкой
@@ -82,6 +89,8 @@ def run(ctx):
         raise UserError("Ни один вид не рассчитан: у всех видов m1 больше старшей возрастной группы данных")
     bc.set_runtime(runtime)
     mode = ctx.params.get("mode") or "new"
+    if mode == "egg_scale":
+        return _egg_scale(ctx, res, pdu, props, list(runtime), code_by_ru)
     payload, rows, per_species = {}, [], {}
     n = len(runtime)
     species = list(runtime)
@@ -134,3 +143,45 @@ def run(ctx):
     ctx.set_payload({"mode": mode, "species": payload})
     ctx.save_state({"res": res, "props": props, "pdu": pdu, "mode": mode, "species": list(runtime), "runtime": runtime})
     return {"species": list(runtime), "mode": mode}
+
+
+EGG_COLUMNS = [
+    {"code": "species", "title": "Вид"}, {"code": "gears", "title": "В правдоподобии"},
+    {"code": "current", "title": "egg_scale сейчас", "type": "number"},
+    {"code": "rmse_current", "title": "Отклонение сейчас (лог.)", "type": "number"},
+    {"code": "suggested", "title": "egg_scale подобранный", "type": "number"},
+    {"code": "rmse_suggested", "title": "Отклонение после подбора (лог.)", "type": "number"},
+    {"code": "last_current", "title": "Последний год: модель сейчас", "unit": "шт", "type": "number"},
+    {"code": "last_suggested", "title": "Последний год: после подбора", "unit": "шт", "type": "number"},
+    {"code": "last_target", "title": "Последний год: оценка по уловам", "unit": "шт", "type": "number"},
+]
+GEAR_TITLES = {"both": "сеть и невод", "net": "только сеть", "seine": "только невод"}
+
+
+def _egg_scale(ctx, res, pdu, props, species, code_by_ru):
+    """Режим «подбор масштаба выживаемости икры» (решение № 73): без выборки, секунды. Результат — таблица
+    «сейчас / подобрано»; значения переносит в набор параметров математик. Состояние для прогноза не сохраняется:
+    такой расчёт нельзя брать входом прогноза (j)."""
+    from fishcore.bayes.calibrate import fit_egg_scale
+    from fishcore.bayes.inputs import build_new_inputs
+    rows, out = [], {}
+    for ru in species:
+        cfg = bc.get_config(ru)
+        inp = build_new_inputs(ru, cfg, res, pdu, props)
+        r = fit_egg_scale(inp, cfg)
+        out[ru] = r
+        last = lambda a: None if not a else float(a[-1])  # noqa: E731
+        rows.append({"species": ru, "gears": GEAR_TITLES.get(cfg.likelihood_gears, cfg.likelihood_gears),
+                     "current": cfg.egg_scale, "rmse_current": r["rmse_current"], "suggested": r["suggested"],
+                     "rmse_suggested": r["rmse_suggested"], "last_current": last(r["traj_current"]),
+                     "last_suggested": last(r["traj_suggested"]), "last_target": last(r["target"])})
+        if r.get("at_grid_edge"):
+            ctx.note(f"{ru}: подобранное значение на границе перебора (10⁻⁶ или 1) — проверьте профиль вида "
+                     "(смертность, плодовитость) и данные")
+        ctx.metric(f"egg_scale_{code_by_ru.get(ru, ru)}", r["suggested"], f"egg_scale подобранный: {ru}")
+    ctx.note("Подбор масштаба выживаемости икры: при медианах априорных распределений траектория модели "
+             "(возрасты 2+) приближается к оценкам запаса по орудиям правдоподобия (наименьшее отклонение логарифмов). "
+             "Перенесите значения в набор «Параметры алгоритма» (поле «Выживаемость икры: масштаб») и выполните расчёт "
+             "модели. Этот расчёт не делайте основным — у него нет выборок для прогноза.")
+    ctx.add_table("egg_scale_fit", "Подбор масштаба выживаемости икры (egg_scale)", EGG_COLUMNS, rows)
+    ctx.set_payload({"mode": "egg_scale", "not_main": True, "species": {}, "egg_scale": out})

@@ -282,3 +282,69 @@ def test_species_m1_above_age_groups(data_stack, tmp_path):
                     {"mode": "prior", "species_profiles": {"zherekh": general, "som": general}})
     assert set(r4["payload"]["species"]) == {"жерех"}
     assert any("«сом» не рассчитан" in n and "m1 = 26" in n for n in r4["notes"]), r4["notes"]
+
+
+def test_likelihood_gears_net_only(data_stack, tmp_path):
+    """Самаркандское: ловов неводом нет — в профиле вида «Оценки запаса в правдоподобии: только сеть» (решение № 73):
+    в правдоподобии только ловы сети, поправки q_net нет, начальный запас — по сети; «только невод» — понятная ошибка.
+    По умолчанию («сеть и невод») модель та же, что раньше (q_net есть)."""
+    import pickle
+    from dataclasses import asdict, replace
+    from fishcore.bayes import config as bc
+    from fishcore.bayes.inputs import build_new_inputs
+    from fishcore.bayes.model import build_model
+    dm, da, _ = data_stack
+    tables = upload_samples(da, "samarkand", REPO / "samples" / "samarkand")
+    (tmp_path / "tables.json").write_text(json.dumps(tables, ensure_ascii=False))
+    sp, gk = dict_maps(dm)
+
+    def step_wb(code, inputs=None, params=None, name=None, ok=True):
+        d = tmp_path / (name or code)
+        ctx = {"run_id": "test", "step": code, "water_body": "samarkand",
+               "params": {**manifest_defaults(code), **(params or {})}, "species_names": sp, "gear_kinds": gk,
+               "inputs": {k: str(v / "out") for k, v in (inputs or {}).items()}, "tables_path": str(tmp_path / "tables.json")}
+        executor.prepare_step(d, PKG[code], ctx)
+        st = executor.run_step(d, timeout_s=900)
+        if ok:
+            assert st["status"] == "done", (st.get("message"), (d / "log.txt").read_text()[-2000:])
+        return d, st, executor.read_result(d) if st["status"] == "done" else None
+
+    karas = {k: v for k, v in asdict(bc.DEFAULTS["карась"]).items() if k in bc.EDITABLE}
+    da_, *_ = step_wb("net_catchability")
+    db, *_ = step_wb("seine_catchability")
+    dc, *_ = step_wb("seine_likelihood", {"seine_catchability": db})
+    dd, *_ = step_wb("net_likelihood", {"net_catchability": da_})
+    de, *_ = step_wb("seine_stock", {"seine_likelihood": dc})
+    df, *_ = step_wb("net_stock", {"net_likelihood": dd})
+    dg, *_ = step_wb("combined_stock", {"seine_stock": de, "net_stock": df})
+    d3, *_ = step_wb("pdu_by_age", {"combined_stock": dg})
+    ins = {"seine_likelihood": dc, "net_likelihood": dd, "combined_stock": dg, "pdu_by_age": d3}
+    d4, _, r4 = step_wb("bayes_cohort", ins, {"mode": "prior", "species_profiles": {"karas": {**karas, "likelihood_gears": "net"}}})
+    assert set(r4["payload"]["species"]) == {"карась"}
+    notes = r4["payload"]["species"]["карась"]["meta"]["notes"]
+    assert any("только оценки по ловам: сеть" in n for n in notes) and any("начальный запас — по оценкам: сеть" in n for n in notes)
+    _, st, _ = step_wb("bayes_cohort", ins, {"mode": "prior", "species_profiles": {"karas": {**karas, "likelihood_gears": "seine"}}},
+                       name="bayes_seine", ok=False)
+    assert st["status"] == "failed" and "только невод" in st["message"] and "ловов этим орудием" in st["message"]
+    # модель: при «только сеть» нет log_q_net, все наблюдения — сеть, начальный запас = оценка сетью первого года
+    with open(d4 / "out" / "state.pkl", "rb") as f:
+        s = pickle.load(f)
+    cfg = replace(bc.DEFAULTS["карась"], likelihood_gears="net")
+    inp = build_new_inputs("карась", cfg, s["res"], s["pdu"], s["props"])
+    assert set(np.asarray(inp.gear).tolist()) == {0}
+    assert np.allclose(inp.consts.x0, np.maximum(np.nan_to_num(inp.yearly_net[0]), 1.0))
+    names = {v.name for v in build_model(inp, cfg).free_RVs}
+    assert "log_q_net" not in names and "s_base" in names
+    inp2 = build_new_inputs("карась", bc.DEFAULTS["карась"], s["res"], s["pdu"], s["props"])
+    assert "log_q_net" in {v.name for v in build_model(inp2, bc.DEFAULTS["карась"]).free_RVs}
+    # подбор масштаба выживаемости икры (решение № 73): таблица «сейчас / подобрано», расчёт не может быть основным
+    _, _, r5 = step_wb("bayes_cohort", ins, {"mode": "egg_scale", "species_profiles": {"karas": {**karas, "likelihood_gears": "net"}}},
+                       name="bayes_egg")
+    row = r5["tables"]["egg_scale_fit"]["rows"][0]
+    assert row["species"] == "карась" and row["gears"] == "только сеть" and row["current"] == bc.DEFAULTS["карась"].egg_scale
+    assert row["suggested"] and row["rmse_suggested"] < row["rmse_current"]
+    assert r5["payload"]["not_main"] is True and r5["payload"]["species"] == {}
+    from fishcore.bayes.calibrate import fit_egg_scale, trajectory
+    f = fit_egg_scale(inp, cfg)
+    assert f["suggested"] == row["suggested"] and len(f["traj_suggested"]) == len(inp.years)
+    assert np.allclose(trajectory(inp, replace(cfg, egg_scale=f["suggested"])), f["traj_suggested"])

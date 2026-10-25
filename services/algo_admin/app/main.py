@@ -553,6 +553,9 @@ def set_main(cid: str, user: User = Depends(require("run.execute"))):
     c = _calc(cid)
     if not c.get("result"):
         raise AppError("calc.no_result", "Основным можно сделать только расчёт с результатом", 400)
+    if c["result"].get("not_main"):
+        raise AppError("calc.not_main", "Этот расчёт — служебный (подбор масштаба выживаемости икры): у него нет "
+                       "результата модели, основным его сделать нельзя", 400)
     prev = E.main_of(c["water_body"], c["algorithm"])
     E.set_main(c["water_body"], c["algorithm"], cid, user.id, user.name)
     E.add_journal(cid, {"action": "main", "by": user.id, "by_name": user.name, "message": "сделан основным"})

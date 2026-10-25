@@ -470,12 +470,14 @@ class Engine:
                 "by_name": c.get("queued_by_name"), **{k: entry[k] for k in ("version", "checksum", "param_set",
                                                                               "param_set_name", "param_version",
                                                                               "period", "datasets", "inputs")}}
+        if (result.get("payload") or {}).get("not_main"):          # служебный режим (подбор egg_scale, № 73)
+            info["not_main"] = True
         self.add_journal(cid, {**entry, "status": "done", "message": "Расчёт выполнен", "result_id": rid,
                                "seconds": res.get("seconds"), "years": info["years"], "notes": info["notes"],
                                "warnings": warnings})
         cur = self.update_calc(cid, state="done", finished_at=info["finished_at"], message="Расчёт выполнен",
                                progress=None, result=info, cancel_requested=False)
-        if not self.main_of(c["water_body"], c["algorithm"]):        # первый результат — основной
+        if not self.main_of(c["water_body"], c["algorithm"]) and not info.get("not_main"):  # первый результат — основной
             self.set_main(c["water_body"], c["algorithm"], cid, "system", "автоматически (первый результат)")
         return cur
 

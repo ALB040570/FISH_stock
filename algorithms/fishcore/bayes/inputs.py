@@ -21,10 +21,11 @@ import numpy as np
 import pandas as pd
 
 from .. import config as app_config
-from .config import SpeciesConfig
+from .config import GEAR_CODES, SpeciesConfig
 from .dynamics import Constants, maturity, zero_log_ref
 
 GEAR_NAMES = ("сеть", "невод")
+GEAR_TITLES = {"net": "сеть", "seine": "невод"}
 
 
 @dataclass
@@ -105,6 +106,16 @@ def build_new_inputs(species: str, cfg: SpeciesConfig, res=None, pdu=None, props
     stock = np.concatenate(parts)
     year_idx = np.concatenate(yidx)
     gear = np.concatenate(gears)
+    if cfg.likelihood_gears != "both":
+        # в правдоподобии только одно орудие (решение № 73): ловы другого орудия не используются
+        g_keep = GEAR_CODES[cfg.likelihood_gears]
+        keep_g = gear == g_keep
+        if not keep_g.any():
+            raise ValueError(f"Вид «{species}»: в правдоподобии выбрано «только {GEAR_TITLES[cfg.likelihood_gears]}», "
+                             f"но ловов этим орудием в данных нет — выберите другое орудие")
+        notes.append(f"в правдоподобии — только оценки по ловам: {GEAR_TITLES[cfg.likelihood_gears]} "
+                     f"({int(keep_g.sum())} ловов); поправка уловистости сети q_net не используется")
+        stock, year_idx, gear = stock[keep_g], year_idx[keep_g], gear[keep_g]
     unrecorded = np.isnan(stock).all(axis=1)
     dropped = 0
     if cfg.unrecorded == "drop":
@@ -128,7 +139,10 @@ def build_new_inputs(species: str, cfg: SpeciesConfig, res=None, pdu=None, props
     yearly_final = res.yearly[(MEAN, "with_ages", meth)][:, si, :][:, sel]
     yearly_net = res.yearly[(app_config.GEAR_NET, "with_ages", meth)][:, si, :][:, sel]
     yearly_seine = res.yearly[(app_config.GEAR_SEINE, "with_ages", meth)][:, si, :][:, sel]
-    src = yearly_seine if cfg.x0_source == "seine" else yearly_final
+    x0_src = cfg.likelihood_gears if cfg.likelihood_gears != "both" else cfg.x0_source
+    src = {"seine": yearly_seine, "net": yearly_net}.get(x0_src, yearly_final)
+    if cfg.likelihood_gears != "both":
+        notes.append(f"начальный запас — по оценкам: {GEAR_TITLES[cfg.likelihood_gears]}")
     x0 = np.nan_to_num(src[0], nan=0.0)
     low = x0 < 1.0
     if low.any():

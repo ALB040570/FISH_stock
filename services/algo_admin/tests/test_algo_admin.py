@@ -42,7 +42,7 @@ def test_catalog_and_default_sets(calc_stack):
     assert [a["letter"] for a in cat] == list("abcdefghijk")
     by = {a["code"]: a for a in cat}
     assert by["removal_pdu"]["planned"] and by["removal_pdu"]["versions"] == []
-    assert all(by[c]["latest"] == "3.0.0" for c in CHAIN + ["forecast_pdu"]) and by["bayes_cohort"]["latest"] == "3.0.1"
+    assert all(by[c]["latest"] == "3.0.0" for c in CHAIN + ["forecast_pdu"]) and by["bayes_cohort"]["latest"] == "3.0.2"
     assert "stock_by_catch" not in by and "bayes_checks" not in by
     assert by["seine_likelihood"]["manifest"]["requires"]["steps"] == ["seine_catchability"]
     assert by["bayes_cohort"]["manifest"]["requires"]["steps"] == ["seine_likelihood", "net_likelihood", "combined_stock", "pdu_by_age"]
@@ -323,3 +323,21 @@ def test_queue_chain_before_inputs_exist(calc_stack):
     for cid in ids:
         c = aa.get(f"/calcs/{cid}", headers=H()).json()
         assert c["state"] == "done" and c["is_main"] and not c["stale"], (c["algorithm"], c.get("message"))
+
+
+def test_egg_scale_calc_is_not_main(calc_stack):
+    """Модель в режиме «подбор масштаба выживаемости икры» (решение № 73): таблица подбора, расчёт служебный —
+    не становится основным ни автоматически, ни вручную."""
+    dm, da, aa, mod = calc_stack
+    chain(aa, mod)
+    d = {s["algorithm"]: s for s in aa.get("/param-sets", headers=H()).json() if s["is_default"]}
+    s = aa.post("/param-sets", headers=H("mathematician"), json={"name": "подбор egg_scale", "base": d["bayes_cohort"]["id"]}).json()
+    aa.put(f"/param-sets/{s['id']}", headers=H("mathematician"), json={"name": s["name"], "values": {**s["values"], "mode": "egg_scale"}})
+    c = make(aa, "bayes_cohort", param_set=s["id"], calc_params={"species": ["lesh"]})
+    work(mod)
+    c = aa.get(f"/calcs/{c['id']}", headers=H()).json()
+    assert c["state"] == "done", c.get("message")
+    assert c["result"]["not_main"] and not c["is_main"]
+    assert aa.post(f"/calcs/{c['id']}/main", headers=H("ichthyologist")).status_code == 400
+    rows = aa.get(f"/calcs/{c['id']}/result", headers=H("ichthyologist")).json()["tables"]["egg_scale_fit"]["rows"]
+    assert [r["species"] for r in rows] == ["лещ"] and rows[0]["suggested"]

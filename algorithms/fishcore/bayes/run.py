@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import config as app_config
-from .config import DEFAULTS, TOKENS, SpeciesConfig, get_config, token
+from .config import DEFAULTS, TOKENS, SpeciesConfig, get_config, token, uses_q_net
 from .dynamics import NumpyOps, simulate
 from .inputs import BayesInputs, build_inputs
 
@@ -135,7 +135,7 @@ def sample_prior_params(c, cfg: SpeciesConfig, n: int, rng) -> dict:
         "sigma_stock": np.abs(rng.normal(0.0, cfg.sigma_stock_sd, n)),
     }
     p["q_bias"] = np.exp(p["q_raw"])
-    if cfg.gear_effect:
+    if uses_q_net(cfg):
         p["log_q_net"] = rng.normal(0.0, cfg.q_net_sigma, n)
     if cfg.likelihood == "delta":
         p["zero_c"] = rng.normal(0.0, cfg.zero_c_sigma, (n, 2))

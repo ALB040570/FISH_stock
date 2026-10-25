@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .config import SpeciesConfig
+from .config import SpeciesConfig, uses_q_net
 from .dynamics import pytensor_ops, simulate, zero_log_lambda
 from .inputs import BayesInputs
 
@@ -80,7 +80,7 @@ def build_model(inp: BayesInputs, cfg: SpeciesConfig):
         X_estimated_obs = X_estimated.take(obs_indices_pt, axis=1)          # возрасты 2..m1
         idx_joint_pt = pt.constant(inp.year_idx, dtype="int64")
         X_at_date_joint = X_estimated_obs.take(idx_joint_pt, axis=0)       # (ловы, возрасты 2..m1)
-        if cfg.gear_effect:
+        if uses_q_net(cfg):
             # поправка уловистости сети: невод — опорное орудие, у ловов сети ожидание × q_net
             log_q_net = pm.Normal("log_q_net", mu=0.0, sigma=cfg.q_net_sigma)
             pm.Deterministic("q_net", pt.exp(log_q_net))

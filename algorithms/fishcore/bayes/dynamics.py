@@ -324,7 +324,7 @@ def expected_observations(X_estimated, q_bias, year_idx: np.ndarray, cfg: Specie
     gear — орудие лова (0 — сеть, 1 — невод); без gear поправка сети не применяется.
     """
     obs = np.asarray(X_estimated)[:, 1:][year_idx]     # возрасты 2..m1
-    if gear is not None and cfg.gear_effect:
+    if gear is not None and cfg.gear_effect and cfg.likelihood_gears == "both":
         obs = obs * np.exp(log_q_net * (np.asarray(gear) == 0))[:, None]
     k = cfg.likelihood_from - 2
     return obs[:, k:] * q_bias[k + 1:], slice(k, None)
