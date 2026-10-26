@@ -103,8 +103,7 @@
           <div class="ctitle">{{ $t('cmp.table') }}</div>
           <el-table :data="rows" size="small" border style="width:100%">
             <el-table-column :label="$t('cmp.col_series')" min-width="220">
-              <template #default="{ row }"><span class="dot" :style="{ background: row.color }" /> {{ row.label }}
-                <div v-if="lab.full[row.n] && lab.full[row.n] !== row.label" class="small muted">{{ lab.full[row.n] }}</div>
+              <template #default="{ row }"><span :title="lab.full[row.n] || ''"><span class="dot" :style="{ background: row.color }" /> {{ row.label }}</span>
                 <div v-if="row.error" class="small err">{{ row.error }}</div></template>
             </el-table-column>
             <el-table-column :label="$t('cmp.col_last', { y: years.last || '' })" align="right" min-width="120">
