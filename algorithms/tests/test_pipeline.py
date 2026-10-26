@@ -215,7 +215,8 @@ def test_forecast_k_scenarios(env):
     assert 0.4 < med[0] / med[1] < 0.6 and 1.3 < med[2] / med[1] < 1.6
     rows = r1["tables"]["k_scenarios"]["rows"]
     assert [r["k"] for r in rows] == [0.5, 1.0, 1.5] and np.isclose(rows[1]["pdu_pct_base"], 100)
-    assert r1["payload"]["k_grid"] == [0.5, 1.0, 1.5] and "k_npc" in r1["payload"]["summary"][0]
+    assert r1["payload"]["k_grid"] == [0.5, 1.0, 1.5]
+    assert not any("npc" in k for k in ks)                      # с ПДУ НПЦ сценарии не сравниваются
     d = tmp / "k_bad"
     ctx = {"water_body": "zhaysan", "params": {**manifest_defaults("forecast_pdu"), **base, "k_scenarios": "0,5; x"},
            "species_names": sp, "gear_kinds": gk, "inputs": {"bayes_cohort": str(tmp / "bayes_k" / "out")},

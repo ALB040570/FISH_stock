@@ -26,20 +26,6 @@ def _k_grid(ctx):
         raise UserError(str(e)) from None
 
 
-def _k_npc(ks, pdu, npc):
-    """k, при котором медиана ПДУ F = k·M равна ПДУ НПЦ (линейная интерполяция по сценариям).
-    (значение, «<» / «>» / None): вне диапазона сценариев — край диапазона и знак."""
-    if not npc or len(ks) < 2 or any(v is None for v in pdu):
-        return None, None
-    if npc < pdu[0]:
-        return ks[0], "<"
-    if npc > pdu[-1]:
-        return ks[-1], ">"
-    for i in range(len(ks) - 1):
-        a, b = pdu[i], pdu[i + 1]
-        if a <= npc <= b:
-            return (ks[i] if b == a else ks[i] + (npc - a) / (b - a) * (ks[i + 1] - ks[i])), None
-    return None, None
 
 
 def _settings(ctx, ru, code, k_grid=()) -> ForecastSettings:
@@ -136,15 +122,12 @@ def run(ctx):
             base_k = 1.0 if 1.0 in ks else res.settings.k
             kp = {kk: res.k_pdu_tonnes(kk) for kk in ks}
             base = float(np.median((kp[base_k] if base_k in kp else res.pdu_tonnes("baranov"))[:, 0]))
-            med1 = [float(np.median(kp[kk][:, 0])) for kk in ks]
-            kn, side = _k_npc(ks, med1, npc_last)
             out[ru]["k_scen"] = {
                 "k": ks, "base_k": base_k, "pdu_t_q": [jq(q(kp[kk][:, 0])) for kk in ks],
                 "pdu_t_median_years": [jq(np.median(kp[kk], axis=0)) for kk in ks],
                 "F": [float(np.median(res.k_F[kk][:, 0])) for kk in ks],
                 "total_end_q": [jq(q(res.k_total(kk)[:, -1])) for kk in ks],
-                "p_decline": [res.k_p_decline(kk) for kk in ks], "p_decline_none": res.p_decline("none"),
-                "k_npc": kn, "k_npc_side": side, "npc_last": npc_last}
+                "p_decline": [res.k_p_decline(kk) for kk in ks], "p_decline_none": res.p_decline("none")}
             for j, kk in enumerate(ks):
                 pq = q(kp[kk][:, 0])
                 krows.append({"species": ru, "k": kk, "F": out[ru]["k_scen"]["F"][j], "pdu_t": float(pq[2]),
@@ -162,7 +145,6 @@ def run(ctx):
             **{f"p_decline_{sc}": res.p_decline(sc) for sc in SCENARIOS},
             **{f"total_end_{sc}": float(np.median(res.total(sc)[:, -1])) for sc in SCENARIOS},
             "year_last": res.years_hist[-1], "year_first_fc": res.years_fc[0], "year_last_fc": res.years_fc[-1],
-            **({"k_npc": out[ru]["k_scen"]["k_npc"], "k_npc_side": out[ru]["k_scen"]["k_npc_side"]} if res.k_grid else {}),
         })
         rows = []
         for sc in SCENARIOS:

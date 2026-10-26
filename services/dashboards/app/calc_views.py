@@ -1544,11 +1544,6 @@ def _k_species(D, opt):
     return pl, meta, R, code, K
 
 
-def _k_npc_text(k, side, lang):
-    if k is None:
-        return "—"
-    return {"<": L(lang, f"меньше {_kf(k)}", f"{_kf(k)}-тен аз"), ">": L(lang, f"больше {_kf(k)}", f"{_kf(k)}-тен көп")}.get(side, f"≈ {nf(k, 2)}")
-
 
 def v_fc_k(D, opt):
     pl, meta, R, code, K = _k_species(D, opt)
@@ -1559,10 +1554,6 @@ def v_fc_k(D, opt):
     bands = [{"name": L(lang, "ПДУ, 95 %", "ШРА, 95 %"), "lo": [p[0] for p in P], "hi": [p[4] for p in P], "op": 0.16, "c": 1},
              {"name": L(lang, "ПДУ, 50 %", "ШРА, 50 %"), "lo": [p[1] for p in P], "hi": [p[3] for p in P], "op": 0.3, "c": 1}]
     lines = [{"name": L(lang, f"ПДУ {y1}, медиана", f"ШРА {y1}, медиана"), "values": [p[2] for p in P], "c": 1, "bold": True}]
-    npc = K.get("npc_last")
-    if npc:
-        lines.append({"name": L(lang, f"ПДУ НПЦ {R['years_hist'][-1]} (для сравнения)", f"ҒӨО ШРА {R['years_hist'][-1]} (салыстыру үшін)"),
-                      "values": [npc] * len(ks), "c": 3, "dash": True})
     base = next((p[2] for k, p in zip(ks, P) if k == K.get("base_k")), None)
     rows = [{"k": _kf(k), "F": K["F"][i], "pdu": P[i][2], "lo": P[i][0], "hi": P[i][4],
              "pct": P[i][2] / base * 100 if base else None, "end": K["total_end_q"][i][2], "p_dec": K["p_decline"][i] * 100,
@@ -1576,10 +1567,8 @@ def v_fc_k(D, opt):
                         col("end", L(lang, f"Численность {ye}", f"Саны {ye}"), "integer"),
                         col("p_dec", L(lang, f"Вероятность снижения к {ye}, %", f"{ye} дейін төмендеу ықтималдығы, %"), "number")],
             "rows": rows,
-            "notes": [L(lang, f"F = k·M: k = 1 — промысловая смертность равна естественной. ПДУ {y1} — медиана и интервалы по {R.get('n_draws')} траекториям модели; "
-                              f"ПДУ НПЦ соответствует k {_k_npc_text(K.get('k_npc'), K.get('k_npc_side'), lang)}.",
-                        f"F = k·M: k = 1 — кәсіптік өлім табиғи өлімге тең. {y1} ШРА — модельдің {R.get('n_draws')} траекториясы бойынша медиана және аралықтар; "
-                              f"ҒӨО ШРА k {_k_npc_text(K.get('k_npc'), K.get('k_npc_side'), lang)} сәйкес.")],
+            "notes": [L(lang, f"F = k·M: k = 1 — промысловая смертность равна естественной. ПДУ {y1} — медиана и интервалы по {R.get('n_draws')} траекториям модели.",
+                        f"F = k·M: k = 1 — кәсіптік өлім табиғи өлімге тең. {y1} ШРА — модельдің {R.get('n_draws')} траекториясы бойынша медиана және аралықтар.")],
             **_fcommon(D, meta, code, L(lang, "сценарии k", "k сценарийлері"))}
 
 
@@ -1628,25 +1617,21 @@ def v_fc_k_species(D, opt):
         for key, k in (("d_lo", lo_k), ("d_base", base_k), ("d_hi", hi_k)):
             r[key] = K["p_decline"][idx[k]] * 100 if k in idx else None
         r["d_none"] = (K.get("p_decline_none") or 0) * 100
-        r["npc"] = K.get("npc_last")
-        r["k_npc"] = _k_npc_text(K.get("k_npc"), K.get("k_npc_side"), lang)
         r["_sort"] = r.get(f"p{grid.index(base_k)}") if base_k in grid else 0
         rows.append(r)
     if not rows:
         raise _no_k(D)
     rows.sort(key=lambda r: -(r.pop("_sort") or 0))
     cols = [col("species", L(lang, "Вид", "Түр"))]
-    cols += [col(f"p{i}", L(lang, f"ПДУ {y1}, k = {_kf(k)}, т", f"ШРА {y1}, k = {_kf(k)}, т"), "number") for i, k in enumerate(grid)]
-    cols += [col("d_lo", L(lang, f"Снижение к {ye}, k = {_kf(lo_k)}, %", f"{ye} дейін төмендеу, k = {_kf(lo_k)}, %"), "number"),
-             col("d_base", L(lang, f"Снижение, k = {_kf(base_k)}, %", f"Төмендеу, k = {_kf(base_k)}, %"), "number"),
-             col("d_hi", L(lang, f"Снижение, k = {_kf(hi_k)}, %", f"Төмендеу, k = {_kf(hi_k)}, %"), "number"),
-             col("d_none", L(lang, "Снижение без промысла, %", "Кәсіпшіліксіз төмендеу, %"), "number"),
-             col("npc", L(lang, "ПДУ НПЦ, т (для сравнения)", "ҒӨО ШРА, т (салыстыру үшін)"), "number"),
-             col("k_npc", L(lang, "ПДУ НПЦ соответствует k", "ҒӨО ШРА сәйкес k"))]
+    cols += [col(f"p{i}", L(lang, f"ПДУ k = {_kf(k)}, т", f"ШРА k = {_kf(k)}, т"), "number") for i, k in enumerate(grid)]
+    cols += [col("d_lo", L(lang, f"Риск k = {_kf(lo_k)}, %", f"Қауіп k = {_kf(lo_k)}, %"), "number"),
+             col("d_base", L(lang, f"Риск k = {_kf(base_k)}, %", f"Қауіп k = {_kf(base_k)}, %"), "number"),
+             col("d_hi", L(lang, f"Риск k = {_kf(hi_k)}, %", f"Қауіп k = {_kf(hi_k)}, %"), "number"),
+             col("d_none", L(lang, "Риск без промысла, %", "Кәсіпшіліксіз қауіп, %"), "number")]
     return {"columns": cols, "rows": rows, "default_view": "table", "row_action": "species", "chart": None,
-            "notes": [L(lang, f"F = k·M; k = 1 — промысловая смертность равна естественной. ПДУ — медиана первого прогнозного года; «снижение» — вероятность, "
+            "notes": [L(lang, f"F = k·M; k = 1 — промысловая смертность равна естественной. ПДУ — медиана {y1} г., т; «риск» — вероятность, "
                               f"что численность в {ye} г. будет ниже последнего года истории. Щелчок по строке — сценарии вида.",
-                        f"F = k·M; k = 1 — кәсіптік өлім табиғи өлімге тең. ШРА — бірінші болжам жылының медианасы; «төмендеу» — {ye} ж. саны "
+                        f"F = k·M; k = 1 — кәсіптік өлім табиғи өлімге тең. ШРА — {y1} ж. медианасы, т; «қауіп» — {ye} ж. саны "
                               f"тарихтың соңғы жылынан төмен болу ықтималдығы. Жолды басу — түрдің сценарийлері.")],
             **_fcommon(D, meta, None, L(lang, "сценарии k", "k сценарийлері"))}
 
