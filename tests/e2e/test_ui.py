@@ -217,12 +217,16 @@ def test_compare_calcs(browser):
     # ссылку можно открыть заново (коллеге): тот же набор рядов; ряд убирается крестиком
     p2 = browser.new_page(viewport={"width": 1440, "height": 1000})
     login(p2)
+    calls = []
+    p2.on("request", lambda r: calls.append(r.url) if "/compare/series" in r.url else None)
     p2.goto(link)
     p2.wait_for_selector("[data-test=cmp-stock] canvas", timeout=20000)
     assert p2.locator("[data-test^=cmp-chip-]").count() == n
     p2.locator("[data-test=cmp-chip-0] .x").click()
     p2.wait_for_timeout(800)
     assert p2.locator("[data-test^=cmp-chip-]").count() == n - 1 and p2.url.count("s=f~") == n - 1
+    assert len(calls) == 1                                                  # убрать ряд — без нового запроса
+    assert p2.locator("[data-test=cmp-table] .el-table__body tr").count() == n - 1
     p2.locator("[data-test=cmp-measure] .el-radio-button").nth(1).click()
     p2.wait_for_timeout(1200)
     assert "m=f" in p2.url and p2.locator("text=Промысловая биомасса (запас) по годам").count() == 1

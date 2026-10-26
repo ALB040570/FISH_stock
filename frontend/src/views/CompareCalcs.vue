@@ -80,7 +80,7 @@
       </div>
 
       <template v-else>
-        <div v-if="dataLoading && !seriesData.length" class="card state">{{ $t('common.loading') }}</div>
+        <div v-if="dataLoading && !rowsData.length" class="card state">{{ $t('common.loading') }}</div>
         <el-alert v-if="dataError" type="error" :closable="false" show-icon :title="String(dataError.message || dataError)" />
         <section class="card chart" v-if="stockOpt" data-test="cmp-stock">
           <div class="ctitle">{{ state.measure === 'fishable' ? $t('cmp.ch_fishable') : $t('cmp.ch_total') }}</div>
@@ -260,24 +260,31 @@ async function presetCalcs(sp) {
 }
 
 // ---------------------------------------------------------------- данные рядов
-const seriesData = ref([])
+// данные кешируются по ряду, показателю и языку: убрать ряд — без запроса, добавить — запрашивается только новый
+const cache = reactive(new Map())
+const ck = (it) => `${state.value.measure}|${locale.value}|${itemKey(it)}`
 const dataLoading = ref(false)
 const dataError = ref(null)
 let reqN = 0
 async function loadSeries() {
   const n = ++reqN
   dataError.value = null
-  if (!items.value.length) { seriesData.value = []; return }
+  const need = items.value.filter((it) => !cache.has(ck(it)))
+  if (!need.length) return
+  const keys = need.map(ck)
   dataLoading.value = true
   try {
-    const d = await api.post('dashboards', '/compare/series', { series: items.value, measure: state.value.measure, lang: locale.value })
-    if (n === reqN) seriesData.value = d.series || []
-  } catch (e) { if (n === reqN) { dataError.value = e; seriesData.value = [] } } finally { if (n === reqN) dataLoading.value = false }
+    const d = await api.post('dashboards', '/compare/series', { series: need, measure: state.value.measure, lang: locale.value })
+    ;(d.series || []).forEach((x, j) => cache.set(keys[j], x))
+  } catch (e) { if (n === reqN) dataError.value = e } finally { if (n === reqN) dataLoading.value = false }
 }
 watch(() => [JSON.stringify(items.value), state.value.measure, locale.value], loadSeries)
 
-// данные — в порядке рядов ссылки (пока ответ не пришёл — пусто)
-const rowsData = computed(() => (seriesData.value.length === items.value.length ? seriesData.value : []))
+// данные — в порядке рядов ссылки (пока не пришли все — пусто)
+const rowsData = computed(() => {
+  const a = items.value.map((it) => cache.get(ck(it)))
+  return a.every(Boolean) ? a : []
+})
 const lab = computed(() => seriesLabels(rowsData.value, t))
 const labels = computed(() => lab.value.labels)
 const common = computed(() => lab.value.common)
