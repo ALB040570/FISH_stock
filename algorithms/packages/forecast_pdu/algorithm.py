@@ -10,14 +10,39 @@ from fishcore.ages import age_title
 from fishcore.bayes import run as R
 from fishcore.bayes.dynamics import NumpyOps, mortality_matrix
 from fishcore.data_source import load_fish_props, load_npc
-from fishcore.forecast import (MAX_HORIZON, SCENARIO_TITLES, SCENARIOS, ForecastSettings, posterior_from_npz, q,
-                               run_forecast)
+from fishcore.forecast import (K_GRID_DEFAULT, MAX_HORIZON, SCENARIO_TITLES, SCENARIOS, ForecastSettings, parse_k_grid,
+                               posterior_from_npz, q, run_forecast)
 from fishcore.pdu_npc import filled_weights
 
 jq = views.jq
 
 
-def _settings(ctx, ru, code) -> ForecastSettings:
+def _k_grid(ctx):
+    from fishrunner import UserError
+    raw = ctx.params.get("k_scenarios")
+    try:
+        return parse_k_grid(K_GRID_DEFAULT if raw is None else raw)
+    except ValueError as e:
+        raise UserError(str(e)) from None
+
+
+def _k_npc(ks, pdu, npc):
+    """k, при котором медиана ПДУ F = k·M равна ПДУ НПЦ (линейная интерполяция по сценариям).
+    (значение, «<» / «>» / None): вне диапазона сценариев — край диапазона и знак."""
+    if not npc or len(ks) < 2 or any(v is None for v in pdu):
+        return None, None
+    if npc < pdu[0]:
+        return ks[0], "<"
+    if npc > pdu[-1]:
+        return ks[-1], ">"
+    for i in range(len(ks) - 1):
+        a, b = pdu[i], pdu[i + 1]
+        if a <= npc <= b:
+            return (ks[i] if b == a else ks[i] + (npc - a) / (b - a) * (ks[i + 1] - ks[i])), None
+    return None, None
+
+
+def _settings(ctx, ru, code, k_grid=()) -> ForecastSettings:
     p = ctx.params
     mort = (p.get("mortality") or {}).get(code) or (p.get("mortality") or {}).get(ru) or {}
     pdu_map = p.get("pdu_t") or {}
@@ -26,7 +51,7 @@ def _settings(ctx, ru, code) -> ForecastSettings:
                             areas={int(y): float(v) for y, v in (p.get("areas") or {}).items() if v not in (None, "")},
                             mortality={int(y): float(v) for y, v in mort.items() if v not in (None, "")},
                             pdu_t=None if pdu_t in (None, "") else float(pdu_t),
-                            seed=int(p.get("seed") if p.get("seed") is not None else 42))
+                            seed=int(p.get("seed") if p.get("seed") is not None else 42), k_grid=tuple(k_grid))
 
 
 def _hist_s_mature(post):
@@ -48,6 +73,7 @@ def run(ctx):
     h = int(ctx.params.get("horizon") or 5)
     if not 1 <= h <= MAX_HORIZON:
         raise UserError(f"Горизонт прогноза — от 1 до {MAX_HORIZON} лет")
+    k_grid = _k_grid(ctx)
     props = load_fish_props(ctx.water_body, b)
     _, pdu_df = load_npc(ctx.water_body, b)
     code_by_ru = {ru: code for code, ru in ctx.species_names.items()}
@@ -56,7 +82,7 @@ def run(ctx):
     if not files:
         raise UserError("В результатах байесовской модели нет расчёта в режиме «расчёт» (априорная проверка не подходит)")
     wanted = ctx.params.get("species")
-    out, summary, xrows = {}, [], {}
+    out, summary, xrows, krows = {}, [], {}, []
     posts = []
     for f in files:
         loaded = R.load_npz(f)
@@ -72,7 +98,7 @@ def run(ctx):
     for i, (post, code) in enumerate(posts):
         ru = post.species
         ctx.progress(i / len(posts), species=ru)
-        s = _settings(ctx, ru, code)
+        s = _settings(ctx, ru, code, k_grid)
         wh, filled = filled_weights(props, ru, post.years, post.ages)
         y_last = post.years[-1]
         npc_last = float(pdu_df.loc[y_last, ru]) if (pdu_df is not None and y_last in pdu_df.index
@@ -105,6 +131,27 @@ def run(ctx):
                          "pdu_fixed_t": res.pdu_fixed_t, "npc_last": npc_last},
             "notes": res.notes,
         }
+        if res.k_grid:
+            ks = res.k_grid
+            base_k = 1.0 if 1.0 in ks else res.settings.k
+            kp = {kk: res.k_pdu_tonnes(kk) for kk in ks}
+            base = float(np.median((kp[base_k] if base_k in kp else res.pdu_tonnes("baranov"))[:, 0]))
+            med1 = [float(np.median(kp[kk][:, 0])) for kk in ks]
+            kn, side = _k_npc(ks, med1, npc_last)
+            out[ru]["k_scen"] = {
+                "k": ks, "base_k": base_k, "pdu_t_q": [jq(q(kp[kk][:, 0])) for kk in ks],
+                "pdu_t_median_years": [jq(np.median(kp[kk], axis=0)) for kk in ks],
+                "F": [float(np.median(res.k_F[kk][:, 0])) for kk in ks],
+                "total_end_q": [jq(q(res.k_total(kk)[:, -1])) for kk in ks],
+                "p_decline": [res.k_p_decline(kk) for kk in ks], "p_decline_none": res.p_decline("none"),
+                "k_npc": kn, "k_npc_side": side, "npc_last": npc_last}
+            for j, kk in enumerate(ks):
+                pq = q(kp[kk][:, 0])
+                krows.append({"species": ru, "k": kk, "F": out[ru]["k_scen"]["F"][j], "pdu_t": float(pq[2]),
+                              "pdu_t_q025": float(pq[0]), "pdu_t_q975": float(pq[4]),
+                              "pdu_pct_base": float(pq[2]) / base * 100 if base > 0 else None,
+                              "total_end": float(np.median(res.k_total(kk)[:, -1])),
+                              "p_decline": res.k_p_decline(kk) * 100, "p_decline_none": res.p_decline("none") * 100})
         bq = res.pdu_tonnes("baranov")[:, 0]
         summary.append({
             "species": ru, "code": code, "total_last": float(np.median(res.hist_total[:, -1])),
@@ -115,6 +162,7 @@ def run(ctx):
             **{f"p_decline_{sc}": res.p_decline(sc) for sc in SCENARIOS},
             **{f"total_end_{sc}": float(np.median(res.total(sc)[:, -1])) for sc in SCENARIOS},
             "year_last": res.years_hist[-1], "year_first_fc": res.years_fc[0], "year_last_fc": res.years_fc[-1],
+            **({"k_npc": out[ru]["k_scen"]["k_npc"], "k_npc_side": out[ru]["k_scen"]["k_npc_side"]} if res.k_grid else {}),
         })
         rows = []
         for sc in SCENARIOS:
@@ -160,9 +208,26 @@ def run(ctx):
         {"code": "p_decline_fixed", "title": "Вероятность снижения (фикс. ПДУ)", "type": "number"},
         {"code": "p_decline_none", "title": "Вероятность снижения (без промысла)", "type": "number"}], summary)
 
+    if krows:
+        y1 = summary[0]["year_first_fc"] if summary else None
+        base_k = 1.0 if 1.0 in k_grid else float(ctx.params.get("k") or 1.0)
+        base_title = f"{base_k:g}".replace(".", ",")
+        ctx.add_table("k_scenarios", "Сценарии k: ПДУ и вероятность снижения запаса", [
+            {"code": "species", "title": "Вид"}, {"code": "k", "title": "k", "type": "number"},
+            {"code": "F", "title": "F, первый год", "type": "number"},
+            {"code": "pdu_t", "title": f"ПДУ {y1}, медиана", "unit": "т", "type": "number"},
+            {"code": "pdu_t_q025", "title": "ПДУ 2,5 %", "unit": "т", "type": "number"},
+            {"code": "pdu_t_q975", "title": "ПДУ 97,5 %", "unit": "т", "type": "number"},
+            {"code": "pdu_pct_base", "title": f"ПДУ, % от k = {base_title}", "unit": "%", "type": "number"},
+            {"code": "total_end", "title": "Численность в конце прогноза, медиана", "unit": "шт", "type": "number"},
+            {"code": "p_decline", "title": "Вероятность снижения запаса", "unit": "%", "type": "number"},
+            {"code": "p_decline_none", "title": "Вероятность снижения без промысла", "unit": "%", "type": "number"}], krows)
+
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as xw:
         pd.DataFrame(summary).to_excel(xw, sheet_name="Сводка", index=False)
+        if krows:
+            pd.DataFrame(krows).to_excel(xw, sheet_name="Сценарии k", index=False)
         for ru, rows in xrows.items():
             df = pd.DataFrame([{**{k: v for k, v in r.items() if k != "pdu_pcs_by_age"},
                                 **{f"ПДУ шт, {age_title(int(a))}": v for a, v in r["pdu_pcs_by_age"].items()}}
@@ -171,7 +236,7 @@ def run(ctx):
         views.autowidth(xw)
     ctx.add_file("forecast.xlsx", "Прогноз и ПДУ (Excel)").write_bytes(buf.getvalue())
     ctx.set_payload({"species": out, "summary": summary, "k": float(ctx.params.get("k") or 1.0), "horizon": h,
-                     "scenario_titles": SCENARIO_TITLES})
+                     "scenario_titles": SCENARIO_TITLES, "k_grid": list(k_grid)})
     for r in summary:
         ctx.metric(f"pdu_next_{r['code']}", r["pdu_next_t"], f"ПДУ {r['species']}, {r['year_first_fc']} г.", "т")
     return {"species": [s for s in out]}

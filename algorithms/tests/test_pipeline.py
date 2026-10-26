@@ -190,6 +190,41 @@ def test_forecast_matches_legacy(env):
         assert old["settings"]["pdu_fixed_t"] == new["settings"]["pdu_fixed_t"]
 
 
+def test_forecast_k_scenarios(env):
+    """Сценарный анализ k (3.1.0): каждый k — сценарий F = k·M на тех же выборках; основной сценарий не меняется."""
+    from fishcore.forecast import parse_k_grid
+    assert parse_k_grid("1,5; 0,5;1; 1") == (0.5, 1.0, 1.5) and parse_k_grid("") == () and parse_k_grid(None) == ()
+    for bad in ("0,5; abc", "0", "11", "; ".join(str(x) for x in range(1, 11))):
+        with pytest.raises(ValueError):
+            parse_k_grid(bad)
+    tmp, sp, gk = env
+    fake = tmp / "bayes_k" / "out"
+    fake.mkdir(parents=True)
+    shutil.copy(REPO / "legacy" / "fish_stock_forecast" / "results" / "zhaysan_bayes_sudak.npz", fake)
+    base = {"horizon": 3, "k": 1.0}
+    _, r0 = step(tmp, sp, gk, "forecast_pdu", {"bayes_cohort": tmp / "bayes_k"}, {**base, "k_scenarios": "1"})
+    _, r1 = step(tmp, sp, gk, "forecast_pdu", {"bayes_cohort": tmp / "bayes_k"}, {**base, "k_scenarios": "0,5; 1; 1,5"})
+    a, b = r0["payload"]["species"]["судак"], r1["payload"]["species"]["судак"]
+    for sc in ("baranov", "fixed", "none"):           # сценарии не влияют на основной расчёт
+        assert np.allclose(np.array(a["scenarios"][sc]["pdu_t_q"], float), np.array(b["scenarios"][sc]["pdu_t_q"], float))
+    ks = b["k_scen"]
+    assert ks["k"] == [0.5, 1.0, 1.5] and ks["base_k"] == 1.0
+    med = [x[2] for x in ks["pdu_t_q"]]
+    assert med[0] < med[1] < med[2]
+    assert np.isclose(med[1], b["scenarios"]["baranov"]["pdu_t_q"][2][0])   # k = 1 — тот же сценарий F = k·M
+    assert 0.4 < med[0] / med[1] < 0.6 and 1.3 < med[2] / med[1] < 1.6
+    rows = r1["tables"]["k_scenarios"]["rows"]
+    assert [r["k"] for r in rows] == [0.5, 1.0, 1.5] and np.isclose(rows[1]["pdu_pct_base"], 100)
+    assert r1["payload"]["k_grid"] == [0.5, 1.0, 1.5] and "k_npc" in r1["payload"]["summary"][0]
+    d = tmp / "k_bad"
+    ctx = {"water_body": "zhaysan", "params": {**manifest_defaults("forecast_pdu"), **base, "k_scenarios": "0,5; x"},
+           "species_names": sp, "gear_kinds": gk, "inputs": {"bayes_cohort": str(tmp / "bayes_k" / "out")},
+           "tables_path": str(tmp / "tables.json")}
+    executor.prepare_step(d, PKG["forecast_pdu"], ctx)
+    st = executor.run_step(d, timeout_s=300)
+    assert st["status"] == "failed" and "«Сценарии k»" in st["message"]
+
+
 def test_cancel_running_step(tmp_path):
     """Отмена выполняющегося шага: алгоритм останавливается при ближайшем ctx.progress()."""
     import time
