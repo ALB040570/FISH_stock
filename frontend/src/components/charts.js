@@ -263,7 +263,7 @@ export function fitChart(spec, ctype) {
     tooltip: { trigger: 'axis', valueFormatter: (v) => fmt(v, 'auto') },
     legend: { top: 0, type: 'scroll' },
     xAxis: { type: 'category', data: x, name: spec.x_title || '', nameLocation: 'middle', nameGap: 26 },
-    yAxis: axisY(spec.y_title || '', log ? { type: 'log', logBase: 10 } : {}),
+    yAxis: axisY(spec.y_title || '', log ? { type: 'log', logBase: 10 } : spec.y_max ? { min: 0, max: spec.y_max } : {}),
     series,
   }
 }

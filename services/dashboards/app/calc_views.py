@@ -1525,6 +1525,120 @@ VIEWS.update({"fc_species": v_fc_species, "fc_tiles": v_fc_tiles, "fc_total": v_
               "fc_ages": v_fc_ages, "fc_pdu_ages": v_fc_pdu_ages, "fc_table": v_fc_table})
 
 
+# ---------------------------------------------------------------- сценарный анализ k (алгоритм j 3.1.0)
+def _kf(k):
+    """k для подписи: 0,5 · 0,75 · 1 · 1,25."""
+    return f"{float(k):g}".replace(".", ",")
+
+
+def _no_k(D):
+    return NoData(L(D.lang, "В основном расчёте прогноза нет сценариев k: нужна версия алгоритма 3.1.0 — перезапустите прогноз водоёма",
+                    "Болжамның негізгі есептеуінде k сценарийлері жоқ: алгоритмнің 3.1.0 нұсқасы керек — су айдынының болжамын қайта іске қосыңыз"))
+
+
+def _k_species(D, opt):
+    pl, meta, R, code = _fc_species(D, opt)
+    K = R.get("k_scen")
+    if not K or not K.get("k"):
+        raise _no_k(D)
+    return pl, meta, R, code, K
+
+
+
+def v_fc_k(D, opt):
+    pl, meta, R, code, K = _k_species(D, opt)
+    lang = D.lang
+    ks, P = K["k"], K["pdu_t_q"]
+    x = [_kf(k) for k in ks]
+    y1, ye = R["years_fc"][0], R["years_fc"][-1]
+    bands = [{"name": L(lang, "ПДУ, 95 %", "ШРА, 95 %"), "lo": [p[0] for p in P], "hi": [p[4] for p in P], "op": 0.16, "c": 1},
+             {"name": L(lang, "ПДУ, 50 %", "ШРА, 50 %"), "lo": [p[1] for p in P], "hi": [p[3] for p in P], "op": 0.3, "c": 1}]
+    lines = [{"name": L(lang, f"ПДУ {y1}, медиана", f"ШРА {y1}, медиана"), "values": [p[2] for p in P], "c": 1, "bold": True}]
+    base = next((p[2] for k, p in zip(ks, P) if k == K.get("base_k")), None)
+    rows = [{"k": _kf(k), "F": K["F"][i], "pdu": P[i][2], "lo": P[i][0], "hi": P[i][4],
+             "pct": P[i][2] / base * 100 if base else None, "end": K["total_end_q"][i][2], "p_dec": K["p_decline"][i] * 100,
+             "_current": k == K.get("base_k")} for i, k in enumerate(ks)]
+    vrefs = [{"x": _kf(K["base_k"]), "label": L(lang, "F = M", "F = M")}] if K.get("base_k") == 1.0 else []
+    return {"chart": {"kind": "band", "x": x, "bands": bands, "lines": lines, "vrefs": vrefs,
+                      "x_title": "k", "y_title": L(lang, "тонн", "тонна"), "allowed": ["linear", "log"], "default": "linear"},
+            "columns": [col("k", "k"), col("F", L(lang, "F, первый год", "F, бірінші жыл"), "number"),
+                        col("pdu", L(lang, f"ПДУ {y1}, т", f"ШРА {y1}, т"), "number"), col("lo", "2,5 %", "number"), col("hi", "97,5 %", "number"),
+                        col("pct", L(lang, f"% от k = {_kf(K.get('base_k'))}", f"k = {_kf(K.get('base_k'))} -ден %"), "number"),
+                        col("end", L(lang, f"Численность {ye}", f"Саны {ye}"), "integer"),
+                        col("p_dec", L(lang, f"Вероятность снижения к {ye}, %", f"{ye} дейін төмендеу ықтималдығы, %"), "number")],
+            "rows": rows,
+            "notes": [L(lang, f"F = k·M: k = 1 — промысловая смертность равна естественной. ПДУ {y1} — медиана и интервалы по {R.get('n_draws')} траекториям модели.",
+                        f"F = k·M: k = 1 — кәсіптік өлім табиғи өлімге тең. {y1} ШРА — модельдің {R.get('n_draws')} траекториясы бойынша медиана және аралықтар.")],
+            **_fcommon(D, meta, code, L(lang, "сценарии k", "k сценарийлері"))}
+
+
+def v_fc_k_risk(D, opt):
+    pl, meta, R, code, K = _k_species(D, opt)
+    lang = D.lang
+    ks = K["k"]
+    ye, yl = R["years_fc"][-1], R["years_hist"][-1]
+    pd = [v * 100 for v in K["p_decline"]]
+    none = (K.get("p_decline_none") or 0) * 100
+    series = [{"name": L(lang, "F = k·M", "F = k·M"), "values": pd, "type": "line", "c": 1, "bold": True},
+              {"name": L(lang, "без промысла", "кәсіпшіліксіз"), "values": [none] * len(ks), "type": "line", "c": 2, "dash": True}]
+    rows = [{"k": _kf(k), "p_dec": pd[i], "end": K["total_end_q"][i][2], "lo": K["total_end_q"][i][0], "hi": K["total_end_q"][i][4]}
+            for i, k in enumerate(ks)]
+    return {"chart": {"kind": "fit", "x": [_kf(k) for k in ks], "series": series, "x_title": "k", "y_title": "%", "y_max": 100,
+                      "allowed": ["linear"], "default": "linear"},
+            "columns": [col("k", "k"), col("p_dec", L(lang, f"Вероятность снижения к {ye}, %", f"{ye} дейін төмендеу ықтималдығы, %"), "number"),
+                        col("end", L(lang, f"Численность {ye}, медиана", f"Саны {ye}, медиана"), "integer"),
+                        col("lo", "2,5 %", "integer"), col("hi", "97,5 %", "integer")],
+            "rows": rows,
+            "notes": [L(lang, f"Доля траекторий, в которых численность в {ye} г. ниже, чем в {yl} г.; линия «без промысла» — естественная динамика запаса.",
+                        f"{ye} ж. саны {yl} ж. қарағанда төмен болатын траекториялар үлесі; «кәсіпшіліксіз» сызығы — қордың табиғи динамикасы.")],
+            **_fcommon(D, meta, code, L(lang, "риск снижения запаса", "қордың төмендеу қаупі"))}
+
+
+def v_fc_k_species(D, opt):
+    pl, meta = _fc(D)
+    lang = D.lang
+    names = _names(D)
+    grid = pl.get("k_grid") or []
+    if not grid:
+        raise _no_k(D)
+    lo_k, hi_k = grid[0], grid[-1]
+    base_k = 1.0 if 1.0 in grid else pl.get("k")
+    rows, y1, ye = [], None, None
+    for ru, R in (pl.get("species") or {}).items():
+        K = R.get("k_scen")
+        if not K:
+            continue
+        y1, ye = R["years_fc"][0], R["years_fc"][-1]
+        code = R.get("code") or names.get(str(ru).strip().lower())
+        r = {"_code": code, "species": D.sp_name(code)}
+        for i, k in enumerate(K["k"]):
+            r[f"p{i}"] = K["pdu_t_q"][i][2]
+        idx = {k: i for i, k in enumerate(K["k"])}
+        for key, k in (("d_lo", lo_k), ("d_base", base_k), ("d_hi", hi_k)):
+            r[key] = K["p_decline"][idx[k]] * 100 if k in idx else None
+        r["d_none"] = (K.get("p_decline_none") or 0) * 100
+        r["_sort"] = r.get(f"p{grid.index(base_k)}") if base_k in grid else 0
+        rows.append(r)
+    if not rows:
+        raise _no_k(D)
+    rows.sort(key=lambda r: -(r.pop("_sort") or 0))
+    cols = [col("species", L(lang, "Вид", "Түр"))]
+    cols += [col(f"p{i}", L(lang, f"ПДУ k = {_kf(k)}, т", f"ШРА k = {_kf(k)}, т"), "number") for i, k in enumerate(grid)]
+    cols += [col("d_lo", L(lang, f"Риск k = {_kf(lo_k)}, %", f"Қауіп k = {_kf(lo_k)}, %"), "number"),
+             col("d_base", L(lang, f"Риск k = {_kf(base_k)}, %", f"Қауіп k = {_kf(base_k)}, %"), "number"),
+             col("d_hi", L(lang, f"Риск k = {_kf(hi_k)}, %", f"Қауіп k = {_kf(hi_k)}, %"), "number"),
+             col("d_none", L(lang, "Риск без промысла, %", "Кәсіпшіліксіз қауіп, %"), "number")]
+    return {"columns": cols, "rows": rows, "default_view": "table", "row_action": "species", "chart": None,
+            "notes": [L(lang, f"F = k·M; k = 1 — промысловая смертность равна естественной. ПДУ — медиана {y1} г., т; «риск» — вероятность, "
+                              f"что численность в {ye} г. будет ниже последнего года истории. Щелчок по строке — сценарии вида.",
+                        f"F = k·M; k = 1 — кәсіптік өлім табиғи өлімге тең. ШРА — {y1} ж. медианасы, т; «қауіп» — {ye} ж. саны "
+                              f"тарихтың соңғы жылынан төмен болу ықтималдығы. Жолды басу — түрдің сценарийлері.")],
+            **_fcommon(D, meta, None, L(lang, "сценарии k", "k сценарийлері"))}
+
+
+VIEWS.update({"fc_k_species": v_fc_k_species, "fc_k": v_fc_k, "fc_k_risk": v_fc_k_risk})
+
+
 # ================================================================== «Можно ли верить запасу» (сводка уловистости)
 # Только сравнения чисел, уже посчитанных запуском (этапы 1–2); пороги — «Правила замечаний» (группа «Уловистость»).
 def _plural(n, one, few, many):

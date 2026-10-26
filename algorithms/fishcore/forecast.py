@@ -20,6 +20,9 @@
     baranov  — F = k·M:  M_j = −ln((1 − s_j)/(1 + γ_j)),  F = k·M̄ (M̄ — средняя M промысловых возрастов,
                взвешенная по численности),  C_j = F/(F + M_j)·(1 − e^(−(F+M_j)))·X_j(t−1).
 ПДУ года t считается по запасу на начало года X(t−1); фактическое изъятие β·A вычитается в (17).
+
+Сценарный анализ k (версия 3.1.0): сценарий F = k·M повторяется для нескольких k на тех же выборках и случайных
+величинах — сценарии различаются только k.
 """
 from __future__ import annotations
 
@@ -46,6 +49,7 @@ class ForecastSettings:
     mortality: dict = field(default_factory=dict)   # год → уровень s половозрелых (доля за год) или None
     pdu_t: float | None = None                      # фиксированный ПДУ, т (None — ПДУ НПЦ последнего года)
     seed: int = 42
+    k_grid: tuple = ()                              # сценарный анализ: F = k·M при нескольких k (пусто — нет)
 
 
 @dataclass
@@ -106,6 +110,11 @@ class ForecastResult:
     Mbar: np.ndarray | None = None                 # (D, H)
     s_mature: np.ndarray | None = None             # (D, H) средняя s половозрелых
     notes: list = field(default_factory=list)
+    # сценарный анализ k: k → массивы сценария F = k·M при этом k (D, H, …)
+    k_grid: list = field(default_factory=list)
+    k_X: dict = field(default_factory=dict)
+    k_catch: dict = field(default_factory=dict)
+    k_F: dict = field(default_factory=dict)
 
     # ---- производные величины (D, H)
     def total(self, sc: str) -> np.ndarray:
@@ -127,6 +136,44 @@ class ForecastResult:
     def p_decline(self, sc: str) -> float:
         """Доля траекторий, в которых численность 1–2+ в последний прогнозный год ниже последнего года истории."""
         return float(np.mean(self.total(sc)[:, -1] < self.hist_total[:, -1]))
+
+    # ---- сценарный анализ k
+    def k_total(self, k: float) -> np.ndarray:
+        return self.k_X[k][:, :, 1:].sum(axis=2)
+
+    def k_pdu_tonnes(self, k: float) -> np.ndarray:
+        return (self.k_catch[k] * self.weights).sum(axis=2) / 1e6
+
+    def k_p_decline(self, k: float) -> float:
+        return float(np.mean(self.k_total(k)[:, -1] < self.hist_total[:, -1]))
+
+
+K_GRID_DEFAULT = "0,5; 0,75; 1; 1,25; 1,5"
+K_GRID_MAX = 9
+
+
+def parse_k_grid(text) -> tuple[float, ...]:
+    """«0,5; 0,75; 1; 1,25; 1,5» → (0.5, 0.75, 1.0, 1.25, 1.5): значения через «;», десятичная запятая или точка.
+    Пусто — без сценарного анализа. ValueError — с понятным сообщением."""
+    if text is None:
+        return ()
+    items = list(text) if isinstance(text, (list, tuple)) else [x for x in str(text).replace("\n", ";").split(";")]
+    out = []
+    for raw in items:
+        t = str(raw).strip().replace(",", ".")
+        if not t:
+            continue
+        try:
+            v = float(t)
+        except ValueError:
+            raise ValueError(f"«Сценарии k»: «{str(raw).strip()}» — не число; пример: {K_GRID_DEFAULT}") from None
+        if not 0 < v <= 10:
+            raise ValueError(f"«Сценарии k»: k = {str(raw).strip()} — нужно больше 0 и не больше 10")
+        out.append(v)
+    out = sorted(set(out))
+    if len(out) > K_GRID_MAX:
+        raise ValueError(f"«Сценарии k»: не больше {K_GRID_MAX} значений")
+    return tuple(out)
 
 
 def q(a: np.ndarray, axis: int = 0) -> np.ndarray:
@@ -263,7 +310,7 @@ def run_forecast(post: Posterior, settings: ForecastSettings, weights_hist: np.n
     res.beta = beta
     res.s_mature = s_rows[:, :, fishable].mean(axis=2)
 
-    for sc in SCENARIOS:
+    def simulate(sc: str, k: float):
         Xs = np.zeros((D, H, A))
         Cs = np.zeros((D, H, A))
         Fs = np.zeros((D, H))
@@ -278,12 +325,25 @@ def run_forecast(post: Posterior, settings: ForecastSettings, weights_hist: np.n
                     C = distribute_pdu(X_prev, weights_last, fishable, ages, m1, pdu_fixed_t * 1e6).pieces
                 else:
                     C, Fs[i, h], Ms[i, h] = baranov_catch(X_prev, s_row, next_age_predation(pp, h_mask),
-                                                          fishable, settings.k)
+                                                          fishable, k)
                 X_new, _ = step(ops, X_prev, s_row, pp, beta[i, h], C[1:-1], K[h], alpha[i, h], theta[i], eps,
                                 egg[i], h_mask, cfg)
                 Xs[i, h], Cs[i, h] = X_new, C
                 X_prev = X_new
+        return Xs, Cs, Fs, Ms
+
+    for sc in SCENARIOS:
+        Xs, Cs, Fs, Ms = simulate(sc, settings.k)
         res.X[sc], res.catch[sc] = Xs, Cs
         if sc == "baranov":
             res.F, res.Mbar = Fs, Ms
+    # сценарный анализ: те же выборки и случайные величины, меняется только k (сценарий F = k·M)
+    for kk in settings.k_grid:
+        kk = float(kk)
+        if kk == float(settings.k):
+            Xs, Cs, Fs = res.X["baranov"], res.catch["baranov"], res.F
+        else:
+            Xs, Cs, Fs, _ = simulate("baranov", kk)
+        res.k_grid.append(kk)
+        res.k_X[kk], res.k_catch[kk], res.k_F[kk] = Xs, Cs, Fs
     return res
