@@ -69,6 +69,10 @@ class SpeciesConfig:
     eggs_mode: str = "all_ages"      # "all_ages" | "older_half" (щука: возрасты 2+ и доля самок 0,5)
     density_sigma: float = 0.2       # множитель ёмкости по годам ~ LogNormal(0, σ)
     density_softmin: str = "scaled"  # "scaled" | "plain" (плотва)
+    # --- зарыбление (решение № 74): X₁(t) = естественное пополнение + φ · Z(t) ---
+    stocking: str = ""               # выпущено молоди по годам, шт: «2015: 150000; 2016: 200000»; пусто — без зарыбления
+    stock_surv_alpha: float = 3.0    # φ ~ Beta(α, β) — выживаемость выпущенной молоди; по умолчанию среднее 0,3
+    stock_surv_beta: float = 7.0     # («около 30 % выпущенной молоди адаптируется» — уточняет математик)
 
     # --- начальный запас (первый год) ---
     x0_sigma: float = 0.2
@@ -253,6 +257,10 @@ SCHEMA = [
     ("theta_nonneg", "Плодовитость не меньше 0", "Пополнение", "bool", None),
     ("eggs_mode", "Кто нерестится", "Пополнение", "select",
      [("all_ages", "все возрасты, без доли самок"), ("older_half", "возрасты 1–2 и старше, доля самок 0,5 (щука)")]),
+    ("stocking", "Зарыбление: выпущено молоди по годам, шт («2015: 150000; 2016: 200000»; пусто — без зарыбления)",
+     "Пополнение", "text", None),
+    ("stock_surv_alpha", "Выживаемость выпущенной молоди φ: Beta α", "Пополнение", "float", None),
+    ("stock_surv_beta", "Выживаемость выпущенной молоди φ: Beta β", "Пополнение", "float", None),
     ("density_sigma", "Ёмкость по годам: σ", "Пополнение", "float", None),
     ("density_softmin", "Ограничение мальков ёмкостью", "Пополнение", "select",
      [("scaled", "масштаб 100 000"), ("plain", "без масштаба (плотва)")]),
@@ -297,6 +305,27 @@ SCHEMA = [
     ("noncentered", "Нецентрированные годовые эффекты (s, β)", "Выборка NUTS", "bool", None),
 ]
 EDITABLE = {k for k, *_ in SCHEMA}
+
+
+def parse_stocking(text) -> dict[int, float]:
+    """«2015: 150000; 2016: 200000» → {2015: 150000.0, 2016: 200000.0}; пусто — {}. Ошибка формата — ValueError."""
+    out: dict[int, float] = {}
+    for part in str(text or "").replace("\n", ";").split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" not in part:
+            raise ValueError(f"зарыбление: «{part}» — нужно «год: число»")
+        y, n = part.split(":", 1)
+        try:
+            year = int(y.strip())
+            num = float(n.strip().replace(" ", "").replace("\u00a0", "").replace(",", "."))
+        except ValueError:
+            raise ValueError(f"зарыбление: «{part}» — нужно «год: число»") from None
+        if num < 0:
+            raise ValueError(f"зарыбление: {year} — число не может быть отрицательным")
+        out[year] = out.get(year, 0.0) + num
+    return out
 
 
 def uses_q_net(cfg: SpeciesConfig) -> bool:
@@ -391,6 +420,12 @@ def validate(species: str, values: dict) -> list[str]:
         opts = _rest[-1]
         if _rest[-2] == "select" and getattr(cfg, k) not in {v for v, _ in opts}:
             errors.append(f"{k}: недопустимое значение")
+    try:
+        parse_stocking(cfg.stocking)
+    except ValueError as e:
+        errors.append(str(e))
+    if cfg.stock_surv_alpha <= 0 or cfg.stock_surv_beta <= 0:
+        errors.append("выживаемость выпущенной молоди: α и β должны быть больше 0")
     if not 2 <= cfg.likelihood_from <= 6:
         errors.append("правдоподобие может начинаться с возраста j от 2 до 6")
     return errors

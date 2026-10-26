@@ -103,6 +103,7 @@ class Constants:
     pdu: np.ndarray          # (годы, m1 − 1) ПДУ в штуках, возрасты 2..m1 (+0,1 и множитель)
     x0: np.ndarray           # (m1 − 1,) оценка начального запаса, возрасты 2..m1
     fec_bounds: tuple        # (мин, макс) икринок на самку
+    stock: np.ndarray | None = None   # (годы,) зарыбление: выпущено молоди в год t, шт (решение № 74); None — нет
 
     @property
     def n_ages(self) -> int:
@@ -188,7 +189,7 @@ def removal_ratio(X_prev, s_t1, beta_older, A_older):
 
 
 def step(ops, X_prev, s_t1, pp, beta_older, A_older, K_t, alpha_t, theta, eps, egg_survival, h_mask,
-         cfg: SpeciesConfig):
+         cfg: SpeciesConfig, stock_t=0.0, phi=0.0):
     """Один год уравнений (16)-(17): численность года t по численности года t − 1.
 
     s_t1, pp — смертность и давление хищников года t (возрасты 1..m1);
@@ -212,7 +213,8 @@ def step(ops, X_prev, s_t1, pp, beta_older, A_older, K_t, alpha_t, theta, eps, e
         smooth_max = ops.softplus(diff / 100000.0) * 100000.0
         effective_larvae = density_cap_t - smooth_max
     larvae_survived_year = effective_larvae * ((1.0 - s_t1[0]) ** 2)
-    X_j1_new = larvae_survived_year / (1.0 + pp[0])
+    # зарыбление (решение № 74): X₁(t) = естественное пополнение + φ · Z(t); без зарыбления φ · Z = 0
+    X_j1_new = larvae_survived_year / (1.0 + pp[0]) + phi * stock_t
 
     # j = 2
     numerator_j2 = (1.0 - s_t1[1]) * X_prev[0]
@@ -293,7 +295,9 @@ def simulate(ops, p: dict, c: Constants, cfg: SpeciesConfig) -> dict:
     smooth_max = ops.softplus(diff / 100000.0) * 100000.0
     effective_larvae = density_cap_0 - smooth_max
     larvae_survived = effective_larvae * ((1.0 - s[0, 0]) ** 2)
-    X_j1_0 = larvae_survived / (1.0 + pred[0, 0])
+    phi = p.get("stock_survival", 0.0)                 # выживаемость выпущенной молоди φ (решение № 74)
+    Z = np.zeros(n_years) if c.stock is None else np.asarray(c.stock, float)
+    X_j1_0 = larvae_survived / (1.0 + pred[0, 0]) + phi * Z[0]
     X_initial_raw = ops.concat([ops.vec1(X_j1_0), X_initial_older])
     smooth_mask = 1.0 / (1.0 + ops.exp(5.0 * (np.arange(1, n_ages + 1) - m1)))
     X_initial = X_initial_raw * smooth_mask
@@ -303,7 +307,8 @@ def simulate(ops, p: dict, c: Constants, cfg: SpeciesConfig) -> dict:
     ratio_list = [np.zeros(n_ages)]
     for t in range(1, n_years):
         X_curr, _ = step(ops, X_list[t - 1], s[t, :], pred[t, :], beta[t, 1:-1], c.pdu[t, :-1],
-                         K[t], density_alpha[t], theta, eps, egg_survival, h_mask, cfg)
+                         K[t], density_alpha[t], theta, eps, egg_survival, h_mask, cfg,
+                         stock_t=Z[t], phi=phi)
         ratio_list.append(ops.concat([np.zeros(2), removal_ratio(X_list[t - 1], s[t, :], beta[t, 1:-1],
                                                                  c.pdu[t, :-1])]))
         X_list.append(X_curr)
@@ -406,6 +411,8 @@ def prior_means(c: Constants, cfg: SpeciesConfig) -> dict:
         "fec_at_m1": (low1 + high1) / 2,
         "X_initial_older_raw": np.asarray(c.x0, float).copy(),
         "log_q_net": 0.0,
+        **({"stock_survival": (cfg.stock_surv_alpha - 1) / (cfg.stock_surv_alpha + cfg.stock_surv_beta - 2)}
+           if c.stock is not None and np.any(np.asarray(c.stock) > 0) else {}),
         "zero_c": np.zeros(2),
         "zero_b": float(cfg.zero_b_mu),
     }

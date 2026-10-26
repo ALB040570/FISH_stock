@@ -145,6 +145,8 @@ def retro_forecast(full, draws: dict, cfg, year_max: int, out_dir: Path, seed: i
     for i in range(D):
         p = {k: draws[k][i] for k in ("s_base", "s_juvenile_steep", "s_aging_slow", "egg_survival_base",
                                        "fec_at_m0", "fec_at_m1", "X_initial_older_raw")}
+        if "stock_survival" in draws:
+            p["stock_survival"] = draws["stock_survival"][i]
         fut = _year_param_prior(cfg, n_fc, rng)
         for k in YEAR_PARAMS:
             p[k] = np.concatenate([draws[k][i][:n_fit], fut[k]])

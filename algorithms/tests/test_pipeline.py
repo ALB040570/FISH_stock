@@ -344,6 +344,22 @@ def test_likelihood_gears_net_only(data_stack, tmp_path):
     assert row["species"] == "карась" and row["gears"] == "только сеть" and row["current"] == bc.DEFAULTS["карась"].egg_scale
     assert row["suggested"] and row["rmse_suggested"] < row["rmse_current"]
     assert r5["payload"]["not_main"] is True and r5["payload"]["species"] == {}
+    # зарыбление (решение № 74): X₁(t) = естественное пополнение + φ · Z(t); без зарыбления числа те же
+    from fishcore.bayes.dynamics import NumpyOps, prior_means, simulate
+    cfg_s = replace(cfg, stocking="2015: 1000; 2017: 500")
+    inp_s = build_new_inputs("карась", cfg_s, s["res"], s["pdu"], s["props"])
+    yrs = [int(y) for y in inp_s.years]
+    assert inp_s.consts.stock[yrs.index(2015)] == 1000 and inp_s.consts.stock[yrs.index(2016)] == 0
+    assert any("зарыбление учтено" in n for n in inp_s.notes)
+    p0 = prior_means(inp.consts, cfg)
+    ps = {**prior_means(inp_s.consts, cfg_s)}
+    assert abs(ps["stock_survival"] - 0.25) < 1e-12                    # мода Beta(3, 7)
+    x_no = simulate(NumpyOps, p0, inp.consts, cfg)["X_estimated"]
+    x_st = simulate(NumpyOps, ps, inp_s.consts, cfg_s)["X_estimated"]
+    assert abs(x_st[0, 0] - x_no[0, 0] - 0.25 * 1000) < 1e-6 * max(1.0, x_no[0, 0])
+    assert np.array_equal(simulate(NumpyOps, {**p0, "stock_survival": 0.0}, inp.consts, cfg)["X_estimated"], x_no)
+    assert "stock_survival" in {v.name for v in build_model(inp_s, cfg_s).free_RVs}
+    assert bc.validate("карась", {"stocking": "2015 = 1000"}) and not bc.validate("карась", {"stocking": "2015: 1 000; 2016: 2000"})
     from fishcore.bayes.calibrate import fit_egg_scale, trajectory
     f = fit_egg_scale(inp, cfg)
     assert f["suggested"] == row["suggested"] and len(f["traj_suggested"]) == len(inp.years)

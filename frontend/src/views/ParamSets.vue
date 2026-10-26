@@ -81,6 +81,8 @@
                       <el-option v-for="o in r.options" :key="o.value" :label="o.label" :value="o.value" />
                     </el-select>
                     <el-switch v-else-if="r.type === 'bool'" v-model="prof[sp][r.key]" :disabled="!editable" />
+                    <el-input v-else-if="r.type === 'text'" v-model="prof[sp][r.key]" size="small" style="width:100%; max-width:520px"
+                              :disabled="!editable" :placeholder="'2015: 150000; 2016: 200000'" :data-test="'prof-' + r.key" />
                     <el-input-number v-else v-model="prof[sp][r.key]" size="small" :controls="false" :step="r.type === 'int' ? 1 : 0.01"
                                      :precision="r.type === 'int' ? 0 : undefined" style="width:140px" :disabled="!editable" />
                   </div>

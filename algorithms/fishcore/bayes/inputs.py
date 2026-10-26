@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 
 from .. import config as app_config
-from .config import GEAR_CODES, SpeciesConfig
+from .config import GEAR_CODES, SpeciesConfig, parse_stocking
 from .dynamics import Constants, maturity, zero_log_ref
 
 GEAR_NAMES = ("сеть", "невод")
@@ -151,9 +151,16 @@ def build_new_inputs(species: str, cfg: SpeciesConfig, res=None, pdu=None, props
     x0 = np.maximum(x0, 1.0)
 
     area = np.array([props.lake_area_km2[y] for y in years], float)
+    stocked = parse_stocking(cfg.stocking)
+    stock_z = None                                      # зарыбление по годам (не путать с оценками stock)
+    if stocked:
+        stock_z = np.array([stocked.get(int(y), 0.0) for y in years], float)
+        notes.append("зарыбление учтено (выпущено молоди, шт): "
+                     + ", ".join(f"{int(y)} — {v:,.0f}".replace(",", " ") for y, v in zip(years, stock_z) if v > 0)
+                     + f"; выживаемость выпущенной молоди φ ~ Beta({cfg.stock_surv_alpha:g}; {cfg.stock_surv_beta:g})")
     consts = Constants(m0=m0, m1=m1, m2=m2, n_years=len(years), eps=maturity(m0, m1),
                        K=_capacity(area, float(props.fry_density[species])), pdu=pdu_clean, x0=x0,
-                       fec_bounds=tuple(props.fecundity[species]))
+                       fec_bounds=tuple(props.fecundity[species]), stock=stock_z)
     npc_total = res.npc_stock[:, si] if res.npc_stock is not None else None
     return BayesInputs(species=species, mode="new", years=years, consts=consts, stock=stock, year_idx=year_idx,
                        gear=gear, zero=zero, zero_ref=zero_log_ref(stock, zero, cfg), dropped=dropped, yearly_final=yearly_final, yearly_net=yearly_net,
@@ -226,7 +233,8 @@ def truncate_inputs(inp: BayesInputs, year_max: int) -> BayesInputs:
     if n < 3:
         raise ValueError(f"до {year_max} года меньше трёх лет данных")
     c = inp.consts
-    consts = replace(c, n_years=n, K=np.asarray(c.K)[:n], pdu=np.asarray(c.pdu)[:n])
+    consts = replace(c, n_years=n, K=np.asarray(c.K)[:n], pdu=np.asarray(c.pdu)[:n],
+                     stock=None if c.stock is None else np.asarray(c.stock)[:n])
     keep = inp.year_idx < n
 
     def cut(a):

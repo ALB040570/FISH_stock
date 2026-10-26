@@ -135,6 +135,8 @@ def sample_prior_params(c, cfg: SpeciesConfig, n: int, rng) -> dict:
         "sigma_stock": np.abs(rng.normal(0.0, cfg.sigma_stock_sd, n)),
     }
     p["q_bias"] = np.exp(p["q_raw"])
+    if c.stock is not None and np.any(np.asarray(c.stock) > 0):
+        p["stock_survival"] = rng.beta(cfg.stock_surv_alpha, cfg.stock_surv_beta, n)
     if uses_q_net(cfg):
         p["log_q_net"] = rng.normal(0.0, cfg.q_net_sigma, n)
     if cfg.likelihood == "delta":
@@ -167,6 +169,8 @@ def recompute(p: dict, c, cfg: SpeciesConfig) -> dict:
         one = {k: p[k][i] for k in ("density_alpha", "s_base", "s_juvenile_steep", "s_aging_slow", "s_year_fluct",
                                     "beta_1d", "egg_survival_base", "fec_at_m0", "fec_at_m1",
                                     "X_initial_older_raw")}
+        if "stock_survival" in p:
+            one["stock_survival"] = p["stock_survival"][i]
         r = simulate(NumpyOps, one, c, cfg)
         for k in keys:
             out[k].append(np.asarray(r[k], float))
@@ -192,6 +196,7 @@ PARAM_ROWS = [
     ("density_alpha", "множитель ёмкости", "year"),
     ("s_year_fluct", "годовое отклонение s", "year"),
     ("q_bias", "поправка уловистости q", "age"),
+    ("stock_survival", "φ — выживаемость выпущенной молоди (зарыбление)", None),
 ]
 
 

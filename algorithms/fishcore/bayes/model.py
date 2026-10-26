@@ -63,6 +63,9 @@ def build_model(inp: BayesInputs, cfg: SpeciesConfig):
                   "s_aging_slow": s_aging_slow, "s_year_fluct": s_year_fluct,
                   "beta_1d": beta_1d, "egg_survival_base": egg_survival_base, "fec_at_m0": fec_at_m0,
                   "fec_at_m1": fec_at_m1, "X_initial_older_raw": X_initial_older_raw}
+        if c.stock is not None and np.any(np.asarray(c.stock) > 0):
+            # зарыбление (решение № 74): выживаемость выпущенной молоди φ оценивается моделью
+            params["stock_survival"] = pm.Beta("stock_survival", alpha=cfg.stock_surv_alpha, beta=cfg.stock_surv_beta)
         out = simulate(pytensor_ops(), params, c, cfg)
 
         pm.Deterministic("s", out["s"], dims=("Year", "age"))
@@ -178,7 +181,7 @@ def free_names(model) -> list[str]:
 KEEP_VARS = ("density_alpha", "s_base", "s_juvenile_steep", "s_aging_slow", "s_year_fluct",
              "beta_1d", "q_raw", "q_bias", "log_q_net", "egg_survival_base", "egg_survival", "fec_at_m0", "fec_at_m1",
              "X_initial_older_raw", "sigma_stock", "zero_c", "zero_b", "s", "pred_press_cube", "beta", "theta_dyn", "X_estimated",
-             "removal_ratio")
+             "removal_ratio", "stock_survival")
 
 
 def _group(idata, name):

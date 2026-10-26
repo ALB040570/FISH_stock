@@ -42,7 +42,7 @@ def test_catalog_and_default_sets(calc_stack):
     assert [a["letter"] for a in cat] == list("abcdefghijk")
     by = {a["code"]: a for a in cat}
     assert by["removal_pdu"]["planned"] and by["removal_pdu"]["versions"] == []
-    assert all(by[c]["latest"] == "3.0.0" for c in CHAIN + ["forecast_pdu"]) and by["bayes_cohort"]["latest"] == "3.0.2"
+    assert all(by[c]["latest"] == "3.0.0" for c in CHAIN + ["forecast_pdu"]) and by["bayes_cohort"]["latest"] == "3.0.3"
     assert "stock_by_catch" not in by and "bayes_checks" not in by
     assert by["seine_likelihood"]["manifest"]["requires"]["steps"] == ["seine_catchability"]
     assert by["bayes_cohort"]["manifest"]["requires"]["steps"] == ["seine_likelihood", "net_likelihood", "combined_stock", "pdu_by_age"]
