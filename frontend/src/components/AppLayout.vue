@@ -119,6 +119,7 @@ const items = computed(() => {
   switch (cab.key) {
     case 'monitoring': return [
       ...it('/monitoring/', 'nav.map', 'MapLocation'), ...it('/monitoring/waterbody', 'cab.waterbody', 'DataLine'),
+      ...it('/monitoring/compare', 'nav.compare_calcs', 'DataAnalysis', 'results.view'),
       ...dashboards.value.slice(0, MAX_DASH).map((d) => ({ index: '/monitoring/dashboards/' + d.id, label: tr(d, 'title'), icon: 'Histogram',
         dash: true, personal: !d.system && d.visibility !== 'shared' })),
       { index: '/monitoring/dashboards', label: t('nav.all_dashboards'), icon: 'Grid', more: true }]

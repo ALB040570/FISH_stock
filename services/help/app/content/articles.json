@@ -232,7 +232,9 @@
   "id": "compare",
   "section": "dashboards",
   "order": 13,
-  "routes": []
+  "routes": [
+   "/monitoring/compare"
+  ]
  },
  {
   "id": "users",

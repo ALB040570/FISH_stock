@@ -21,7 +21,7 @@ from fishcommon.auth import User, require
 from fishcommon.errors import AppError, not_found
 from fishcommon.storage import Collection, dumps
 
-from . import access, explain, export, insights, kk, templates
+from . import access, compare, explain, export, insights, kk, templates
 
 app = create_app("dashboards", "Администрирование дашбордов",
                  "Шаблоны мониторинга, конструктор дашбордов, данные виджетов, доступ.")
@@ -699,3 +699,57 @@ def delete_comment(cid: str, user: User = Depends(require("dashboard.view"))):
     comments.delete(cid)
     audit(user, "dashboard.comment_delete", c.get("board"), {"comment": cid})
     return {"ok": True}
+
+
+# ================================================================ сравнение расчётов (кабинет «Мониторинг», № 77)
+def _dict_names(entity, lang):
+    recs = SVC["data_model"].get(f"/entities/{entity}/records") or []
+    vals = [r["values"] for r in recs if not r.get("deleted")]
+    return {v["code"]: (lang == "kk" and v.get("name_kk")) or v.get("name_ru") or v["code"] for v in vals}, vals
+
+
+def _sp_codes(vals):
+    out = {}
+    for v in vals:
+        for n in (v.get("name_ru"), v.get("name_kk"), v.get("code")):
+            if n:
+                out[str(n).strip().lower()] = v["code"]
+    return out
+
+
+@app.get("/compare/options", tags=["сравнение расчётов"])
+def compare_options(lang: str = "ru", user: User = Depends(require("results.view"))):
+    """Водоёмы и расчёты с результатом для каждого источника сравнения: прогноз (j), модель (i), запас по уловам (g)."""
+    wb_names, _ = _dict_names("water_bodies", lang)
+    calcs = {src: compare.list_calcs(SVC, src) for src in compare.SOURCES}
+    for cs in calcs.values():
+        for c in cs:
+            c["water_body_name"] = wb_names.get(c["water_body"], c["water_body"])
+    used = {c["water_body"] for cs in calcs.values() for c in cs}
+    wbs = [{"code": c, "name": n} for c, n in wb_names.items() if c in used]
+    wbs += [{"code": c, "name": c} for c in sorted(used - set(wb_names))]
+    return {"water_bodies": wbs, "calcs": calcs, "max_series": compare.MAX_SERIES, "gears": list(compare.GEARS)}
+
+
+@app.get("/compare/meta", tags=["сравнение расчётов"])
+def compare_meta(ids: str, source: str = "forecast", lang: str = "ru", user: User = Depends(require("results.view"))):
+    """Виды (и k прогноза, орудия запаса по уловам) расчётов; ids — через запятую."""
+    if source not in compare.SOURCES:
+        raise AppError("compare.source", "Неизвестный источник сравнения", 400)
+    sp_names, vals = _dict_names("species", lang)
+    codes, st = _sp_codes(vals), compare.Store(SVC)
+    return {cid: compare.calc_meta(st, cid, source, codes, sp_names) for cid in [x for x in ids.split(",") if x][:20]}
+
+
+class CompareIn(BaseModel):
+    series: list[dict] = []
+    measure: str = "total"
+    lang: str = "ru"
+
+
+@app.post("/compare/series", tags=["сравнение расчётов"])
+def compare_series(body: CompareIn, user: User = Depends(require("results.view"))):
+    """Данные рядов сравнения: численность (или промысловый запас) по годам, ПДУ по годам прогноза, риск, F."""
+    wb_names, _ = _dict_names("water_bodies", body.lang)
+    sp_names, vals = _dict_names("species", body.lang)
+    return compare.series_data(compare.Store(SVC), body.series, body.measure, _sp_codes(vals), wb_names, sp_names, body.lang)

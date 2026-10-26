@@ -69,7 +69,7 @@ export function legacyToNew(fullPath) {
   if (p.startsWith('/monitoring/')) {
     // старый мониторинг водоёма /monitoring/<код>; остальные адреса кабинета — новые
     const seg = p.split('/')[2]
-    if (['waterbody', 'dashboards', 'help'].includes(seg)) return null
+    if (['waterbody', 'dashboards', 'help', 'compare'].includes(seg)) return null
     return '/monitoring/waterbody' + p.slice('/monitoring'.length) + rest
   }
   for (const [old, now] of LEGACY) if (under(p, old)) return now + p.slice(old.length) + rest

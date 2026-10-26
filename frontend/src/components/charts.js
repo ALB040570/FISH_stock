@@ -238,7 +238,7 @@ export function fitChart(spec, ctype) {
   const pos = (v) => (v == null || (log && v <= 0) ? null : v)
   const bars = spec.series.filter((s) => s.type === 'bar' && !s.stack).length + (spec.series.some((s) => s.stack) ? 1 : 0)
   const series = spec.series.map((s) => {
-    const color = s.c != null ? PALETTE[s.c % PALETTE.length] : null
+    const color = s.color || (s.c != null ? PALETTE[s.c % PALETTE.length] : null)
     if (s.type === 'bar' && color == null && !s.warn && !s.stack) {           // одиночный ряд факта (улов по возрастам)
       if (!log) return { type: 'bar', name: s.name, data: s.values, barMaxWidth: 34, itemStyle: { color: CHART.background } }
       return { type: 'scatter', name: s.name, data: s.values.map(pos), symbolSize: 9, itemStyle: { color: CHART.highlight } }
@@ -252,7 +252,7 @@ export function fitChart(spec, ctype) {
       itemStyle: { color: s.warn ? SIGNAL.warning : color || CHART.highlight } }
     const c = color || CHART.main
     return { type: 'line', name: s.name, data: s.values.map(pos), symbol: 'circle', symbolSize: s.bold ? 7 : 5, z: s.bold ? 5 : 3,
-      lineStyle: { width: s.bold ? 3 : 2.2, color: c, type: s.dash ? 'dashed' : 'solid' }, itemStyle: { color: c } }
+      lineStyle: { width: s.bold ? 3 : 2.2, color: c, type: s.dash ? (s.dash === true ? 'dashed' : s.dash) : 'solid' }, itemStyle: { color: c } }
   })
   if (spec.vrefs?.length && series.length) {
     series[0].markLine = { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: CHART.limit },
@@ -293,6 +293,7 @@ export function dotsChart(spec, ctype) {
 }
 
 // Полосы интервалов (модель: 95 % и 50 %), медиана, точки оценок и вертикальные интервалы; x — категории (годы или возрасты).
+// Цвет полосы и линии — номер в палитре (c) или явный цвет (color); пунктир линии — dash: true | 'dotted'.
 // Полосы и интервалы рисуются своими фигурами, поэтому работают и в логарифмической шкале. ctype linear | log
 export function bandChart(spec, ctype) {
   const x = spec.x.map(String)
@@ -303,13 +304,14 @@ export function bandChart(spec, ctype) {
   for (const b of spec.bands || []) {
     const lo = b.lo.map(ok), hi = b.hi.map(ok)
     // данные с границами полосы: по ним ось (в том числе логарифмическая) считает свой диапазон
-    series.push({ type: 'custom', name: b.name, silent: true, z: 1, itemStyle: { color: b.c != null ? col(b.c) : CHART.main, opacity: 0.5 },
+    const bc = b.color || (b.c != null ? col(b.c) : CHART.main)
+    series.push({ type: 'custom', name: b.name, silent: true, z: 1, itemStyle: { color: bc, opacity: 0.5 },
       data: x.slice(0, -1).map((_, i) => [i, lo[i] ?? lo[i + 1] ?? null, hi[i] ?? hi[i + 1] ?? null]),
       renderItem: (params, api) => {
         const i = api.value(0)
         if (lo[i] == null || hi[i] == null || lo[i + 1] == null || hi[i + 1] == null) return null
         const pts = [api.coord([i, lo[i]]), api.coord([i + 1, lo[i + 1]]), api.coord([i + 1, hi[i + 1]]), api.coord([i, hi[i]])]
-        return { type: 'polygon', shape: { points: pts }, style: { fill: b.c != null ? col(b.c) : CHART.main, opacity: b.op || 0.2 } }
+        return { type: 'polygon', shape: { points: pts }, style: { fill: bc, opacity: b.op || 0.2 } }
       }, encode: { x: 0, y: [1, 2] }, tooltip: { show: false } })
   }
   for (const it of spec.intervals || []) {
@@ -333,8 +335,9 @@ export function bandChart(spec, ctype) {
       tooltip: { formatter: (p) => `${p.seriesName}, ${x[p.value[0]]}<br>${fmt(p.value[3], 'auto')} (${fmt(p.value[1], 'auto')} – ${fmt(p.value[2], 'auto')})` } })
   }
   for (const l of spec.lines || []) {
+    const lc = l.color || col(l.c)
     series.push({ type: 'line', name: l.name, data: l.values.map(ok), symbol: 'circle', symbolSize: l.bold ? 6 : 4, z: 5,
-      lineStyle: { width: l.bold ? 2.8 : 2, color: col(l.c), type: l.dash ? 'dashed' : 'solid' }, itemStyle: { color: col(l.c) } })
+      lineStyle: { width: l.bold ? 2.8 : 2, color: lc, type: l.dash ? (l.dash === true ? 'dashed' : l.dash) : 'solid' }, itemStyle: { color: lc } })
   }
   for (const pt of spec.points || []) {
     series.push({ type: 'custom', name: pt.name, z: 6, data: x.map((_, i) => [i, ok(pt.values[i])]),
