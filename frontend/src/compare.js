@@ -95,16 +95,23 @@ function parts(s, t) {
 const KEYS = ['wb', 'sp', 'calc', 'src', 'k']
 
 /**
- * Короткие подписи рядов: только то, чем ряды различаются (водоём, вид, расчёт, источник, k);
- * общее — отдельной строкой над графиками.
+ * Короткие подписи рядов: только то, чем ряды различаются (водоём, вид, расчёт, источник, k); расчёт — только если
+ * ряды одного источника взяты из разных расчётов. Общее — отдельной строкой над графиками; full — полные подписи.
  */
 export function seriesLabels(series, t) {
   const ps = series.map((s) => parts(s, t))
-  if (ps.length <= 1) return { labels: ps.map((p) => KEYS.map((k) => p[k]).filter(Boolean).join(' · ')), common: '' }
-  const varying = KEYS.filter((k) => new Set(ps.map((p) => p[k])).size > 1)
+  const full = ps.map((p) => KEYS.map((k) => p[k]).filter(Boolean).join(' · '))
+  if (ps.length <= 1) return { labels: full, common: '', full }
+  const differs = (k) => {
+    if (k !== 'calc') return new Set(ps.map((p) => p[k])).size > 1
+    const by = new Map()
+    series.forEach((s, i) => { if (!by.has(s.source)) by.set(s.source, new Set()); by.get(s.source).add(ps[i].calc) })
+    return [...by.values()].some((v) => v.size > 1)
+  }
+  const varying = KEYS.filter(differs)
   const show = varying.length ? varying : KEYS
-  const common = KEYS.filter((k) => !show.includes(k)).map((k) => ps[0][k]).filter(Boolean).join(' · ')
-  return { labels: ps.map((p) => show.map((k) => p[k]).filter(Boolean).join(' · ') || '—'), common }
+  const common = KEYS.filter((k) => !show.includes(k) && new Set(ps.map((p) => p[k])).size === 1).map((k) => ps[0][k]).filter(Boolean).join(' · ')
+  return { labels: ps.map((p) => show.map((k) => p[k]).filter(Boolean).join(' · ') || '—'), common, full }
 }
 
 const hasQ = (q) => Array.isArray(q) && q.length === 5

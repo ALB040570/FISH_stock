@@ -189,6 +189,43 @@ def test_roles_monitoring_limited(browser, role):
     page.wait_for_timeout(1500)
     if page.locator("text=ПДУ НПЦ, т").count() == 0:
         assert page.locator("text=ПДУ, т").count() == 0                  # ПДУ приложения на карте не показывается
+    # «Сравнение расчётов» (№ 77) — только с правом на результаты модели: нет пункта меню, адрес не открывается
+    assert page.locator(".el-menu-item", has_text="Сравнение расчётов").count() == 0
+    page.goto(URL + "/monitoring/compare")
+    page.wait_for_url(lambda u: u.rstrip("/") == URL + "/monitoring", timeout=10000)
+    assert not errors, errors
+
+
+def test_compare_calcs(browser):
+    """Сравнение расчётов (№ 77): быстрый набор «вид при всех k», графики и таблица, набор рядов в ссылке."""
+    page = browser.new_page(viewport={"width": 1440, "height": 1000})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    login(page)
+    page.goto(URL + "/monitoring/")
+    page.locator(".el-menu-item", has_text="Сравнение расчётов").first.click()
+    page.wait_for_url(URL + "/monitoring/compare")
+    page.wait_for_selector("[data-test=cmp-builder]")
+    page.wait_for_timeout(1500)
+    page.click("[data-test=cmp-preset-all_k]")
+    page.wait_for_selector("[data-test=cmp-stock] canvas", timeout=20000)
+    n = page.locator("[data-test^=cmp-chip-]").count()
+    assert n >= 2 and page.url.count("s=f~") == n
+    assert page.locator("[data-test=cmp-pdu] canvas").count() == 1 and page.locator("[data-test=cmp-risk] canvas").count() == 1
+    assert page.locator("[data-test=cmp-table] .el-table__body tr").count() == n
+    link = page.url
+    # ссылку можно открыть заново (коллеге): тот же набор рядов; ряд убирается крестиком
+    p2 = browser.new_page(viewport={"width": 1440, "height": 1000})
+    login(p2)
+    p2.goto(link)
+    p2.wait_for_selector("[data-test=cmp-stock] canvas", timeout=20000)
+    assert p2.locator("[data-test^=cmp-chip-]").count() == n
+    p2.locator("[data-test=cmp-chip-0] .x").click()
+    p2.wait_for_timeout(800)
+    assert p2.locator("[data-test^=cmp-chip-]").count() == n - 1 and p2.url.count("s=f~") == n - 1
+    p2.locator("[data-test=cmp-measure] .el-radio-button").nth(1).click()
+    p2.wait_for_timeout(1200)
+    assert "m=f" in p2.url and p2.locator("text=Промысловая биомасса (запас) по годам").count() == 1
     assert not errors, errors
 
 

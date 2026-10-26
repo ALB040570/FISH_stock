@@ -52,6 +52,12 @@ describe('подписи рядов', () => {
     const w = seriesLabels([fc(1), fc(1, { water_body_name: 'Капчагай', calc_title: 'Прогноз К', is_main: true })], t)
     expect(w.labels).toEqual(['Жайсан · Прогноз ★', 'Капчагай · Прогноз К ★'])
     expect(seriesLabels([fc(0.25)], t).labels[0]).toBe('Жайсан · лещ · Прогноз ★ · cmp.src_forecast_short · k = 0,25')
+    // разные источники одного водоёма и вида: расчёт не повторяется, если у источника он один
+    const mix = seriesLabels([fc(1), { ...fc(1), source: 'model', k: undefined, calc_title: 'Модель' },
+      { ...fc(1), source: 'catch', k: undefined, gear: 'сеть', calc_title: 'g. Ежегодный запас' }], t)
+    expect(mix.labels).toEqual(['cmp.src_forecast_short · k = 1', 'cmp.src_model_short', 'cmp.src_catch_short: сеть'])
+    expect(mix.common).toBe('Жайсан · лещ')
+    expect(mix.full[1]).toBe('Жайсан · лещ · Модель ★ · cmp.src_model_short')
     expect(kf(0.25)).toBe('0,25')
   })
   it('k = 0 — пунктир, после десятого ряда — точки', () => {

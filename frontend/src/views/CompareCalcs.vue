@@ -58,7 +58,7 @@
           <span v-for="(it, i) in items" :key="itemKey(it)" class="chip" :class="{ bad: rowsData[i]?.error }" :data-test="'cmp-chip-' + i">
             <span class="dot" :style="dotStyle(i)" />
             <el-tooltip v-if="rowsData[i]?.error" :content="rowsData[i].error" placement="top"><el-icon class="wicon"><WarningFilled /></el-icon></el-tooltip>
-            <span class="clabel">{{ labels[i] || pending(it) }}</span>
+            <span class="clabel" :title="lab.full[i] || ''">{{ labels[i] || pending(it) }}</span>
             <button class="x" :title="$t('cmp.remove')" @click="removeAt(i)">×</button>
           </span>
           <el-button text size="small" @click="clearAll">{{ $t('cmp.clear') }}</el-button>
@@ -104,10 +104,11 @@
           <el-table :data="rows" size="small" border style="width:100%">
             <el-table-column :label="$t('cmp.col_series')" min-width="220">
               <template #default="{ row }"><span class="dot" :style="{ background: row.color }" /> {{ row.label }}
+                <div v-if="lab.full[row.n] && lab.full[row.n] !== row.label" class="small muted">{{ lab.full[row.n] }}</div>
                 <div v-if="row.error" class="small err">{{ row.error }}</div></template>
             </el-table-column>
             <el-table-column :label="$t('cmp.col_last', { y: years.last || '' })" align="right" min-width="120">
-              <template #default="{ row }">{{ fmt(row.last, 'auto') }}</template>
+              <template #default="{ row }">{{ num(row.last) }}</template>
             </el-table-column>
             <el-table-column label="F" align="right" width="80">
               <template #default="{ row }">{{ row.F != null ? fmt(row.F, 3) : '' }}</template>
@@ -117,8 +118,8 @@
                 <span class="muted small"> ({{ fmt(row.pdu_lo, 'auto') }}–{{ fmt(row.pdu_hi, 'auto') }})</span></template></template>
             </el-table-column>
             <el-table-column :label="(state.measure === 'fishable' ? $t('cmp.col_end_f') : $t('cmp.col_end')) + ' ' + (years.yE || '')" align="right" min-width="170">
-              <template #default="{ row }"><template v-if="row.end != null">{{ fmt(row.end, 'auto') }}
-                <span class="muted small"> ({{ fmt(row.end_lo, 'auto') }}–{{ fmt(row.end_hi, 'auto') }})</span></template></template>
+              <template #default="{ row }"><template v-if="row.end != null">{{ num(row.end) }}
+                <span class="muted small"> ({{ num(row.end_lo) }}–{{ num(row.end_hi) }})</span></template></template>
             </el-table-column>
             <el-table-column :label="$t('cmp.col_risk')" align="right" width="130">
               <template #default="{ row }">{{ row.risk != null ? fmt(row.risk, 0) + ' %' : '' }}</template>
@@ -137,7 +138,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { api } from '../api'
 import { helpPath } from '../cabinets'
-import { fmt } from '../components/charts'
+import { compact, fmt } from '../components/charts'
 import EChart from '../components/EChart.vue'
 import StateBlock from '../components/StateBlock.vue'
 import { GEARS, MAX_SERIES, SOURCES, fromQuery, itemKey, kf, pduChart, riskChart, seriesLabels, seriesStyle, stockChart,
@@ -251,7 +252,8 @@ async function presetCalcs(sp) {
   const cs = calcsFor(b.source, b.wb)
   try {
     const ms = await loadMeta(b.source, cs.map((c) => c.id))
-    const list = ms.filter((m) => m.species.some((s) => s.code === sp)).map((m) => mk(b.source, m.id, sp, firstK(), b.gear))
+    // у каждого расчёта — его собственное k (альтернативный расчёт часто отличается именно k)
+    const list = ms.filter((m) => m.species.some((s) => s.code === sp)).map((m) => mk(b.source, m.id, sp, m.base_k ?? firstK(), b.gear))
     if (!list.length) return ElMessage.warning(t('cmp.no_matches'))
     setItems(list, true)
   } catch (e) { ElMessage.error(e.message) }
@@ -292,6 +294,8 @@ const pduOpt = computed(() => pduChart(rowsData.value, { labels: labels.value, l
 const riskOpt = computed(() => riskChart(rowsData.value, { labels: labels.value, t }))
 const rows = computed(() => tableRows(rowsData.value, labels.value))
 const years = computed(() => tableYears(rows.value))
+// численность — в тыс./млн, тонны — целиком
+const num = (v) => (v == null ? '' : state.value.measure === 'total' && Math.abs(v) >= 1e5 ? compact(v) : fmt(v, 'auto'))
 const stockNote = computed(() => {
   const srcs = new Set(rowsData.value.filter((s) => !s.error).map((s) => s.source))
   return [srcs.has('forecast') ? t('cmp.note_forecast') : '', srcs.has('model') ? t('cmp.note_model') : '', srcs.has('catch') ? t('cmp.note_catch') : '',
