@@ -27,6 +27,31 @@ def period_text(period) -> str:
     return "все годы"
 
 
+def unknown_profile_fields(E, code: str, version: str, profiles: dict) -> list[str]:
+    """Поля профилей видов, которых нет в схеме профиля этой версии кода: старая версия их молча пропустит
+    (например, «Оценки запаса в правдоподобии» — с версии 3.0.2, решение № 73)."""
+    try:
+        files = E.package_files(code, version)
+    except Exception:  # noqa: BLE001 — нет пакета: проверять нечем
+        return []
+    if "profile_schema.json" not in files:
+        return []
+    import json as _json
+    schema = _json.loads(files["profile_schema.json"])
+    known = {row["key"] for row in schema}
+    labels = {}
+    try:
+        from_latest = E.latest_enabled(code)
+        if from_latest:
+            lf = E.package_files(code, from_latest["version"])
+            labels = {row["key"]: row.get("label") or row["key"]
+                      for row in _json.loads(lf.get("profile_schema.json", b"[]"))}
+    except Exception:  # noqa: BLE001
+        pass
+    keys = sorted({k for vals in (profiles or {}).values() if isinstance(vals, dict) for k in vals} - known)
+    return [f"«{labels.get(k, k)}» ({k})" for k in keys]
+
+
 def plan(E, clients, c: dict, names: dict | None = None, current: dict | None = None):
     """(план, ошибки, предупреждения)."""
     errors, warnings = [], []
@@ -82,6 +107,10 @@ def plan(E, clients, c: dict, names: dict | None = None, current: dict | None = 
             miss = [names.get(x, x) for x in prm["species"] if x not in prof]
             if miss:
                 errors.append("В параметрах алгоритма нет значений для видов: " + ", ".join(miss))
+        unknown = unknown_profile_fields(E, code, v, prof)
+        if unknown:
+            warnings.append(f"Версия кода {v} не знает полей профиля: {', '.join(unknown)} — они не будут учтены "
+                            "(выберите последнюю версию алгоритма в расчёте)")
     # расчёты-входы
     inputs = {}
     for dep in m.get("requires", {}).get("steps", []):

@@ -341,3 +341,22 @@ def test_egg_scale_calc_is_not_main(calc_stack):
     assert aa.post(f"/calcs/{c['id']}/main", headers=H("ichthyologist")).status_code == 400
     rows = aa.get(f"/calcs/{c['id']}/result", headers=H("ichthyologist")).json()["tables"]["egg_scale_fit"]["rows"]
     assert [r["species"] for r in rows] == ["лещ"] and rows[0]["suggested"]
+
+
+def test_warning_profile_fields_unknown_to_version(calc_stack):
+    """Поле профиля вида, которого не знает версия кода расчёта, — предупреждение при проверке и запуске (раньше
+    закреплённая 3.0.1 молча пропускала «Оценки запаса в правдоподобии», 26.10.2026)."""
+    from importlib import import_module
+    dm, da, aa, mod = calc_stack
+    planning = import_module("app.planning")
+    d = {s["algorithm"]: s for s in aa.get("/param-sets", headers=H()).json() if s["is_default"]}
+    s = aa.post("/param-sets", headers=H("mathematician"), json={"name": "поле из будущего", "base": d["bayes_cohort"]["id"]}).json()
+    v = s["values"]
+    v["species_profiles"]["lesh"] = {**v["species_profiles"]["lesh"], "likelihood_gears": "net", "future_field": 1}
+    r = aa.put(f"/param-sets/{s['id']}", headers=H("mathematician"), json={"name": s["name"], "values": v})
+    assert r.status_code == 200, r.json()
+    c = make(aa, "bayes_cohort", run=False, param_set=s["id"], calc_params={"species": ["lesh"]})
+    w = aa.post(f"/calcs/{c['id']}/check", headers=H()).json()["warnings"]
+    assert any("future_field" in x and "не знает полей профиля" in x for x in w), w
+    assert not any("likelihood_gears" in x for x in w)            # поле текущей версии — известно
+    assert planning.unknown_profile_fields(mod.E, "bayes_cohort", "0.0.0-нет", {"lesh": {"x": 1}}) == []
