@@ -194,7 +194,8 @@ def test_forecast_k_scenarios(env):
     """Сценарный анализ k (3.1.0): каждый k — сценарий F = k·M на тех же выборках; основной сценарий не меняется."""
     from fishcore.forecast import parse_k_grid
     assert parse_k_grid("1,5; 0,5;1; 1") == (0.5, 1.0, 1.5) and parse_k_grid("") == () and parse_k_grid(None) == ()
-    for bad in ("0,5; abc", "0", "11", "; ".join(str(x) for x in range(1, 11))):
+    assert parse_k_grid("0; 2") == (0.0, 2.0)
+    for bad in ("0,5; abc", "-0,5", "11", "; ".join(str(x) for x in range(1, 11))):
         with pytest.raises(ValueError):
             parse_k_grid(bad)
     tmp, sp, gk = env
@@ -204,6 +205,15 @@ def test_forecast_k_scenarios(env):
     base = {"horizon": 3, "k": 1.0}
     _, r0 = step(tmp, sp, gk, "forecast_pdu", {"bayes_cohort": tmp / "bayes_k"}, {**base, "k_scenarios": "1"})
     _, r1 = step(tmp, sp, gk, "forecast_pdu", {"bayes_cohort": tmp / "bayes_k"}, {**base, "k_scenarios": "0,5; 1; 1,5"})
+    _, rz = step(tmp, sp, gk, "forecast_pdu", {"bayes_cohort": tmp / "bayes_k"}, {**base, "k_scenarios": "0; 1"})
+    kz = rz["payload"]["species"]["судак"]
+    assert kz["k_scen"]["k"] == [0.0, 1.0] and kz["k_scen"]["pdu_t_q"][0] == [0, 0, 0, 0, 0]       # k = 0 — без промысла
+    assert np.isclose(kz["k_scen"]["p_decline"][0], kz["scenarios"]["none"]["p_decline"])
+    # запас по годам для каждого k: k = 0 совпадает с «без промысла», k = 1 — с F = k·M
+    ty = kz["k_scen"]["total_q_years"]
+    assert np.array(ty).shape == (2, 5, 3) and np.allclose(ty[0], kz["scenarios"]["none"]["total_q"]) and np.allclose(ty[1], kz["scenarios"]["baranov"]["total_q"])
+    assert np.allclose(kz["k_scen"]["fishable_q_years"][1], kz["scenarios"]["baranov"]["fishable_q"])
+    assert {r["k"] for r in rz["tables"]["k_years"]["rows"]} == {0.0, 1.0} and len(rz["tables"]["k_years"]["rows"]) == 2 * 3
     a, b = r0["payload"]["species"]["судак"], r1["payload"]["species"]["судак"]
     for sc in ("baranov", "fixed", "none"):           # сценарии не влияют на основной расчёт
         assert np.allclose(np.array(a["scenarios"][sc]["pdu_t_q"], float), np.array(b["scenarios"][sc]["pdu_t_q"], float))

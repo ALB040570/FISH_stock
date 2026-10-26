@@ -141,6 +141,10 @@ class ForecastResult:
     def k_total(self, k: float) -> np.ndarray:
         return self.k_X[k][:, :, 1:].sum(axis=2)
 
+    def k_fishable(self, k: float) -> np.ndarray:
+        m = self.ages >= self.m0
+        return (self.k_X[k][:, :, m] * self.weights[m]).sum(axis=2) / 1e6
+
     def k_pdu_tonnes(self, k: float) -> np.ndarray:
         return (self.k_catch[k] * self.weights).sum(axis=2) / 1e6
 
@@ -148,13 +152,14 @@ class ForecastResult:
         return float(np.mean(self.k_total(k)[:, -1] < self.hist_total[:, -1]))
 
 
-K_GRID_DEFAULT = "0,5; 0,75; 1; 1,25; 1,5"
+K_GRID_DEFAULT = "0; 0,25; 0,5; 0,75; 1; 1,25; 1,5; 2"
 K_GRID_MAX = 9
 
 
 def parse_k_grid(text) -> tuple[float, ...]:
-    """«0,5; 0,75; 1; 1,25; 1,5» → (0.5, 0.75, 1.0, 1.25, 1.5): значения через «;», десятичная запятая или точка.
-    Пусто — без сценарного анализа. ValueError — с понятным сообщением."""
+    """«0; 0,5; 1; 1,5» → (0.0, 0.5, 1.0, 1.5): значения через «;», десятичная запятая или точка; k = 0 — промыслового
+    вылова нет (F = 0, совпадает со сценарием «без промысла»). Пусто — без сценарного анализа. ValueError — с понятным
+    сообщением."""
     if text is None:
         return ()
     items = list(text) if isinstance(text, (list, tuple)) else [x for x in str(text).replace("\n", ";").split(";")]
@@ -167,8 +172,8 @@ def parse_k_grid(text) -> tuple[float, ...]:
             v = float(t)
         except ValueError:
             raise ValueError(f"«Сценарии k»: «{str(raw).strip()}» — не число; пример: {K_GRID_DEFAULT}") from None
-        if not 0 < v <= 10:
-            raise ValueError(f"«Сценарии k»: k = {str(raw).strip()} — нужно больше 0 и не больше 10")
+        if not 0 <= v <= 10:
+            raise ValueError(f"«Сценарии k»: k = {str(raw).strip()} — нужно от 0 до 10 (k = 0 — без промысла)")
         out.append(v)
     out = sorted(set(out))
     if len(out) > K_GRID_MAX:

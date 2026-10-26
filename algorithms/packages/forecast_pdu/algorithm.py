@@ -68,7 +68,7 @@ def run(ctx):
     if not files:
         raise UserError("В результатах байесовской модели нет расчёта в режиме «расчёт» (априорная проверка не подходит)")
     wanted = ctx.params.get("species")
-    out, summary, xrows, krows = {}, [], {}, []
+    out, summary, xrows, krows, kyrows = {}, [], {}, [], []
     posts = []
     for f in files:
         loaded = R.load_npz(f)
@@ -127,7 +127,15 @@ def run(ctx):
                 "pdu_t_median_years": [jq(np.median(kp[kk], axis=0)) for kk in ks],
                 "F": [float(np.median(res.k_F[kk][:, 0])) for kk in ks],
                 "total_end_q": [jq(q(res.k_total(kk)[:, -1])) for kk in ks],
-                "p_decline": [res.k_p_decline(kk) for kk in ks], "p_decline_none": res.p_decline("none")}
+                "p_decline": [res.k_p_decline(kk) for kk in ks], "p_decline_none": res.p_decline("none"),
+                "total_q_years": [jq(q(res.k_total(kk))) for kk in ks],
+                "fishable_q_years": [jq(q(res.k_fishable(kk))) for kk in ks]}
+            for kk in ks:
+                tq, fq = q(res.k_total(kk)), q(res.k_fishable(kk))
+                for hh, y in enumerate(res.years_fc):
+                    kyrows.append({"species": ru, "k": kk, "year": y, "total_median": float(tq[2, hh]), "total_q025": float(tq[0, hh]),
+                                   "total_q975": float(tq[4, hh]), "fishable_t": float(fq[2, hh]),
+                                   "pdu_t": float(np.median(kp[kk][:, hh]))})
             for j, kk in enumerate(ks):
                 pq = q(kp[kk][:, 0])
                 krows.append({"species": ru, "k": kk, "F": out[ru]["k_scen"]["F"][j], "pdu_t": float(pq[2]),
@@ -204,12 +212,20 @@ def run(ctx):
             {"code": "total_end", "title": "Численность в конце прогноза, медиана", "unit": "шт", "type": "number"},
             {"code": "p_decline", "title": "Вероятность снижения запаса", "unit": "%", "type": "number"},
             {"code": "p_decline_none", "title": "Вероятность снижения без промысла", "unit": "%", "type": "number"}], krows)
+        ctx.add_table("k_years", "Сценарии k: запас по годам прогноза", [
+            {"code": "species", "title": "Вид"}, {"code": "k", "title": "k", "type": "number"}, {"code": "year", "title": "Год", "type": "integer"},
+            {"code": "total_median", "title": "Численность 1–2+, медиана", "unit": "шт", "type": "number"},
+            {"code": "total_q025", "title": "Численность 2,5 %", "unit": "шт", "type": "number"},
+            {"code": "total_q975", "title": "Численность 97,5 %", "unit": "шт", "type": "number"},
+            {"code": "fishable_t", "title": "Промысловая биомасса, медиана", "unit": "т", "type": "number"},
+            {"code": "pdu_t", "title": "ПДУ, медиана", "unit": "т", "type": "number"}], kyrows)
 
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as xw:
         pd.DataFrame(summary).to_excel(xw, sheet_name="Сводка", index=False)
         if krows:
             pd.DataFrame(krows).to_excel(xw, sheet_name="Сценарии k", index=False)
+            pd.DataFrame(kyrows).to_excel(xw, sheet_name="Сценарии k по годам", index=False)
         for ru, rows in xrows.items():
             df = pd.DataFrame([{**{k: v for k, v in r.items() if k != "pdu_pcs_by_age"},
                                 **{f"ПДУ шт, {age_title(int(a))}": v for a, v in r["pdu_pcs_by_age"].items()}}

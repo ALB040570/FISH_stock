@@ -1572,6 +1572,67 @@ def v_fc_k(D, opt):
             **_fcommon(D, meta, code, L(lang, "сценарии k", "k сценарийлері"))}
 
 
+def v_fc_k_years(D, opt):
+    pl, meta, R, code, K = _k_species(D, opt)
+    lang = D.lang
+    if not K.get("total_q_years"):
+        raise NoData(L(lang, "В основном расчёте прогноза нет запаса по годам для сценариев k: нужна версия алгоритма 3.1.1 — перезапустите прогноз водоёма",
+                       "Болжамның негізгі есептеуінде k сценарийлері үшін жылдар бойынша қор жоқ: алгоритмнің 3.1.1 нұсқасы керек — су айдынының болжамын қайта іске қосыңыз"))
+    ks = K["k"]
+    meas = opt.get("kmeas") if opt.get("kmeas") in ("total", "fishable") else "total"
+    try:
+        pick = float(str(opt.get("kpick")).replace(",", "."))
+    except (TypeError, ValueError):
+        pick = None
+    if pick not in ks:
+        pick = K.get("base_k") if K.get("base_k") in ks else ks[0]
+    i_pick = ks.index(pick)
+    x = R["years_hist"] + R["years_fc"]
+    nh = len(R["years_hist"])
+    if meas == "total":
+        hq, fq_all, y_title = R["hist"]["total_q"], K["total_q_years"], L(lang, "штук", "дана")
+        lq = R["hist"].get("total_last_draws_q") or [q[nh - 1] for q in hq]
+    else:
+        hq, fq_all, y_title = R["hist"]["fishable_q"], K["fishable_q_years"], L(lang, "тонн", "тонна")
+        lq = [q[nh - 1] for q in hq]
+    fq = fq_all[i_pick]
+    bands = [{"name": L(lang, "История, 95 %", "Тарих, 95 %"), "lo": _joined(R, hq[0], [])[0], "hi": _joined(R, hq[4], [])[0], "op": 0.16, "c": 0},
+             {"name": f"k = {_kf(pick)}, 95 %", "lo": _joined(R, [], fq[0], lq[0])[1], "hi": _joined(R, [], fq[4], lq[4])[1], "op": 0.14, "c": i_pick + 1},
+             {"name": f"k = {_kf(pick)}, 50 %", "lo": _joined(R, [], fq[1], lq[1])[1], "hi": _joined(R, [], fq[3], lq[3])[1], "op": 0.28, "c": i_pick + 1}]
+    lines = [{"name": L(lang, "История (модель), медиана", "Тарих (модель), медиана"), "values": _joined(R, hq[2], [])[0], "c": 0, "bold": True}]
+    for i, k in enumerate(ks):
+        lines.append({"name": (L(lang, "k = 0 (без промысла)", "k = 0 (кәсіпшіліксіз)") if k == 0 else f"k = {_kf(k)}"),
+                      "values": _joined(R, [], fq_all[i][2], lq[2])[1], "c": i + 1, "bold": k == pick, "dash": k == 0})
+    rows = []
+    for j, yy in enumerate(x):
+        r = {"year": yy, "kind": L(lang, "история", "тарих") if j < nh else L(lang, "прогноз", "болжам")}
+        if j < nh:
+            r["hist"] = hq[2][j]
+        else:
+            for i in range(len(ks)):
+                r[f"m{i}"] = fq_all[i][2][j - nh]
+        rows.append(r)
+    vt = "integer" if meas == "total" else "number"
+    toggles = [{"key": "kmeas", "title": L(lang, "Показатель", "Көрсеткіш"), "value": meas,
+                "options": [{"value": "total", "label": L(lang, "численность", "сан")},
+                            {"value": "fishable", "label": L(lang, "промысловая биомасса", "кәсіптік биомасса")}]},
+               {"key": "kpick", "title": L(lang, "Интервалы для k", "k үшін аралықтар"), "value": _kf(pick),
+                "options": [{"value": _kf(k), "label": f"k = {_kf(k)}"} for k in ks]}]
+    return {"chart": {"kind": "band", "x": x, "bands": bands, "lines": lines, "vrefs": [{"x": str(R["years_fc"][0]), "label": L(lang, "прогноз →", "болжам →")}],
+                      "x_title": L(lang, "Год", "Жыл"), "y_title": y_title, "allowed": ["linear", "log"], "default": "linear"},
+            "columns": [col("year", L(lang, "Год", "Жыл"), "integer"), col("kind", L(lang, "Период", "Кезең")),
+                        col("hist", L(lang, "История, медиана", "Тарих, медиана"), vt)]
+                       + [col(f"m{i}", f"k = {_kf(k)}", vt) for i, k in enumerate(ks)],
+            "rows": rows, "toggles": toggles,
+            "notes": [L(lang, f"История — байесовская модель (медиана и 95 %); прогноз — медиана для каждого k по {R.get('n_draws')} траекториям, "
+                              f"полосы 50 % и 95 % — для выбранного k. k = 0 — промыслового вылова нет. "
+                              + ("Численность — возрасты 1–2 и старше, штук." if meas == "total" else "Промысловая биомасса — возрасты от m0, тонн."),
+                        f"Тарих — байестік модель (медиана және 95 %); болжам — {R.get('n_draws')} траектория бойынша әр k үшін медиана, "
+                              f"50 % және 95 % жолақтары — таңдалған k үшін. k = 0 — кәсіптік аулау жоқ. "
+                              + ("Сан — 1–2 және үлкен жастар, дана." if meas == "total" else "Кәсіптік биомасса — m0-ден бастап жастар, тонна."))],
+            **_fcommon(D, meta, code, L(lang, "сценарии k: запас по годам", "k сценарийлері: жылдар бойынша қор"))}
+
+
 def v_fc_k_risk(D, opt):
     pl, meta, R, code, K = _k_species(D, opt)
     lang = D.lang
@@ -1636,7 +1697,7 @@ def v_fc_k_species(D, opt):
             **_fcommon(D, meta, None, L(lang, "сценарии k", "k сценарийлері"))}
 
 
-VIEWS.update({"fc_k_species": v_fc_k_species, "fc_k": v_fc_k, "fc_k_risk": v_fc_k_risk})
+VIEWS.update({"fc_k_species": v_fc_k_species, "fc_k": v_fc_k, "fc_k_years": v_fc_k_years, "fc_k_risk": v_fc_k_risk})
 
 
 # ================================================================== «Можно ли верить запасу» (сводка уловистости)

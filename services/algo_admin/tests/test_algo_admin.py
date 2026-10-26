@@ -42,7 +42,7 @@ def test_catalog_and_default_sets(calc_stack):
     assert [a["letter"] for a in cat] == list("abcdefghijk")
     by = {a["code"]: a for a in cat}
     assert by["removal_pdu"]["planned"] and by["removal_pdu"]["versions"] == []
-    assert all(by[c]["latest"] == "3.0.0" for c in CHAIN) and by["bayes_cohort"]["latest"] == "3.0.3" and by["forecast_pdu"]["latest"] == "3.1.0"
+    assert all(by[c]["latest"] == "3.0.0" for c in CHAIN) and by["bayes_cohort"]["latest"] == "3.0.3" and by["forecast_pdu"]["latest"] == "3.1.1"
     assert "stock_by_catch" not in by and "bayes_checks" not in by
     assert by["seine_likelihood"]["manifest"]["requires"]["steps"] == ["seine_catchability"]
     assert by["bayes_cohort"]["manifest"]["requires"]["steps"] == ["seine_likelihood", "net_likelihood", "combined_stock", "pdu_by_age"]
@@ -63,11 +63,11 @@ def test_catalog_and_default_sets(calc_stack):
                 f"/param-sets/{defaults['bayes_cohort']['id']}"):
         assert aa.get(url, headers=H("presenter")).status_code == 403, url
     # отключение версии — только математик и администратор
-    assert aa.post("/catalog/forecast_pdu/versions/3.1.0/disable", headers=H("ichthyologist")).status_code == 403
-    assert aa.post("/catalog/forecast_pdu/versions/3.1.0/disable", headers=H("mathematician")).status_code == 200
+    assert aa.post("/catalog/forecast_pdu/versions/3.1.1/disable", headers=H("ichthyologist")).status_code == 403
+    assert aa.post("/catalog/forecast_pdu/versions/3.1.1/disable", headers=H("mathematician")).status_code == 200
     c = make(aa, "forecast_pdu", run=False)
     assert any("нет включённых версий" in e for e in c["check"]["errors"])
-    assert aa.post("/catalog/forecast_pdu/versions/3.1.0/enable", headers=H("admin")).status_code == 200
+    assert aa.post("/catalog/forecast_pdu/versions/3.1.1/enable", headers=H("admin")).status_code == 200
     # планируемый алгоритм не запускается
     r = aa.post("/calcs", headers=H("ichthyologist"), json={"algorithm": "removal_pdu", "water_body": "zhaysan"})
     assert r.status_code == 400 and "планируется" in str(r.json())
